@@ -83,12 +83,12 @@
                                         <td id="product" style="width:100px;">
                                             <span t-field="line.truck_number"/>
                                         </td>
-                                        <t t-if="line.order_id">
+                                        <t t-if="line.order_id.sale_order_id">
                                             <td id="product" style="width:100px;">
                                                 <span t-field="line.order_id.sale_order_id.order_line[0].container_num"/>
                                             </td>
                                         </t>
-                                        <t t-if="not line.order_id">
+                                        <t t-if="not line.order_id.sale_order_id">
                                             <td id="product" style="width:100px;">
                                                 <span></span>
                                             </td>
