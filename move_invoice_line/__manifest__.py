@@ -29,14 +29,15 @@
     'maintainer': 'Madfox solutions',
     'company': 'Madfox solutions',
     'website': 'https://www.madfox.solutions',
-    'depends': ['base', 'sale', 'fleet', 'account', 'purchase'],
+    'depends': ['base', 'sale', 'fleet', 'account', 'purchase', 'account_asset'],
     'data': [
         'views/account_move_views.xml',
         'views/sale_order_views.xml',
         'views/invoice_views.xml',
         'views/inherit_partner.xml',
         'views/inherit_purchase_order_views.xml',
-        'report/inherit_purchase_template.xml'
+        'report/inherit_purchase_template.xml',
+        'views/inherit_account_asset_views.xml'
 
     ],
     'qweb': [],
