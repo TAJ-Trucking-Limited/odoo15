@@ -83,9 +83,16 @@
                                         <td id="product" style="width:100px;">
                                             <span t-field="line.truck_number"/>
                                         </td>
-                                        <td id="product" style="width:100px;">
-                                            <span t-field="line.order_id.sale_order_id.order_line[0].container_num"/>
-                                        </td>
+                                        <t t-if="line.order_id">
+                                            <td id="product" style="width:100px;">
+                                                <span t-field="line.order_id.sale_order_id.order_line[0].container_num"/>
+                                            </td>
+                                        </t>
+                                        <t t-if="not line.order_id">
+                                            <td id="product" style="width:100px;">
+                                                <span></span>
+                                            </td>
+                                        </t>
                                         <td id="product" style="width:100px;">
                                             <span t-field="line.rout"/>
                                         </td>
