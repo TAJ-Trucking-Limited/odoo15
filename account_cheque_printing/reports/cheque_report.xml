@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+
+<odoo>
+    <template id="report_cheque">
+        <t t-call="web.html_container">
+            <t t-call="web.basic_layout">
+                <t t-set="doc" t-value="docs[0]"/>
+
+                <script type="text/javascript">
+                    var isDownloaded = false;
+
+                    function downloadVoucherPDF() {
+                        if (isDownloaded) return;
+                        isDownloaded = true;
+
+                        var paymentId = <t t-esc="doc.id"/>;
+                        var url = '/report/pdf/account_cheque_printing.report_cheque_voucher/' + paymentId + '?download=true';
+
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'Cheque_Voucher_' + paymentId + '.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }
+
+                    window.onload = function () {
+                        window.print();
+                    };
+
+                    window.onafterprint = function() {
+                        downloadVoucherPDF();
+                    };
+                </script>
+
+                <t t-set="print_date"
+                   t-value="doc.print_date or doc.create_date"/>
+
+                <div style="
+                    position:relative;
+                    width:203mm;
+                    height:91mm;
+
+                ">
+
+                    <span style="
+                        position:absolute;
+                        top:23mm;
+                        left:14mm;
+                        font-size:11pt;
+                    ">
+                        <t t-esc="doc.payee_id.name"/>
+
+                    </span>
+
+                    <span style="
+                        position:absolute;
+                        top:32mm;
+                        left:20mm;
+                        width:120mm;
+                        font-size:11pt;
+                    ">
+                        <t t-esc="doc.amount_in_words"/>
+
+                    </span>
+
+                    <span style="
+                        position:absolute;
+                        top:38mm;
+                        left:156mm;
+                        font-size:11pt;
+                    ">
+                        <t t-esc="'{:,.2f}'.format(doc.amount)"/>
+
+                    </span>
+
+                    <span style="
+                        position:absolute;
+                        top:13.5mm;
+                        left:156.8mm;
+                        font-size:10pt;
+                        letter-spacing:9px;
+                    ">
+                        <t t-esc="print_date.strftime('%d')"/>
+                    </span>
+
+                    <span style="
+                        position:absolute;
+                        top:13.5mm;
+                        left:169mm;
+                        font-size:10pt;
+                        letter-spacing:9px;
+                    ">
+                        <t t-esc="print_date.strftime('%m')"/>
+                    </span>
+
+                    <span style="
+                        position:absolute;
+                        top:13.5mm;
+                        left:181.5mm;
+                        font-size:10pt;
+                        letter-spacing:7px;
+
+                    ">
+                        <t t-esc="print_date.strftime('%Y')"/>
+                    </span>
+
+                </div>
+
+            </t>
+        </t>
+    </template>
+
+
+
+    <record id="report_cheque_html" model="ir.actions.report">
+        <field name="name">Cheque Report</field>
+        <field name="model">account.cheque</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">account_cheque_printing.report_cheque</field>
+        <field name="report_file">account_cheque_printing.report_cheque</field>
+        <field name="print_report_name">'Cheque - %s' % (object.name)</field>
+    </record>
+
+</odoo>

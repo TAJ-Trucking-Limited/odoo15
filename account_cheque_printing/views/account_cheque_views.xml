@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_account_cheque_form" model="ir.ui.view">
+        <field name="name">account.cheque.form</field>
+        <field name="model">account.cheque</field>
+        <field name="arch" type="xml">
+            <form string="Cheque" create="false">
+                <sheet>
+
+                    <group col="2">
+                        <field name="name" readonly="1"/>
+                        <field name="cheque_number" readonly="1"/>
+
+                        <field name="payment_id" readonly="1"/>
+                        <field name="journal_id" readonly="1"/>
+
+                        <field name="payee_id" readonly="1"/>
+                        <field name="amount" readonly="1"/>
+                        <field name="amount_in_words" readonly="1"/>
+
+                        <field name="currency_id" readonly="1"/>
+                        <field name="print_count" readonly="1"/>
+
+                        <field name="print_date" readonly="1"/>
+                    </group>
+
+                    <group>
+                        <field name="reason_note" readonly="1"/>
+                    </group>
+                    <group>
+                        <field name="partner_comparison_note" readonly="1"/>
+                    </group>
+                </sheet>
+
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="view_account_cheque_tree" model="ir.ui.view">
+        <field name="name">account.cheque.tree</field>
+        <field name="model">account.cheque</field>
+        <field name="arch" type="xml">
+            <tree string="Cheques" create="false">
+                <field name="name"/>
+                <field name="cheque_number"/>
+                <field name="cheque_type"/>
+                <field name="payee_id"/>
+                <field name="amount"/>
+                <field name="currency_id"/>
+                <field name="journal_id" optional="hide"/>
+                <field name="print_count" optional="hide"/>
+                <field name="print_date"/>
+                <field name="partner_comparison_note" optional="hide"/>
+
+            </tree>
+        </field>
+    </record>
+</odoo>
