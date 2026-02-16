@@ -12,8 +12,8 @@
                 <group col="2">
                     <field name="cheque_number"/>
                     <field name="payee_id"/>
-                    <field name="amount" readonly="payment_id == True"/>
-                    <field name="currency_id" readonly="payment_id == True"/>
+                    <field name="amount" readonly="payment_id != False"/>
+                    <field name="currency_id" readonly="payment_id != False"/>
                     <field name="amount_in_words" readonly="1"/>
                 </group>
 

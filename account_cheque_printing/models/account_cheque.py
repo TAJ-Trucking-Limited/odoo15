@@ -99,7 +99,7 @@ class AccountCheque(models.Model):
         ('manual_cheque', 'Manual Cheque')
     ], string='Cheque Type', default='manual_cheque', required=True)
 
-    @api.model
+    @api.model_create_multi
     def create(self, vals):
         # Override create to generate internal reference
         cheque = super().create(vals)

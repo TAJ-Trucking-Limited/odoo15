@@ -13,7 +13,8 @@
                     string="Print Cheque"
                     type="action"
                     class="btn-primary"
-                  
+                    invisible="payment_type != 'outbound'"
+
                 />
             </xpath>
 
