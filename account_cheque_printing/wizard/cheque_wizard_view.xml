@@ -14,7 +14,7 @@
                     <field name="payee_id"/>
                     <field name="amount" readonly="payment_id == True"/>
                     <field name="currency_id" readonly="payment_id == True"/>
-                    <field name="amount_in_words"/>
+                    <field name="amount_in_words" readonly="1"/>
                 </group>
 
                 <group>
