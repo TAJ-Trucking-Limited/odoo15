@@ -8,45 +8,59 @@
             <t t-set="bg_image"
                t-value="'tzs_cheque_bg.jpg' if doc.get('currency_code') == 'TZS' else 'usd_cheque_bg.jpg'"/>
 
-            <div t-attf-style="
-                position:relative;
-                width:203mm;
-                height:91mm;
-                background-image: url('/account_cheque_printing/static/src/img/#{bg_image}');
-                background-size: 203mm 91mm;
-                background-repeat: no-repeat;
+            <div style="
+                position: relative;
+                width: 91mm;
+                height: 203mm;
+                overflow: hidden;
             ">
 
+                <div t-attf-style="
+                    position: absolute;
+                    width: 203mm;
+                    height: 91mm;
+                    top: 0;
+                    left: 0;
+                    transform-origin: top left;
+                    transform: rotate(90deg) translateY(-91mm);
+                    background-image: url('/account_cheque_printing/static/src/img/#{bg_image}');
+                    background-size: 203mm 91mm;
+                    background-repeat: no-repeat;
+                ">
 
+                    <!-- Payee -->
+                    <span style="position:absolute; top:23mm; left:14mm; font-size:11pt;">
+                        <t t-esc="doc.get('payee_name','')"/>
+                    </span>
 
-                <span style="position:absolute; top:23mm; left:14mm; font-size:11pt;">
-                    <t t-esc="doc.get('payee_name','')"/>
+                    <!-- Amount in words -->
+                    <span style="position:absolute; top:32mm; left:22mm; width:120mm; font-size:11pt;">
+                        <t t-esc="doc.get('amount_in_words','')"/>
+                    </span>
 
-                </span>
+                    <!-- Amount number -->
+                    <span style="position:absolute; top:38mm; left:156mm; font-size:11pt;">
+                        <t t-esc="'{:,.2f}'.format(doc.get('amount', 0.0))"/>
+                    </span>
 
-                <span style="position:absolute; top:32mm; left:22mm; width:120mm; font-size:11pt;">
-                    <t t-esc="doc.get('amount_in_words','')"/>
-                </span>
+                    <!-- Day -->
+                    <span style="position:absolute; top:13.5mm; left:156.8mm; font-size:10pt; letter-spacing:9px;">
+                        <t t-esc="doc.get('date') and doc['date'].strftime('%d') or ''"/>
+                    </span>
 
-                <span style="position:absolute; top:38mm; left:156mm; font-size:11pt;">
-                    <t t-esc="'{:,.2f}'.format(doc.get('amount', 0.0))"/>
+                    <!-- Month -->
+                    <span style="position:absolute; top:13.5mm; left:169mm; font-size:10pt; letter-spacing:9px;">
+                        <t t-esc="doc.get('date') and doc['date'].strftime('%m') or ''"/>
+                    </span>
 
+                    <!-- Year -->
+                    <span style="position:absolute; top:13.5mm; left:181.5mm; font-size:10pt; letter-spacing:7px;">
+                        <t t-esc="doc.get('date') and doc['date'].strftime('%Y') or ''"/>
+                    </span>
 
-                </span>
-
-                <span style="position:absolute; top:13.5mm; left:156.8mm; font-size:10pt; letter-spacing:9px;">
-                    <t t-esc="doc.get('date') and doc['date'].strftime('%d') or ''"/>
-                </span>
-
-                <span style="position:absolute; top:13.5mm; left:169mm; font-size:10pt; letter-spacing:9px;">
-                    <t t-esc="doc.get('date') and doc['date'].strftime('%m') or ''"/>
-                </span>
-
-                <span style="position:absolute; top:13.5mm; left:181.5mm; font-size:10pt; letter-spacing:7px;">
-                    <t t-esc="doc.get('date') and doc['date'].strftime('%Y') or ''"/>
-                </span>
-
+                </div>
             </div>
+
         </t>
     </template>
 </odoo>

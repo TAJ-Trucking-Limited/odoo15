@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-
-
 <odoo>
     <template id="report_cheque">
         <t t-call="web.html_container">
             <t t-call="web.basic_layout">
+
                 <t t-set="doc" t-value="docs[0]"/>
 
                 <script type="text/javascript">
@@ -19,7 +18,8 @@
 
                         var a = document.createElement('a');
                         a.href = url;
-                        a.download = 'Cheque_Voucher_' + paymentId + '.pdf';
+                        a.download = '<t t-esc="doc.cheque_number"/>' + '.pdf';
+
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
@@ -38,81 +38,92 @@
                    t-value="doc.print_date or doc.create_date"/>
 
                 <div style="
-                    position:relative;
-                    width:203mm;
-                    height:91mm;
-
+                    position: relative;
+                    width: 91mm;
+                    height: 203mm;
+                    overflow: hidden;
                 ">
 
-                    <span style="
-                        position:absolute;
-                        top:23mm;
-                        left:14mm;
-                        font-size:11pt;
+                    <div style="
+                        position: absolute;
+                        width: 203mm;
+                        height: 91mm;
+                        top: 0;
+                        left: 0;
+                        transform-origin: top left;
+                        transform: rotate(90deg) translateY(-91mm);
                     ">
-                        <t t-esc="doc.payee_id.name"/>
 
-                    </span>
+                        <!-- Payee -->
+                        <span style="
+                            position:absolute;
+                            top:23mm;
+                            left:14mm;
+                            font-size:11pt;
+                        ">
+                            <t t-esc="doc.payee_id.name"/>
+                        </span>
 
-                    <span style="
-                        position:absolute;
-                        top:32mm;
-                        left:22mm;
-                        width:120mm;
-                        font-size:11pt;
-                    ">
-                        <t t-esc="doc.amount_in_words"/>
+                        <!-- Amount in words -->
+                        <span style="
+                            position:absolute;
+                            top:32mm;
+                            left:22mm;
+                            width:120mm;
+                            font-size:11pt;
+                        ">
+                            <t t-esc="doc.amount_in_words"/>
+                        </span>
 
-                    </span>
+                        <!-- Amount number -->
+                        <span style="
+                            position:absolute;
+                            top:38mm;
+                            left:156mm;
+                            font-size:11pt;
+                        ">
+                            <t t-esc="'{:,.2f}'.format(doc.amount)"/>
+                        </span>
 
-                    <span style="
-                        position:absolute;
-                        top:38mm;
-                        left:156mm;
-                        font-size:11pt;
-                    ">
-                        <t t-esc="'{:,.2f}'.format(doc.amount)"/>
+                        <!-- Day -->
+                        <span style="
+                            position:absolute;
+                            top:13.5mm;
+                            left:156.8mm;
+                            font-size:10pt;
+                            letter-spacing:9px;
+                        ">
+                            <t t-esc="print_date.strftime('%d')"/>
+                        </span>
 
-                    </span>
+                        <!-- Month -->
+                        <span style="
+                            position:absolute;
+                            top:13.5mm;
+                            left:169mm;
+                            font-size:10pt;
+                            letter-spacing:9px;
+                        ">
+                            <t t-esc="print_date.strftime('%m')"/>
+                        </span>
 
-                    <span style="
-                        position:absolute;
-                        top:13.5mm;
-                        left:156.8mm;
-                        font-size:10pt;
-                        letter-spacing:9px;
-                    ">
-                        <t t-esc="print_date.strftime('%d')"/>
-                    </span>
+                        <!-- Year -->
+                        <span style="
+                            position:absolute;
+                            top:13.5mm;
+                            left:181.5mm;
+                            font-size:10pt;
+                            letter-spacing:7px;
+                        ">
+                            <t t-esc="print_date.strftime('%Y')"/>
+                        </span>
 
-                    <span style="
-                        position:absolute;
-                        top:13.5mm;
-                        left:169mm;
-                        font-size:10pt;
-                        letter-spacing:9px;
-                    ">
-                        <t t-esc="print_date.strftime('%m')"/>
-                    </span>
-
-                    <span style="
-                        position:absolute;
-                        top:13.5mm;
-                        left:181.5mm;
-                        font-size:10pt;
-                        letter-spacing:7px;
-
-                    ">
-                        <t t-esc="print_date.strftime('%Y')"/>
-                    </span>
-
+                    </div>
                 </div>
 
             </t>
         </t>
     </template>
-
-
 
     <record id="report_cheque_html" model="ir.actions.report">
         <field name="name">Cheque Report</field>
