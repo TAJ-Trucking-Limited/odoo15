@@ -3,7 +3,6 @@
     <template id="report_cheque">
         <t t-call="web.html_container">
             <t t-call="web.basic_layout">
-
                 <t t-set="doc" t-value="docs[0]"/>
 
                 <script type="text/javascript">
@@ -34,87 +33,56 @@
                     };
                 </script>
 
-                <t t-set="print_date"
-                   t-value="doc.print_date or doc.create_date"/>
+                <t t-set="print_date" t-value="doc.print_date or doc.create_date"/>
 
+                <!-- A4 Container -->
                 <div style="
                     position: relative;
-                    width: 91mm;
-                    height: 203mm;
-                    overflow: hidden;
+                    width: 210mm;
+                    height: 297mm;
+                    margin: 0 auto;
                 ">
 
+                    <!-- Cheque centered -->
                     <div style="
                         position: absolute;
+                        top: 35%;
+                        left: 50%;
                         width: 203mm;
                         height: 91mm;
-                        top: 0;
-                        left: 0;
-                        transform-origin: top left;
-                        transform: rotate(90deg) translateY(-91mm);
+                        transform: translate(-50%, -50%) rotate(90deg);
+                        transform-origin: center center;
+                        background-size: 203mm 91mm;
+                        background-repeat: no-repeat;
                     ">
 
                         <!-- Payee -->
-                        <span style="
-                            position:absolute;
-                            top:23mm;
-                            left:14mm;
-                            font-size:11pt;
-                        ">
+                        <span style="position:absolute; top:16mm; left:0.2mm; font-size:13pt;">
                             <t t-esc="doc.payee_id.name"/>
                         </span>
 
                         <!-- Amount in words -->
-                        <span style="
-                            position:absolute;
-                            top:32mm;
-                            left:22mm;
-                            width:120mm;
-                            font-size:11pt;
-                        ">
+                        <span style="position:absolute; top:27.3mm; left:10mm; width:120mm; font-size:13pt;">
                             <t t-esc="doc.amount_in_words"/>
                         </span>
 
                         <!-- Amount number -->
-                        <span style="
-                            position:absolute;
-                            top:38mm;
-                            left:156mm;
-                            font-size:11pt;
-                        ">
+                        <span style="position:absolute; top:39mm; left:216mm; font-size:13pt;">
                             <t t-esc="'{:,.2f}'.format(doc.amount)"/>
                         </span>
 
                         <!-- Day -->
-                        <span style="
-                            position:absolute;
-                            top:13.5mm;
-                            left:156.8mm;
-                            font-size:10pt;
-                            letter-spacing:9px;
-                        ">
+                        <span style="position:absolute; top:3mm; left:212mm; font-size:13pt; letter-spacing:9px;">
                             <t t-esc="print_date.strftime('%d')"/>
                         </span>
 
                         <!-- Month -->
-                        <span style="
-                            position:absolute;
-                            top:13.5mm;
-                            left:169mm;
-                            font-size:10pt;
-                            letter-spacing:9px;
-                        ">
+                        <span style="position:absolute; top:3mm; left:231mm; font-size:13pt; letter-spacing:9px;">
                             <t t-esc="print_date.strftime('%m')"/>
                         </span>
 
                         <!-- Year -->
-                        <span style="
-                            position:absolute;
-                            top:13.5mm;
-                            left:181.5mm;
-                            font-size:10pt;
-                            letter-spacing:7px;
-                        ">
+                        <span style="position:absolute; top:3mm; left:249mm; font-size:13pt; letter-spacing:13px;">
                             <t t-esc="print_date.strftime('%Y')"/>
                         </span>
 

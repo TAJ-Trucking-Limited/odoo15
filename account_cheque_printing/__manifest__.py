@@ -1,6 +1,6 @@
 {
     'name': 'Cheque Management',
-    'version': '17.0.1.0.3',
+    'version': '17.0.1.0.4',
     'summary': 'Cheque printing and management with wizard',
     'description': """
         Manage cheques, print them multiple times,
