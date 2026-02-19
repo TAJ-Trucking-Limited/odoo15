@@ -1,105 +1,108 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <template id="report_cheque">
+
+    <record id="paperformat_cheque" model="report.paperformat">
+        <field name="name">Cheque Printer Feed Portrait</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_width">91</field>
+        <field name="page_height">203</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+
+
+    <template id="report_cheque_pdf">
         <t t-call="web.html_container">
-            <t t-call="web.basic_layout">
-                <t t-set="doc" t-value="docs[0]"/>
 
-                <script type="text/javascript">
-                    var isDownloaded = false;
+            <t t-set="doc" t-value="docs[0]"/>
+            <t t-set="print_date" t-value="doc.print_date or doc.create_date"/>
 
-                    function downloadVoucherPDF() {
-                        if (isDownloaded) return;
-                        isDownloaded = true;
+            <div class="page"
+                 style="
+                    width:91mm;
+                    height:203mm;
+                    margin:0;
+                    padding:0;
+                    position:relative;
+                 ">
 
-                        var paymentId = <t t-esc="doc.id"/>;
-                        var url = '/report/pdf/account_cheque_printing.report_cheque_voucher/' + paymentId + '?download=true';
-
-                        var a = document.createElement('a');
-                        a.href = url;
-                        a.download = '<t t-esc="doc.cheque_number"/>' + '.pdf';
-
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                    }
-
-                    window.onload = function () {
-                        window.print();
-                    };
-
-                    window.onafterprint = function() {
-                        downloadVoucherPDF();
-                    };
-                </script>
-
-                <t t-set="print_date" t-value="doc.print_date or doc.create_date"/>
-
-                <!-- A4 Container -->
                 <div style="
-                    position: relative;
-                    width: 210mm;
-                    height: 297mm;
-                    margin: 0 auto;
+                    position:absolute;
+                    width:203mm;
+                    height:91mm;
+                    left:91mm;
+                    top:20mm;
+                    display:block;
+                    -webkit-transform:rotate(90deg);
+                    -webkit-transform-origin:top left;
+                    transform:rotate(90deg);
+                    transform-origin:top left;
                 ">
 
-                    <!-- Cheque centered -->
+                    <!-- الخلفية -->
                     <div style="
-                        position: absolute;
-                        top: 35%;
-                        left: 50%;
-                        width: 203mm;
-                        height: 91mm;
-                        transform: translate(-50%, -50%) rotate(90deg);
-                        transform-origin: center center;
-                        background-size: 203mm 91mm;
-                        background-repeat: no-repeat;
+                        position:relative;
+                        width:203mm;
+                        height:91mm;
+
                     ">
 
                         <!-- Payee -->
-                        <span style="position:absolute; top:16mm; left:0.2mm; font-size:13pt;">
+                        <div style="position:absolute; top:9mm; left:2mm; font-size:13pt;">
                             <t t-esc="doc.payee_id.name"/>
-                        </span>
+                        </div>
 
                         <!-- Amount in words -->
-                        <span style="position:absolute; top:27.3mm; left:10mm; width:120mm; font-size:13pt;">
+                        <div style="position:absolute; top:18mm; left:10mm; width:120mm; font-size:13pt;">
                             <t t-esc="doc.amount_in_words"/>
-                        </span>
+                        </div>
 
                         <!-- Amount number -->
-                        <span style="position:absolute; top:39mm; left:216mm; font-size:13pt;">
+                        <div style="position:absolute; top:28mm; left:167mm; font-size:13pt;">
                             <t t-esc="'{:,.2f}'.format(doc.amount)"/>
-                        </span>
+                        </div>
 
                         <!-- Day -->
-                        <span style="position:absolute; top:3mm; left:212mm; font-size:13pt; letter-spacing:9px;">
+                        <div style="position:absolute; top:0mm; left:168mm; font-size:13pt; letter-spacing:6px;">
                             <t t-esc="print_date.strftime('%d')"/>
-                        </span>
+                        </div>
 
                         <!-- Month -->
-                        <span style="position:absolute; top:3mm; left:231mm; font-size:13pt; letter-spacing:9px;">
+                        <div style="position:absolute; top:0mm; left:183mm; font-size:13pt; letter-spacing:6px;">
                             <t t-esc="print_date.strftime('%m')"/>
-                        </span>
+                        </div>
 
                         <!-- Year -->
-                        <span style="position:absolute; top:3mm; left:249mm; font-size:13pt; letter-spacing:13px;">
+                        <div style="position:absolute; top:0mm; left:198mm; font-size:13pt; letter-spacing:8px;">
                             <t t-esc="print_date.strftime('%Y')"/>
-                        </span>
+                        </div>
 
                     </div>
                 </div>
 
-            </t>
+            </div>
+
         </t>
     </template>
 
-    <record id="report_cheque_html" model="ir.actions.report">
-        <field name="name">Cheque Report</field>
-        <field name="model">account.cheque</field>
-        <field name="report_type">qweb-html</field>
-        <field name="report_name">account_cheque_printing.report_cheque</field>
-        <field name="report_file">account_cheque_printing.report_cheque</field>
-        <field name="print_report_name">'Cheque - %s' % (object.name)</field>
-    </record>
+        <record id="report_cheque_pdf_action" model="ir.actions.report">
+            <field name="name">Cheque Report</field>
+            <field name="model">account.cheque</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">account_cheque_printing.report_cheque_pdf</field>
+            <field name="report_file">account_cheque_printing.report_cheque_pdf</field>
+            <field name="paperformat_id" ref="account_cheque_printing.paperformat_cheque"/>
+            <field name="print_report_name">'Cheque - %s' % (object.name)</field>
+        </record>
+
+
 
 </odoo>

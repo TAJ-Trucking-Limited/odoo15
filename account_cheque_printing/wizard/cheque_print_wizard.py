@@ -195,10 +195,12 @@ class ChequeWizard(models.TransientModel):
                 'print_count': 1,
                 'cheque_type': 'manual_cheque',
             })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/cheque/print_and_download/{cheque.id}',
+            'target': 'new',
+        }
 
-        return self.env.ref(
-            'account_cheque_printing.report_cheque_html'
-        ).report_action(cheque)
 
     def _convert_amount_to_words(self, amount, currency):
         """Convert numeric amount into English words."""
