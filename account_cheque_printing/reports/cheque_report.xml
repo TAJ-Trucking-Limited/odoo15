@@ -38,8 +38,8 @@
                     position:absolute;
                     width:203mm;
                     height:91mm;
-                    left:91mm;
-                    top:20mm;
+                    left:85mm;
+                    top:18mm;
                     display:block;
                     -webkit-transform:rotate(90deg);
                     -webkit-transform-origin:top left;
@@ -47,7 +47,6 @@
                     transform-origin:top left;
                 ">
 
-                    <!-- الخلفية -->
                     <div style="
                         position:relative;
                         width:203mm;
