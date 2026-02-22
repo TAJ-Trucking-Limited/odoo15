@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <template id="report_cheque_preview">
+        <t t-call="web.html_container">
+
+            <t t-set="doc" t-value="docs and docs[0]"/>
+
+            <t t-set="bg_image"
+               t-value="'tzs_cheque_bg.jpg' if doc.get('currency_code') == 'TZS' else 'usd_cheque_bg.jpg'"/>
+
+            <div t-attf-style="
+                position:relative;
+                width:203mm;
+                height:91mm;
+                background-image: url('/account_cheque_printing/static/src/img/#{bg_image}');
+                background-size: 203mm 91mm;
+                background-repeat: no-repeat;
+            ">
+
+
+
+                <span style="position:absolute; top:23mm; left:14mm; font-size:11pt;">
+                    <t t-esc="doc.get('payee_name','')"/>
+
+                </span>
+
+                <span style="position:absolute; top:32mm; left:22mm; width:120mm; font-size:11pt;">
+                    <t t-esc="doc.get('amount_in_words','')"/>
+                </span>
+
+                <span style="position:absolute; top:38mm; left:156mm; font-size:11pt;">
+                    <t t-esc="'{:,.2f}'.format(doc.get('amount', 0.0))"/>
+
+
+                </span>
+
+                <span style="position:absolute; top:13.5mm; left:156.8mm; font-size:10pt; letter-spacing:9px;">
+                    <t t-esc="doc.get('date') and doc['date'].strftime('%d') or ''"/>
+                </span>
+
+                <span style="position:absolute; top:13.5mm; left:169mm; font-size:10pt; letter-spacing:9px;">
+                    <t t-esc="doc.get('date') and doc['date'].strftime('%m') or ''"/>
+                </span>
+
+                <span style="position:absolute; top:13.5mm; left:181.5mm; font-size:10pt; letter-spacing:7px;">
+                    <t t-esc="doc.get('date') and doc['date'].strftime('%Y') or ''"/>
+                </span>
+
+            </div>
+        </t>
+    </template>
+</odoo>

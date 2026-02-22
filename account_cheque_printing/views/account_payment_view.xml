@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+
+<odoo>
+    <record id="view_account_payment_form_inherit_cheque" model="ir.ui.view">
+        <field name="name">account.payment.form.cheque</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button
+                    name="%(action_open_cheque_wizard)d"
+                    string="Print Cheque"
+                    type="action"
+                    class="btn-primary"
+                    invisible="payment_type != 'outbound'"
+
+                />
+            </xpath>
+
+        </field>
+    </record>
+    <record id="view_account_payment_form_inherited_cheque" model="ir.ui.view">
+        <field name="name">account.payment.form.inherited.cheque</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account_check_printing.view_account_payment_form_inherited"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//button[@name='print_checks']" position="replace">
+            </xpath>
+        </field>
+    </record>
+</odoo>

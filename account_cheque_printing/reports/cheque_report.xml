@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="paperformat_cheque" model="report.paperformat">
+        <field name="name">Cheque Printer Feed Portrait</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_width">91</field>
+        <field name="page_height">203</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">90</field>
+    </record>
+
+
+
+    <template id="report_cheque_pdf">
+        <t t-call="web.html_container">
+
+            <t t-set="doc" t-value="docs[0]"/>
+            <t t-set="print_date" t-value="doc.print_date or doc.create_date"/>
+
+            <div class="page"
+                 style="
+                    width:91mm;
+                    height:203mm;
+                    margin:0;
+                    padding:0;
+                    position:relative;
+                 ">
+
+                <div style="
+                    position:absolute;
+                    width:203mm;
+                    height:91mm;
+                    left:85mm;
+                    top:18.5mm;
+                    font-size:11pt;
+                    display:block;
+                    -webkit-transform:rotate(90deg);
+                    -webkit-transform-origin:top left;
+                    transform:rotate(90deg);
+                    transform-origin:top left;
+                ">
+
+                    <div style="
+                        position:relative;
+                        width:203mm;
+                        height:91mm;
+
+                    ">
+
+                        <!-- Payee -->
+                        <div style="position:absolute; top:9mm; left:2mm; ">
+                            <t t-esc="doc.payee_id.name"/>
+                        </div>
+
+                        <!-- Amount in words -->
+                        <div style="position:absolute; top:19.5mm; left:10mm; width:120mm;">
+                            <t t-esc="doc.amount_in_words"/>
+                        </div>
+
+                        <!-- Amount number -->
+                        <div style="position:absolute; top:28mm; left:164mm;">
+                            <t t-esc="'{:,.2f}'.format(doc.amount)"/>
+                        </div>
+
+                        <!-- Day -->
+                        <div style="position:absolute; top:0mm; left:166mm; letter-spacing:6px;">
+                            <t t-esc="print_date.strftime('%d')"/>
+                        </div>
+
+                        <!-- Month -->
+                        <div style="position:absolute; top:0mm; left:181mm; letter-spacing:6px;">
+                            <t t-esc="print_date.strftime('%m')"/>
+                        </div>
+
+                        <!-- Year -->
+                        <div style="position:absolute; top:0mm; left:196mm; letter-spacing:8px;">
+                            <t t-esc="print_date.strftime('%Y')"/>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </t>
+    </template>
+
+        <record id="report_cheque_pdf_action" model="ir.actions.report">
+            <field name="name">Cheque Report</field>
+            <field name="model">account.cheque</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">account_cheque_printing.report_cheque_pdf</field>
+            <field name="report_file">account_cheque_printing.report_cheque_pdf</field>
+            <field name="paperformat_id" ref="account_cheque_printing.paperformat_cheque"/>
+            <field name="print_report_name">'Cheque - %s' % (object.name)</field>
+        </record>
+
+
+
+</odoo>
