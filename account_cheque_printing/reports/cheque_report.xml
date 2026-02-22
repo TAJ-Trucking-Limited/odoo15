@@ -39,7 +39,8 @@
                     width:203mm;
                     height:91mm;
                     left:85mm;
-                    top:18mm;
+                    top:18.5mm;
+                    font-size:11pt;
                     display:block;
                     -webkit-transform:rotate(90deg);
                     -webkit-transform-origin:top left;
@@ -55,32 +56,32 @@
                     ">
 
                         <!-- Payee -->
-                        <div style="position:absolute; top:9mm; left:2mm; font-size:13pt;">
+                        <div style="position:absolute; top:9mm; left:2mm; ">
                             <t t-esc="doc.payee_id.name"/>
                         </div>
 
                         <!-- Amount in words -->
-                        <div style="position:absolute; top:18mm; left:10mm; width:120mm; font-size:13pt;">
+                        <div style="position:absolute; top:19.5mm; left:10mm; width:120mm;">
                             <t t-esc="doc.amount_in_words"/>
                         </div>
 
                         <!-- Amount number -->
-                        <div style="position:absolute; top:28mm; left:167mm; font-size:13pt;">
+                        <div style="position:absolute; top:28mm; left:164mm;">
                             <t t-esc="'{:,.2f}'.format(doc.amount)"/>
                         </div>
 
                         <!-- Day -->
-                        <div style="position:absolute; top:0mm; left:168mm; font-size:13pt; letter-spacing:6px;">
+                        <div style="position:absolute; top:0mm; left:166mm; letter-spacing:6px;">
                             <t t-esc="print_date.strftime('%d')"/>
                         </div>
 
                         <!-- Month -->
-                        <div style="position:absolute; top:0mm; left:183mm; font-size:13pt; letter-spacing:6px;">
+                        <div style="position:absolute; top:0mm; left:181mm; letter-spacing:6px;">
                             <t t-esc="print_date.strftime('%m')"/>
                         </div>
 
                         <!-- Year -->
-                        <div style="position:absolute; top:0mm; left:198mm; font-size:13pt; letter-spacing:8px;">
+                        <div style="position:absolute; top:0mm; left:196mm; letter-spacing:8px;">
                             <t t-esc="print_date.strftime('%Y')"/>
                         </div>
 
