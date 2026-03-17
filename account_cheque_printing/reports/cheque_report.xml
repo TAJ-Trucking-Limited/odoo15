@@ -40,7 +40,7 @@
                     height:91mm;
                     left:87mm;
                     top:18.5mm;
-                    font-size:11pt;
+                    font-size:12pt;
                     display:block;
                     -webkit-transform:rotate(90deg);
                     -webkit-transform-origin:top left;
@@ -56,12 +56,12 @@
                     ">
 
                         <!-- Payee -->
-                        <div style="position:absolute; top:11mm; left:2mm; ">
+                        <div style="position:absolute; top:11mm; left:2mm; white-space:nowrap; width:120mm;">
                             <t t-esc="doc.payee_id.name"/>
                         </div>
 
                         <!-- Amount in words -->
-                        <div style="position:absolute; top:21.5mm; left:10mm; width:120mm;">
+                        <div style="position:absolute; top:21.5mm; left:10mm; white-space:nowrap; width:120mm;">
                             <t t-esc="doc.amount_in_words"/>
                         </div>
 
