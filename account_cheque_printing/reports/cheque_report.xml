@@ -60,17 +60,21 @@
                             <t t-esc="doc.payee_id.name"/>
                         </div>
                         <!-- Amount in words -->
+                        <t t-set="text" t-value="doc.amount_in_words"/>
+                        <t t-set="cut" t-value="50"/>
+
+                        <t t-set="first_part" t-value="text[:cut].rsplit(' ', 1)[0]"/>
+
+                        <t t-set="second_part" t-value="text[len(first_part):].strip()"/>
+
                         <div style="position:absolute; top:21.5mm; left:10mm; width:120mm;">
-
-                            <t t-set="text" t-value="doc.amount_in_words"/>
-                            <t t-set="cut" t-value="70"/>
-
+                            
                             <div>
-                                <t t-esc="text[:cut].rsplit(' ', 1)[0]"/>
+                                <t t-esc="first_part"/>
                             </div>
 
                             <div style="margin-top:6mm;">
-                                <t t-esc="text[:cut].rsplit(' ', 1)[1] + text[cut:]"/>
+                                <t t-esc="second_part"/>
                             </div>
 
                         </div>
