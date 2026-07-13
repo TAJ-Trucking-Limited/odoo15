@@ -6,7 +6,7 @@
         <field name="arch" type="xml">
             <form string="Print Cheque">
                 <group>
-                    <field name="payment_id" readonly="1" invisible="1"/>
+                    <field name="payment_id" readonly="1" invisible="1"/> <!-- used by amount/currency readonly modifiers -->
                 </group>
 
                 <group col="2">

@@ -20,7 +20,7 @@
                         </div>
                         <div class="col-5">
                             <span>
-                                <strong t-esc="'{0:,.2f}'.format(int(o.amount_total_signed/o.amount_total))"></strong>
+                                <strong t-esc="'{0:,.2f}'.format(int(o.amount_total_signed / o.amount_total) if o.amount_total else 0)"/>
                             </span>
                         </div>
                     </div>

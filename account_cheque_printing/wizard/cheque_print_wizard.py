@@ -40,7 +40,7 @@ class ChequeWizard(models.TransientModel):
     def default_get(self, fields_list):
         """Prefill wizard data from payment or existing cheque."""
         res = super().default_get(fields_list)
-        payment = self.env['account.payment'].browse(self._context.get('active_id'))
+        payment = self.env['account.payment'].browse(self.env.context.get('active_id'))
         if not payment:
             return res
 
