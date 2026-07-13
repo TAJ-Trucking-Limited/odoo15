@@ -4,9 +4,9 @@
         <field name="name">report.send.mail.tree</field>
         <field name="model">report.send.mail</field>
         <field name="arch" type="xml">
-            <tree string="Reports">
+            <list string="Reports">
                 <!--                <field name="invoice_id"/>-->
-            </tree>
+            </list>
         </field>
     </record>
 

@@ -4,7 +4,7 @@
         <field name="name">Report Trip Profit</field>
         <field name="model">report.trip.profit</field>
         <field name="arch" type="xml">
-            <tree string="Report Trip Profit" create="0">
+            <list string="Report Trip Profit" create="0">
                 <field name="truck"/>
                 <field name="order_id"/>
                 <field name="root"/>
@@ -76,7 +76,7 @@
                 <field name="percentage"/>
                 <!--                <button name="view_details" type="object"-->
                 <!--                        string="View"/>-->
-            </tree>
+            </list>
         </field>
     </record>
     <record id="report_trip_profit_action" model="ir.actions.act_window">

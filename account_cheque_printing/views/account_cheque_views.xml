@@ -40,7 +40,7 @@
         <field name="name">account.cheque.tree</field>
         <field name="model">account.cheque</field>
         <field name="arch" type="xml">
-            <tree string="Cheques" create="false">
+            <list string="Cheques" create="false">
                 <field name="name"/>
                 <field name="cheque_number"/>
                 <field name="cheque_type"/>
@@ -52,7 +52,7 @@
                 <field name="print_date"/>
                 <field name="partner_comparison_note" optional="hide"/>
 
-            </tree>
+            </list>
         </field>
     </record>
 </odoo>
