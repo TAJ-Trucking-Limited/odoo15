@@ -5,28 +5,28 @@
     <record id="action_account_cheque" model="ir.actions.act_window">
         <field name="name">Cheques</field>
         <field name="res_model">account.cheque</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
     <menuitem
         id="menu_account_cheque_management"
         name="Cheque Management"
-        parent="account.account_management_menu"
+        parent="account.menu_finance_entries"
         sequence="10"
     />
     <menuitem
         id="menu_account_cheque"
         name="Cheque Registry"
-        parent="account.menu_finance_entries_management"
+        parent="menu_account_cheque_management"
         action="action_account_cheque"
         sequence="10"
     />
     <menuitem
         id="menu_account_cheque_wizard"
         name="Manual Cheque"
-        parent="account.menu_finance_entries_actions"
+        parent="menu_account_cheque_management"
         action="action_open_cheque_wizard"
-        sequence="5"
+        sequence="15"
     />
 
 </odoo>
