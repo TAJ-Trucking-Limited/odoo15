@@ -36,5 +36,5 @@
 
 
     'application': False,
-    'installable': False,
+    'installable': True,
 }

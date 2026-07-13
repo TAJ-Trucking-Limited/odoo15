@@ -42,7 +42,7 @@
     ],
     'qweb': [],
     'license': 'AGPL-3',
-    'installable': False,
+    'installable': True,
     'application': False,
-    'auto_install': True,
+    'auto_install': False,
 }

@@ -792,8 +792,7 @@ class ReportSendMail(models.TransientModel):
         return {
             'name': 'Report Trip Profit',
             'type': 'ir.actions.act_window',
-            'view_type': 'form',
-            'view_mode': 'tree,form',
+            'view_mode': 'list,form',
             'res_model': 'report.trip.profit',
             'context': {'group_by': 'truck'}
 

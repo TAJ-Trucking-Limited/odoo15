@@ -9,7 +9,7 @@
                 <xpath expr="//field[@name='currency_id']" position='after'>
                     <field name="sale_order_id" string="Sale Order"/>
                 </xpath>
-                <xpath expr="//notebook/page/field[@name='order_line']/tree/field[@name='product_qty']"
+                <xpath expr="//field[@name='order_line']/list/field[@name='product_qty']"
                        position="after">
                     <field name="truck_number" optional="hide"/>
                     <field name="cargo_type" optional="hide"/>
