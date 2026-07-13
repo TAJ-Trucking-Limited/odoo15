@@ -12,7 +12,7 @@
     "external_dependencies": {"python": ["xlsxwriter", "xlrd"]},
     "depends": ["base", "web"],
     "demo": ["demo/report.xml"],
-    "installable": True,
+    "installable": False,
     "assets": {
         "web.assets_backend": [
             "report_xlsx/static/src/js/report/action_manager_report.esm.js",

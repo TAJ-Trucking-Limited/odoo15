@@ -16,5 +16,6 @@
         'views/report_trip_profit_views.xml'
     ],
     'application': True,
+    'installable': False,
     'license': 'LGPL-3',
 }
