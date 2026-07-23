@@ -45,7 +45,7 @@ try:
                     re.search(pattern, sheetname) and int(sheetname[-2:]) or 0
                 )
                 # Only up to 100 duplicates
-                deduplicated_secuence = "~{:02d}".format(duplicated_secuence + 1)
+                deduplicated_secuence = f"~{duplicated_secuence + 1:02d}"
                 if duplicated_secuence > 99:
                     raise xlsxwriter.exceptions.DuplicateWorksheetName  # noqa: B904
                 if duplicated_secuence:
@@ -95,7 +95,7 @@ class ReportXlsxAbstract(models.AbstractModel):
         """Get the format to be used in cells (symbol included).
         Used in account_financial_report addon"""
         s_before = currency.symbol if currency.position == "before" else ""
-        s_after = " %s" % currency.symbol if currency.position == "after" else ""
+        s_after = f" {currency.symbol}" if currency.position == "after" else ""
         return f"{f'{s_before}'}#,##0.{'0' * currency.decimal_places}{f'{s_after}'}"
 
     def create_xlsx_report(self, docids, data):

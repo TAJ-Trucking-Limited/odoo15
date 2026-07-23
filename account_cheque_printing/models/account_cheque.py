@@ -8,6 +8,11 @@ class AccountCheque(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
 
+    _cheque_number_unique = models.Constraint(
+        'UNIQUE(cheque_number)',
+        'Cheque number must be unique.',
+    )
+
     name = fields.Char(
         string='Cheque Reference',
         readonly=True,
@@ -100,11 +105,12 @@ class AccountCheque(models.Model):
     ], string='Cheque Type', default='manual_cheque', required=True)
 
     @api.model_create_multi
-    def create(self, vals):
+    def create(self, vals_list):
         # Override create to generate internal reference
-        cheque = super().create(vals)
-        cheque.name = f"CH/{cheque.cheque_number}"
-        return cheque
+        cheques = super().create(vals_list)
+        for cheque in cheques:
+            cheque.name = f"CH/{cheque.cheque_number}"
+        return cheques
 
     @api.depends('payment_id.partner_id', 'payee_id')
     def _compute_partner_note(self):

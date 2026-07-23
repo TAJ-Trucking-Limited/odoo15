@@ -1,16 +1,24 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="email_template_report_pdf" model="mail.template">
-        <field name="name">Report Pdf</field>
-        <field name="model_id" ref="send_report_via_mail.model_report_send_mail"/>
-        <field name="auto_delete" eval="True"/>
-        <field name="email_from">kreik.ali@gmail.com</field>
-        <field name="email_to">mmbashiti@gmail.com</field>
-        <field name="subject">Send Report Pdf</field>
-    </record>
+    <delete id="email_template_report_pdf" model="mail.template"/>
+
     <data noupdate="1">
+        <record id="email_from_parameter" model="ir.config_parameter">
+            <field name="key">send_report_via_mail.email_from</field>
+            <field name="value">odoobot@taj-limited.odoo.com</field>
+        </record>
+        <record id="email_to_parameter" model="ir.config_parameter">
+            <field name="key">send_report_via_mail.email_to</field>
+            <field name="value">kreik.ali@gmail.com</field>
+        </record>
+        <record id="email_cc_parameter" model="ir.config_parameter">
+            <field name="key">send_report_via_mail.email_cc</field>
+            <field name="value">nour.m@madfoxme.com; Moustapha@madfoxme.com; souzan.s@madfoxme.com</field>
+        </record>
+
         <record id="report_cron" model="ir.cron">
             <field name="name">Send Report Via Email</field>
+            <field name="active" eval="False"/>
             <field name="state">code</field>
             <field name="model_id" ref="model_report_send_mail"/>
             <field name="code">model.send_email_with_pdf_attach()</field>

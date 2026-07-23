@@ -1,6 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from num2words import num2words
+
 
 class ChequeWizard(models.TransientModel):
     _name = 'account.cheque.wizard'
@@ -15,14 +15,18 @@ class ChequeWizard(models.TransientModel):
         help="Partner receiving the cheque."
     )
     amount = fields.Monetary(required=True, help="Amount written on the cheque.")
-    currency_id = fields.Many2one('res.currency', help="Currency of the cheque amount.")
+    currency_id = fields.Many2one(
+        'res.currency',
+        required=True,
+        help="Currency of the cheque amount.",
+    )
     reason_note = fields.Text(required=True, help="A mandatory note explaining the reason for issuing the check.")
 
     amount_in_words = fields.Char(
         string="Amount in Words",
         compute='_compute_amount_in_words',
         store=True,
-        help="Amount written in words."
+        help="Amount written in words.",
     )
 
     preview_date = fields.Date(string='Cheque Date', default=fields.Date.context_today)

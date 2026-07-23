@@ -26,7 +26,7 @@ class ReportAction(models.Model):
             .sudo(False)
             .create_xlsx_report(docids, data)  # noqa
         )
-        if ret and isinstance(ret, (tuple, list)):
+        if ret and isinstance(ret, (tuple | list)):  # data, "xlsx"
             report_sudo.save_xlsx_report_attachment(docids, ret[0])
         return ret
 
@@ -49,13 +49,13 @@ class ReportAction(models.Model):
         # Similar to ir.actions.report::_render_qweb_pdf in the base module.
         if not self.attachment:
             return
-        if len(docids) != 1:
+        if len(docids) != 1:  # unlike PDFs, here we don't have multiple streams
             _logger.warning(f"{self.name}: No records to save attachments onto.")
             return
         record = self.env[self.model].browse(docids)
         attachment_name = safe_eval(self.attachment, {"object": record, "time": time})
         if not attachment_name:
-            return
+            return  # same as for PDFs, get out silently when name fails
         attachment_values = {
             "name": attachment_name,
             "raw": report_contents,
@@ -76,4 +76,4 @@ class ReportAction(models.Model):
                 "The XLSX document %r is now saved in the database",
                 attachment_values["name"],
             )
-            return attachment, record
+        return attachment, record

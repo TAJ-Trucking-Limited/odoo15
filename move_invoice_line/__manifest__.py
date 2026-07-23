@@ -22,14 +22,18 @@
 
 {
     'name': 'Taj Customizations',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'summary': 'customizations for accounting add new fields to help compute profit for track ,route, order',
     'category': 'Accounting',
     'author': 'Madfox',
     'maintainer': 'Madfox solutions',
     'company': 'Madfox solutions',
     'website': 'https://www.madfox.solutions',
-    'depends': ['base', 'sale', 'fleet', 'account', 'purchase', 'account_asset'],
+    'depends': [
+        'account_asset',
+        'fleet',
+        'sale_purchase',
+    ],
     'data': [
         'views/account_move_views.xml',
         'views/sale_order_views.xml',
@@ -40,7 +44,6 @@
         'views/inherit_account_asset_views.xml'
 
     ],
-    'qweb': [],
     'license': 'AGPL-3',
     'installable': True,
     'application': False,

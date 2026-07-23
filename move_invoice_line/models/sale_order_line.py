@@ -17,9 +17,18 @@ class SaleOrderLine(models.Model):
     weight = fields.Char(required=False, string='WEIGHT')
 
     def _prepare_invoice_line(self, **optional_values):
-        """
-       add vehicle_id value to invoice line
-        """
-        values = super(SaleOrderLine, self)._prepare_invoice_line(**optional_values)
-        values.update({'vehicle_id': self.vehicle_id.id, 'container_num': self.container_num, 'consignee': self.consignee})
+        values = super()._prepare_invoice_line(**optional_values)
+        if values.get('display_type') != 'product':
+            return values
+        values.update({
+            'vehicle_id': self.vehicle_id.id,
+            'container_num': self.container_num,
+            'file_name': self.file_name,
+            'consignee': self.consignee,
+            'weight': self.weight,
+            'size': self.size,
+            'srn': self.srn,
+            'order_id': self.order_id.id,
+            'route_id': self.id,
+        })
         return values

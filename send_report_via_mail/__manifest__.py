@@ -1,13 +1,18 @@
 {
     'name': 'Send Report Via Email',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'author': 'Madfox Solutions',
     'website': 'https://madfox.solutions/',
     'category': 'Send Mail Implementation',
     'sequence': 380,
     'summary': 'Send Mail Implementation',
     'description': """Send Report Via Email""",
-    'depends': ['base', 'payment', 'account', 'sale', 'account_reports'],
+    'depends': [
+        'account_reports',
+        'mail',
+        'move_invoice_line',
+        'report_xlsx',
+    ],
     'data': [
         'security/ir.model.access.csv',
         'data/report_mail.xml',

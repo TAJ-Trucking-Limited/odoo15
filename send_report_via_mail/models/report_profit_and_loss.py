@@ -1,8 +1,4 @@
-import datetime
-import logging
 from odoo import models
-
-_logger = logging.getLogger(__name__)
 
 
 class ReportTajProfitExcel(models.AbstractModel):
@@ -11,7 +7,6 @@ class ReportTajProfitExcel(models.AbstractModel):
     _description = 'Profit Loss Report'
 
     def generate_xlsx_report(self, workbook, data, partners):
-        # print('data:::', data['products'])
         bold = workbook.add_format(
             {'bold': True, 'align': 'center', 'bg_color': '#757171', 'border': 1, 'color': 'white'})
 
