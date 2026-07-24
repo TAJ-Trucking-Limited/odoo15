@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <delete id="email_template_report_pdf" model="mail.template"/>
+    <delete
+        model="mail.template"
+        search="[('name', '=', 'Report Pdf'), ('model_id', '=', ref('model_report_send_mail'))]"
+    />
 
     <data noupdate="1">
         <record id="email_from_parameter" model="ir.config_parameter">
