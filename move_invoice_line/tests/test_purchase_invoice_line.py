@@ -9,15 +9,17 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.vendor = cls.env['res.partner'].create({
+        cls.vendor = cls.env['res.partner'].sudo().create({
             'name': 'Test Vendor',
             'supplier_rank': 1,
         })
 
     def _sale_order(self, line_count=1):
-        order = self.env['sale.order'].create({'partner_id': self.partner_a.id})
+        order = self.env['sale.order'].sudo().create({
+            'partner_id': self.partner_a.id,
+        })
         for index in range(line_count):
-            self.env['sale.order.line'].create({
+            self.env['sale.order.line'].sudo().create({
                 'order_id': order.id,
                 'product_id': self.product_a.id,
                 'product_uom_qty': 1,
@@ -31,12 +33,12 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             })
         return order
 
-    def _purchase_line(self, sale_order=False, sale_line=False):
-        order = self.env['purchase.order'].create({
+    def _purchase_line(self, sale_order=None, sale_line=None):
+        order = self.env['purchase.order'].sudo().create({
             'partner_id': self.vendor.id,
             'sale_order_id': sale_order.id if sale_order else False,
         })
-        return self.env['purchase.order.line'].create({
+        return self.env['purchase.order.line'].sudo().create({
             'order_id': order.id,
             'product_id': self.product_a.id,
             'product_qty': 1,

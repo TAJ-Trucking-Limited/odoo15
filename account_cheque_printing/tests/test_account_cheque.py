@@ -1,5 +1,8 @@
-from odoo.exceptions import UserError, ValidationError
+from psycopg2 import IntegrityError
+
+from odoo.exceptions import UserError
 from odoo.tests import tagged
+from odoo.tools import mute_logger
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
@@ -44,7 +47,11 @@ class TestAccountCheque(AccountTestInvoicingCommon):
     def test_duplicate_cheque_number_is_rejected(self):
         self.env['account.cheque'].create(self._cheque_values('UNIQUE-001'))
 
-        with self.assertRaises(ValidationError):
+        with (
+            self.assertRaises(IntegrityError),
+            self.cr.savepoint(),
+            mute_logger('odoo.sql_db'),
+        ):
             self.env['account.cheque'].create(self._cheque_values('UNIQUE-001'))
 
     def test_manual_cheque_wizard(self):

@@ -8,19 +8,21 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        brand = cls.env['fleet.vehicle.model.brand'].create({'name': 'Test Brand'})
-        vehicle_model = cls.env['fleet.vehicle.model'].create({
+        brand = cls.env['fleet.vehicle.model.brand'].sudo().create({
+            'name': 'Test Brand',
+        })
+        vehicle_model = cls.env['fleet.vehicle.model'].sudo().create({
             'name': 'Test Model',
             'brand_id': brand.id,
         })
-        cls.vehicle = cls.env['fleet.vehicle'].create({
+        cls.vehicle = cls.env['fleet.vehicle'].sudo().create({
             'model_id': vehicle_model.id,
             'license_plate': 'TEST-1',
         })
-        cls.sale_order = cls.env['sale.order'].create({
+        cls.sale_order = cls.env['sale.order'].sudo().create({
             'partner_id': cls.partner_a.id,
         })
-        cls.sale_line = cls.env['sale.order.line'].create({
+        cls.sale_line = cls.env['sale.order.line'].sudo().create({
             'order_id': cls.sale_order.id,
             'product_id': cls.product_a.id,
             'product_uom_qty': 1,
@@ -48,7 +50,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(values['route_id'], self.sale_line.id)
 
     def test_section_does_not_receive_cargo_values(self):
-        section = self.env['sale.order.line'].create({
+        section = self.env['sale.order.line'].sudo().create({
             'order_id': self.sale_order.id,
             'display_type': 'line_section',
             'name': 'Section',
