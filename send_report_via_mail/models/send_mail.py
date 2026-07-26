@@ -149,8 +149,7 @@ class ReportSendMail(models.TransientModel):
             ('account_reports.aged_receivable_report', 'aged receivable.pdf'),
         ):
             report = self.env.ref(xml_id)
-            options = report.get_options()
-            result = report.dispatch_report_action(options, 'export_to_pdf')
+            result = self._export_aged_report(report)
             attachments |= self.env['ir.attachment'].sudo().create({
                 'name': filename,
                 'type': 'binary',
@@ -169,6 +168,10 @@ class ReportSendMail(models.TransientModel):
             'attachment_ids': [Command.set(attachments.ids)],
         })
         mail.send()
+
+    def _export_aged_report(self, report):
+        options = report.get_options({})
+        return report.dispatch_report_action(options, 'export_to_pdf')
 
     def convert_date_to_datetime(self, from_date, to_date):
         return (

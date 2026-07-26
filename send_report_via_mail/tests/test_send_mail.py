@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
@@ -86,3 +87,19 @@ class TestSendMail(TransactionCase):
 
         with self.assertRaises(UserError):
             self.env['report.send.mail'].send_email_with_pdf_attach()
+
+    def test_aged_report_export_uses_odoo_19_options_api(self):
+        report = MagicMock()
+        report.get_options.return_value = {'date': {}}
+        report.dispatch_report_action.return_value = {
+            'file_content': b'%PDF test',
+        }
+
+        result = self.env['report.send.mail']._export_aged_report(report)
+
+        report.get_options.assert_called_once_with({})
+        report.dispatch_report_action.assert_called_once_with(
+            {'date': {}},
+            'export_to_pdf',
+        )
+        self.assertEqual(result['file_content'], b'%PDF test')
