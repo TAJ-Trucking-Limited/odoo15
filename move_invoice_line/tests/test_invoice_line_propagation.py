@@ -1,3 +1,5 @@
+from xml.etree import ElementTree
+
 from odoo.tests import tagged
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
@@ -36,6 +38,10 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             'srn': 'SRN-001',
         })
 
+    def _combined_view_root(self, xml_id):
+        view = self.env.ref(xml_id)
+        return ElementTree.fromstring(view.get_combined_arch())
+
     def test_product_line_propagates_all_custom_values(self):
         values = self.sale_line._prepare_invoice_line()
 
@@ -60,3 +66,149 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
 
         self.assertNotIn('route_id', values)
         self.assertNotIn('container_num', values)
+
+    def test_move_form_exposes_cargo_fields_on_both_line_lists(self):
+        root = self._combined_view_root(
+            'move_invoice_line.view_move_form_madfox_17'
+        )
+        expected_fields = {
+            'order_id',
+            'route_id',
+            'vehicle_id',
+            'analytic_account_id',
+            'file_name',
+            'container_num',
+            'consignee',
+            'size',
+            'weight',
+            'srn',
+        }
+
+        targets = {
+            'invoice_line_ids': (
+                ".//page[@name='invoice_tab']"
+                "/field[@name='invoice_line_ids']/list"
+            ),
+            'line_ids': (
+                ".//page[@name='aml_tab']"
+                "/field[@name='line_ids']/list"
+            ),
+        }
+
+        for line_field, xpath in targets.items():
+            line_lists = root.findall(xpath)
+            self.assertEqual(
+                len(line_lists),
+                1,
+                f'Expected one embedded list for {line_field}',
+            )
+            field_names = {
+                node.get('name')
+                for node in line_lists[0].findall('./field')
+            }
+            self.assertTrue(
+                expected_fields.issubset(field_names),
+                f'Missing cargo fields from {line_field}: '
+                f'{sorted(expected_fields - field_names)}',
+            )
+
+    def test_other_custom_forms_keep_their_field_placements(self):
+        sale_form = self._combined_view_root(
+            'move_invoice_line.view_sale_form_madfox'
+        )
+        sale_lists = sale_form.findall(
+            ".//field[@name='order_line']/list"
+        )
+        self.assertEqual(len(sale_lists), 1)
+        sale_fields = {
+            field.get('name')
+            for field in sale_lists[0].findall('./field')
+        }
+        self.assertTrue({
+            'vehicle_id',
+            'analytic_account_id',
+            'file_name',
+            'container_num',
+            'srn',
+            'consignee',
+            'size',
+            'weight',
+        }.issubset(sale_fields))
+
+        purchase_form = self._combined_view_root(
+            'move_invoice_line.view_purchase_order_form'
+        )
+        self.assertTrue(
+            purchase_form.findall(".//field[@name='sale_order_id']")
+        )
+        purchase_lists = purchase_form.findall(
+            ".//field[@name='order_line']/list"
+        )
+        self.assertEqual(len(purchase_lists), 1)
+        purchase_fields = {
+            field.get('name')
+            for field in purchase_lists[0].findall('./field')
+        }
+        self.assertTrue({
+            'truck_number',
+            'cargo_type',
+            'rout',
+        }.issubset(purchase_fields))
+
+        partner_form = self._combined_view_root(
+            'move_invoice_line.view_partner_form'
+        )
+        self.assertTrue(partner_form.findall(".//field[@name='vrn']"))
+
+        asset_form = self._combined_view_root(
+            'move_invoice_line.view_account_asset_inherit_form'
+        )
+        expense_fields = asset_form.findall(
+            ".//field[@name='account_depreciation_expense_id']"
+        )
+        self.assertEqual(len(expense_fields), 1)
+        self.assertEqual(expense_fields[0].get('required'), '1')
+
+        journal_items = self._combined_view_root(
+            'move_invoice_line.view_move_line_tree_fleet_madfox'
+        )
+        journal_item_fields = {
+            field.get('name')
+            for field in journal_items.findall('.//field')
+        }
+        self.assertTrue({
+            'vehicle_id',
+            'order_id',
+            'route_id',
+        }.issubset(journal_item_fields))
+
+    def test_invoice_report_renders_custom_cargo_content(self):
+        invoice = self.init_invoice(
+            'out_invoice',
+            products=self.product_a,
+        )
+        product_line = invoice.invoice_line_ids.filtered(
+            lambda line: line.display_type == 'product'
+        )
+        product_line.write({
+            'vehicle_id': self.vehicle.id,
+            'container_num': 'REPORT-CONT-001',
+            'consignee': 'Report Consignee',
+        })
+
+        content, report_type = self.env['ir.actions.report']._render_qweb_html(
+            'account.account_invoices',
+            res_ids=invoice.ids,
+        )
+        html = content.decode() if isinstance(content, bytes) else content
+
+        self.assertEqual(report_type, 'html')
+        for expected in (
+            self.vehicle.license_plate,
+            'REPORT-CONT-001',
+            'Report Consignee',
+            'Exchange Rate:',
+            'Total TSH',
+            '05233990011',
+        ):
+            self.assertIn(expected, html)

@@ -86,3 +86,32 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
 
         self.assertNotIn('route_id', values)
         self.assertNotIn('container_num', values)
+
+    def test_purchase_report_renders_custom_cargo_content(self):
+        sale_order = self._sale_order()
+        purchase_line = self._purchase_line(sale_order=sale_order)
+        purchase_line.write({
+            'truck_number': 'REPORT-TRUCK-001',
+            'rout': 'REPORT-ROUTE-001',
+            'cargo_type': 'REPORT-CARGO-001',
+        })
+
+        content, report_type = self.env['ir.actions.report']._render_qweb_html(
+            'purchase.action_report_purchase_order',
+            res_ids=purchase_line.order_id.ids,
+        )
+        html = content.decode() if isinstance(content, bytes) else content
+
+        self.assertEqual(report_type, 'html')
+        for expected in (
+            'Truck Number',
+            'Container',
+            'Route',
+            'Cargo Type',
+            'Date Req.',
+            'REPORT-TRUCK-001',
+            'CONT-1',
+            'REPORT-ROUTE-001',
+            'REPORT-CARGO-001',
+        ):
+            self.assertIn(expected, html)

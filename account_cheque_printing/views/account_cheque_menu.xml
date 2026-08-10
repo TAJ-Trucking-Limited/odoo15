@@ -26,6 +26,7 @@
         name="Manual Cheque"
         parent="menu_account_cheque_management"
         action="action_open_cheque_wizard"
+        groups="account.group_account_user"
         sequence="15"
     />
 

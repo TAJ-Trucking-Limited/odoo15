@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from xml.etree import ElementTree
 
 from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
@@ -103,3 +104,23 @@ class TestSendMail(TransactionCase):
             'export_to_pdf',
         )
         self.assertEqual(result['file_content'], b'%PDF test')
+
+    def test_profit_report_form_keeps_buttons_and_modal_action(self):
+        form = self.env.ref(
+            'send_report_via_mail.send_pdf_report_form'
+        )
+        root = ElementTree.fromstring(form.get_combined_arch())
+        button_names = {
+            button.get('name')
+            for button in root.findall('.//button')
+        }
+
+        self.assertTrue({'send_report', 'view_report'}.issubset(button_names))
+
+        action = self.env.ref(
+            'send_report_via_mail.action_choose_date_report'
+        )
+        self.assertEqual(action.res_model, 'report.send.mail')
+        self.assertEqual(action.view_mode, 'form')
+        self.assertEqual(action.target, 'new')
+        self.assertEqual(action.view_id, form)

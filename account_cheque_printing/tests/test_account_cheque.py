@@ -1,3 +1,5 @@
+from xml.etree import ElementTree
+
 from psycopg2 import IntegrityError
 
 from odoo.exceptions import UserError
@@ -110,3 +112,38 @@ class TestAccountCheque(AccountTestInvoicingCommon):
             self.env['account.cheque.wizard'].create(
                 values
             ).action_print_cheque_and_voucher()
+
+    def test_manual_cheque_menu_keeps_account_user_restriction(self):
+        menu = self.env.ref(
+            'account_cheque_printing.menu_account_cheque_wizard'
+        )
+
+        self.assertEqual(
+            menu.group_ids,
+            self.env.ref('account.group_account_user'),
+        )
+
+    def test_payment_form_keeps_only_custom_cheque_button(self):
+        payment_form = self.env.ref(
+            'account.view_account_payment_form'
+        )
+        root = ElementTree.fromstring(payment_form.get_combined_arch())
+        buttons = root.findall('.//button')
+        action_id = str(self.env.ref(
+            'account_cheque_printing.action_open_cheque_wizard'
+        ).id)
+
+        custom_buttons = [
+            button
+            for button in buttons
+            if button.get('name') == action_id
+            and button.get('string') == 'Print Cheque'
+        ]
+        standard_buttons = [
+            button
+            for button in buttons
+            if button.get('name') == 'print_checks'
+        ]
+
+        self.assertEqual(len(custom_buttons), 1)
+        self.assertFalse(standard_buttons)
