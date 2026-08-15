@@ -15,6 +15,17 @@ class AccountMoveLine(models.Model):
     consignee = fields.Char(required=False, string='CONSIGNEE')
     srn = fields.Char(required=False, string='SHIPMENT REFERENCE NUMBER')
 
+    @api.onchange('order_id')
+    def _onchange_order_id(self):
+        candidates = self.order_id.order_line.filtered(
+            lambda line: not line.display_type
+        )
+        if len(candidates) == 1:
+            self.route_id = candidates
+        elif self.route_id not in candidates:
+            self.route_id = False
+        self._onchange_route_id()
+
     @api.onchange('route_id')
     def _onchange_route_id(self):
         self.container_num = self.route_id.container_num

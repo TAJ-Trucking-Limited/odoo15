@@ -67,6 +67,44 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertNotIn('route_id', values)
         self.assertNotIn('container_num', values)
 
+    def test_single_route_is_auto_selected_from_sale_order(self):
+        self.env['sale.order.line'].sudo().create({
+            'order_id': self.sale_order.id,
+            'display_type': 'line_section',
+            'name': 'Section',
+        })
+        line = self.env['account.move.line'].new({
+            'order_id': self.sale_order.id,
+        })
+
+        line._onchange_order_id()
+
+        self.assertEqual(line.route_id, self.sale_line)
+        self.assertEqual(line.container_num, 'CONT-001')
+        self.assertEqual(line.file_name, 'FILE-001')
+        self.assertEqual(line.consignee, 'Test Consignee')
+        self.assertEqual(line.weight, '20T')
+        self.assertEqual(line.size, '40FT')
+        self.assertEqual(line.srn, 'SRN-001')
+        self.assertEqual(line.vehicle_id, self.vehicle)
+
+    def test_multiple_routes_are_not_auto_selected(self):
+        self.env['sale.order.line'].sudo().create({
+            'order_id': self.sale_order.id,
+            'product_id': self.product_a.id,
+            'product_uom_qty': 1,
+            'price_unit': 100,
+            'container_num': 'CONT-002',
+        })
+        line = self.env['account.move.line'].new({
+            'order_id': self.sale_order.id,
+        })
+
+        line._onchange_order_id()
+
+        self.assertFalse(line.route_id)
+        self.assertFalse(line.container_num)
+
     def test_move_form_exposes_cargo_fields_on_both_line_lists(self):
         root = self._combined_view_root(
             'move_invoice_line.view_move_form_madfox_17'
