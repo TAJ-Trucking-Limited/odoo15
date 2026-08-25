@@ -393,7 +393,7 @@ try:
                 "purchase-order cargo columns",
             ),
         )
-        for xml_id, xpath, fields, label in embedded_list_contracts:
+        for xml_id, xpath, expected_fields, label in embedded_list_contracts:
             root = ElementTree.fromstring(
                 env.ref(xml_id).get_combined_arch()
             )
@@ -407,7 +407,8 @@ try:
                 else set()
             )
             ok(
-                len(lists) == 1 and fields.issubset(present_fields),
+                len(lists) == 1
+                and expected_fields.issubset(present_fields),
                 f"compiled view retains {label}",
             )
 
