@@ -436,13 +436,39 @@ try:
                 "move_invoice_line.view_account_asset_inherit_form"
             ).get_combined_arch()
         )
-        asset_expense_fields = asset_form.findall(
-            ".//field[@name='account_depreciation_expense_id']"
+        base_asset_form = ElementTree.fromstring(
+            env.ref(
+                "account_asset.view_account_asset_form"
+            ).with_context(lang=None).arch_db
         )
+        asset_field_paths = (
+            (
+                ".//group[@invisible=\"state != 'model'\"]"
+                "//field[@name='account_depreciation_expense_id']"
+            ),
+            (
+                ".//notebook[@invisible=\"state == 'model'\"]"
+                "//field[@name='account_depreciation_expense_id']"
+            ),
+        )
+        asset_contracts = []
+        for xpath in asset_field_paths:
+            expected_fields = base_asset_form.findall(xpath)
+            expense_fields = asset_form.findall(xpath)
+            asset_contracts.append(
+                len(expected_fields) == 1
+                and len(expense_fields) == 1
+                and expense_fields[0].get("required") == "1"
+                and expense_fields[0].get("readonly") == "state == 'close'"
+                and all(
+                    expense_fields[0].get(attribute)
+                    == expected_fields[0].get(attribute)
+                    for attribute in ("domain", "context")
+                )
+            )
         ok(
-            len(asset_expense_fields) == 1
-            and asset_expense_fields[0].get("required") == "1",
-            "asset form retains required depreciation expense account",
+            all(asset_contracts),
+            "asset form retains required expense accounts and modifiers",
         )
 
         payment_form = ElementTree.fromstring(

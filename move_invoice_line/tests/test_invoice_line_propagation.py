@@ -201,11 +201,37 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         asset_form = self._combined_view_root(
             'move_invoice_line.view_account_asset_inherit_form'
         )
-        expense_fields = asset_form.findall(
-            ".//field[@name='account_depreciation_expense_id']"
+        base_asset_form = ElementTree.fromstring(
+            self.env.ref(
+                'account_asset.view_account_asset_form'
+            ).with_context(lang=None).arch_db
         )
-        self.assertEqual(len(expense_fields), 1)
-        self.assertEqual(expense_fields[0].get('required'), '1')
+        asset_field_paths = {
+            'asset model': (
+                ".//group[@invisible=\"state != 'model'\"]"
+                "//field[@name='account_depreciation_expense_id']"
+            ),
+            'asset': (
+                ".//notebook[@invisible=\"state == 'model'\"]"
+                "//field[@name='account_depreciation_expense_id']"
+            ),
+        }
+        for branch, xpath in asset_field_paths.items():
+            expected_fields = base_asset_form.findall(xpath)
+            expense_fields = asset_form.findall(xpath)
+            with self.subTest(asset_branch=branch):
+                self.assertEqual(len(expected_fields), 1)
+                self.assertEqual(len(expense_fields), 1)
+                self.assertEqual(expense_fields[0].get('required'), '1')
+                self.assertEqual(
+                    expense_fields[0].get('readonly'),
+                    "state == 'close'",
+                )
+                for attribute in ('domain', 'context'):
+                    self.assertEqual(
+                        expense_fields[0].get(attribute),
+                        expected_fields[0].get(attribute),
+                    )
 
         journal_items = self._combined_view_root(
             'move_invoice_line.view_move_line_tree_fleet_madfox'
