@@ -16,7 +16,7 @@
         </record>
         <record id="email_cc_parameter" model="ir.config_parameter">
             <field name="key">send_report_via_mail.email_cc</field>
-            <field name="value">nour.m@madfoxme.com; Moustapha@madfoxme.com; souzan.s@madfoxme.com</field>
+            <field name="value">moustapha@primeshiftuae.com, souzan@primeshiftuae.com, nour@primeshiftuae.com</field>
         </record>
 
         <record id="report_cron" model="ir.cron">

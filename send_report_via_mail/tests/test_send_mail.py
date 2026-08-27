@@ -89,6 +89,20 @@ class TestSendMail(TransactionCase):
         with self.assertRaises(UserError):
             self.env['report.send.mail'].send_email_with_pdf_attach()
 
+    def test_aged_report_recipient_configuration(self):
+        self.assertEqual(
+            self.env['report.send.mail']._get_mail_configuration(),
+            {
+                'email_from': 'odoobot@taj-limited.odoo.com',
+                'email_to': 'kreik.ali@gmail.com',
+                'email_cc': (
+                    'moustapha@primeshiftuae.com, '
+                    'souzan@primeshiftuae.com, '
+                    'nour@primeshiftuae.com'
+                ),
+            },
+        )
+
     def test_aged_report_export_uses_odoo_19_options_api(self):
         report = MagicMock()
         report.get_options.return_value = {'date': {}}

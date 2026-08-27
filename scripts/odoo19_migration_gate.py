@@ -1008,11 +1008,16 @@ try:
         config = mailer._get_mail_configuration()
 
         ok(
-            bool(
-                config["email_from"]
-                and config["email_to"]
-            ),
-            "mail sender/recipient configured",
+            config == {
+                "email_from": "odoobot@taj-limited.odoo.com",
+                "email_to": "kreik.ali@gmail.com",
+                "email_cc": (
+                    "moustapha@primeshiftuae.com, "
+                    "souzan@primeshiftuae.com, "
+                    "nour@primeshiftuae.com"
+                ),
+            },
+            "aged-report routing uses PrimeShift recipients",
         )
         ok(
             cron.state == "code"
