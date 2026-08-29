@@ -1,5 +1,8 @@
 from xml.etree import ElementTree
 
+from lxml import html as lxml_html
+
+from odoo import Command
 from odoo.tests import tagged
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
@@ -41,6 +44,14 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
     def _combined_view_root(self, xml_id):
         view = self.env.ref(xml_id)
         return ElementTree.fromstring(view.get_combined_arch())
+
+    def _render_invoice_html(self, invoice):
+        content, report_type = self.env['ir.actions.report']._render_qweb_html(
+            'account.account_invoices',
+            res_ids=invoice.ids,
+        )
+        self.assertEqual(report_type, 'html')
+        return content.decode() if isinstance(content, bytes) else content
 
     def test_product_line_propagates_all_custom_values(self):
         values = self.sale_line._prepare_invoice_line()
@@ -260,13 +271,8 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             'consignee': 'Report Consignee',
         })
 
-        content, report_type = self.env['ir.actions.report']._render_qweb_html(
-            'account.account_invoices',
-            res_ids=invoice.ids,
-        )
-        html = content.decode() if isinstance(content, bytes) else content
+        html = self._render_invoice_html(invoice)
 
-        self.assertEqual(report_type, 'html')
         for expected in (
             self.vehicle.license_plate,
             'REPORT-CONT-001',
@@ -276,3 +282,64 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             '05233990011',
         ):
             self.assertIn(expected, html)
+
+    def test_invoice_report_places_customer_address_on_left(self):
+        root = self._combined_view_root(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        layout_options = root.findall(
+            ".//t[@t-call='web.external_layout']"
+            "/t[@t-set='custom_layout_address']"
+        )
+
+        self.assertEqual(len(layout_options), 1)
+        self.assertEqual(layout_options[0].get('t-value'), 'True')
+
+        invoice = self.init_invoice(
+            'out_invoice',
+            products=self.product_a,
+        )
+        invoice.partner_shipping_id = invoice.partner_id
+        document = lxml_html.fromstring(
+            self._render_invoice_html(invoice)
+        )
+        address = document.xpath("//div[@name='address']")
+
+        self.assertEqual(len(address), 1)
+        self.assertNotIn('ms-auto', address[0].get('class', '').split())
+
+    def test_invoice_report_places_shipping_address_on_right(self):
+        self.env.user.sudo().write({
+            'group_ids': [Command.link(
+                self.env.ref('account.group_delivery_invoice_address').id
+            )],
+        })
+        invoice = self.init_invoice(
+            'out_invoice',
+            products=self.product_a,
+        )
+        shipping_partner = self.env['res.partner'].create({
+            'name': 'Report Shipping Address',
+            'parent_id': invoice.partner_id.id,
+            'type': 'delivery',
+            'street': 'Shipping Street',
+        })
+        invoice.partner_shipping_id = shipping_partner
+        document = lxml_html.fromstring(
+            self._render_invoice_html(invoice)
+        )
+        address_rows = document.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), "
+            "' address ')]"
+        )
+
+        self.assertEqual(len(address_rows), 1)
+        blocks = address_rows[0].xpath(
+            "./div[@name='address' or @name='information_block']"
+        )
+        self.assertEqual(
+            [block.get('name') for block in blocks],
+            ['address', 'information_block'],
+        )
+        self.assertIn(invoice.partner_id.name, blocks[0].text_content())
+        self.assertIn(shipping_partner.name, blocks[1].text_content())

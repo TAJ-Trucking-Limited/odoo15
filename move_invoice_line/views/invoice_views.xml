@@ -4,6 +4,10 @@
         <field name="name">taj_report_invoice_document</field>
         <field name="inherit_id" ref="account.report_invoice_document"/>
         <field name="arch" type="xml">
+            <xpath expr="//t[@t-call='web.external_layout']/t[@t-set='o']" position="after">
+                <t t-set="custom_layout_address" t-value="True"/>
+            </xpath>
+
             <xpath expr="//table[@name='invoice_line_table']" position="before">
                 <div class="row text-start">
                     <div class="col-2">
