@@ -11,11 +11,6 @@ class PurchaseOrderInherit(models.Model):
     def set_cargo_rout(self):
         for order in self:
             for line in order.order_line:
-                line.update({
-                    'truck_number': False,
-                    'cargo_type': False,
-                    'rout': False,
-                })
                 account_ids = {
                     int(account_id)
                     for key in (line.analytic_distribution or {})

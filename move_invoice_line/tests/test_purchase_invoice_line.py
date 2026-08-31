@@ -1,5 +1,5 @@
 from odoo.exceptions import UserError
-from odoo.tests import tagged
+from odoo.tests import Form, tagged
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
@@ -86,6 +86,43 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
 
         self.assertNotIn('route_id', values)
         self.assertNotIn('container_num', values)
+
+    def test_order_line_onchange_preserves_manual_cargo_fields(self):
+        purchase_line = self._purchase_line()
+
+        with Form(purchase_line.order_id) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.truck_number = 'MANUAL-TRUCK'
+                line_form.cargo_type = 'MANUAL-CARGO'
+                line_form.rout = 'MANUAL-ROUTE'
+
+        purchase_line.invalidate_recordset([
+            'truck_number', 'cargo_type', 'rout',
+        ])
+        self.assertEqual(purchase_line.truck_number, 'MANUAL-TRUCK')
+        self.assertEqual(purchase_line.cargo_type, 'MANUAL-CARGO')
+        self.assertEqual(purchase_line.rout, 'MANUAL-ROUTE')
+
+    def test_analytic_distribution_sets_cargo_fields(self):
+        plan = self.env['account.analytic.plan'].sudo().create({
+            'name': 'Test Cargo Plan',
+        })
+        accounts = self.env['account.analytic.account'].sudo().create([
+            {'name': 'Truck TRK-001', 'plan_id': plan.id},
+            {'name': 'Cargo General', 'plan_id': plan.id},
+            {'name': 'DAR to Nairobi', 'plan_id': plan.id},
+        ])
+        purchase_line = self._purchase_line()
+        purchase_line.analytic_distribution = {
+            str(account.id): percentage
+            for account, percentage in zip(accounts, (34, 33, 33))
+        }
+
+        purchase_line.order_id.set_cargo_rout()
+
+        self.assertEqual(purchase_line.truck_number, 'Truck TRK-001')
+        self.assertEqual(purchase_line.cargo_type, 'Cargo General')
+        self.assertEqual(purchase_line.rout, 'DAR to Nairobi')
 
     def test_purchase_report_renders_custom_cargo_content(self):
         sale_order = self._sale_order()
