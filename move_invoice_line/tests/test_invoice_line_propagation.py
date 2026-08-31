@@ -3,7 +3,7 @@ from xml.etree import ElementTree
 from lxml import html as lxml_html
 
 from odoo import Command
-from odoo.tests import tagged
+from odoo.tests import Form, tagged
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
@@ -65,6 +65,53 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(values['srn'], 'SRN-001')
         self.assertEqual(values['order_id'], self.sale_order.id)
         self.assertEqual(values['route_id'], self.sale_line.id)
+
+    def test_sale_line_custom_values_survive_inline_edit(self):
+        with Form(self.sale_order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.container_num = 'MANUAL-CONT'
+                line_form.file_name = 'MANUAL-FILE'
+                line_form.consignee = 'Manual Consignee'
+                line_form.weight = '25T'
+                line_form.size = '20FT'
+                line_form.srn = 'MANUAL-SRN'
+
+        self.sale_line.invalidate_recordset([
+            'container_num',
+            'file_name',
+            'consignee',
+            'weight',
+            'size',
+            'srn',
+        ])
+        self.assertEqual(self.sale_line.container_num, 'MANUAL-CONT')
+        self.assertEqual(self.sale_line.file_name, 'MANUAL-FILE')
+        self.assertEqual(self.sale_line.consignee, 'Manual Consignee')
+        self.assertEqual(self.sale_line.weight, '25T')
+        self.assertEqual(self.sale_line.size, '20FT')
+        self.assertEqual(self.sale_line.srn, 'MANUAL-SRN')
+
+    def test_invoice_line_sale_order_selection_survives_inline_edit(self):
+        invoice = self.init_invoice(
+            'out_invoice',
+            products=self.product_a,
+        )
+
+        with Form(invoice) as invoice_form:
+            with invoice_form.invoice_line_ids.edit(0) as line_form:
+                line_form.order_id = self.sale_order
+
+        product_line = invoice.invoice_line_ids.filtered(
+            lambda line: line.display_type == 'product'
+        )
+        self.assertEqual(product_line.route_id, self.sale_line)
+        self.assertEqual(product_line.vehicle_id, self.vehicle)
+        self.assertEqual(product_line.container_num, 'CONT-001')
+        self.assertEqual(product_line.file_name, 'FILE-001')
+        self.assertEqual(product_line.consignee, 'Test Consignee')
+        self.assertEqual(product_line.weight, '20T')
+        self.assertEqual(product_line.size, '40FT')
+        self.assertEqual(product_line.srn, 'SRN-001')
 
     def test_section_does_not_receive_cargo_values(self):
         section = self.env['sale.order.line'].sudo().create({

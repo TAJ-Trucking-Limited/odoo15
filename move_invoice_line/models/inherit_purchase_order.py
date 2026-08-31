@@ -7,27 +7,6 @@ class PurchaseOrderInherit(models.Model):
 
     sale_order_id = fields.Many2one('sale.order', 'Sale Order')
 
-    @api.onchange('order_line')
-    def set_cargo_rout(self):
-        for order in self:
-            for line in order.order_line:
-                account_ids = {
-                    int(account_id)
-                    for key in (line.analytic_distribution or {})
-                    for account_id in key.split(',')
-                    if account_id.isdigit()
-                }
-                for account in self.env['account.analytic.account'].browse(
-                    sorted(account_ids)
-                ).exists():
-                    name = account.name or ''
-                    if 'Truck' in name:
-                        line.truck_number = name
-                    if 'Cargo' in name:
-                        line.cargo_type = name
-                    if 'DAR' in name:
-                        line.rout = name
-
 
 class PurchaseOrderLineInherit(models.Model):
     _inherit = 'purchase.order.line'

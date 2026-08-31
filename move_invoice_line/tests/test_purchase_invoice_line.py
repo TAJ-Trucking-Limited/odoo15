@@ -87,8 +87,18 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertNotIn('route_id', values)
         self.assertNotIn('container_num', values)
 
-    def test_order_line_onchange_preserves_manual_cargo_fields(self):
+    def test_inline_edit_preserves_manual_cargo_fields_with_analytics(self):
         purchase_line = self._purchase_line()
+        plan = self.env['account.analytic.plan'].sudo().create({
+            'name': 'Test Manual Cargo Plan',
+        })
+        analytic_account = self.env['account.analytic.account'].sudo().create({
+            'name': 'Truck Cargo DAR AUTO VALUE',
+            'plan_id': plan.id,
+        })
+        purchase_line.analytic_distribution = {
+            str(analytic_account.id): 100,
+        }
 
         with Form(purchase_line.order_id) as order_form:
             with order_form.order_line.edit(0) as line_form:
@@ -103,30 +113,15 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(purchase_line.cargo_type, 'MANUAL-CARGO')
         self.assertEqual(purchase_line.rout, 'MANUAL-ROUTE')
 
-    def test_analytic_distribution_sets_cargo_fields(self):
-        plan = self.env['account.analytic.plan'].sudo().create({
-            'name': 'Test Cargo Plan',
-        })
-        accounts = self.env['account.analytic.account'].sudo().create([
-            {'name': 'Truck TRK-001', 'plan_id': plan.id},
-            {'name': 'Cargo General', 'plan_id': plan.id},
-            {'name': 'DAR to Nairobi', 'plan_id': plan.id},
-        ])
-        purchase_line = self._purchase_line()
-        purchase_line.analytic_distribution = {
-            str(account.id): percentage
-            for account, percentage in zip(accounts, (34, 33, 33))
-        }
-
-        purchase_line.order_id.set_cargo_rout()
-
-        self.assertEqual(purchase_line.truck_number, 'Truck TRK-001')
-        self.assertEqual(purchase_line.cargo_type, 'Cargo General')
-        self.assertEqual(purchase_line.rout, 'DAR to Nairobi')
-
     def test_purchase_report_renders_custom_cargo_content(self):
         sale_order = self._sale_order()
         purchase_line = self._purchase_line(sale_order=sale_order)
+        purchase_line.order_id.partner_id.write({
+            'street': 'SUPPLIER STREET 172',
+            'city': 'Dar es Salaam',
+            'phone': '+255 700 001 172',
+            'vat': 'SUPPLIER-VAT-172',
+        })
         purchase_line.write({
             'truck_number': 'REPORT-TRUCK-001',
             'rout': 'REPORT-ROUTE-001',
@@ -150,5 +145,9 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             'CONT-1',
             'REPORT-ROUTE-001',
             'REPORT-CARGO-001',
+            'Test Vendor',
+            'SUPPLIER STREET 172',
+            '+255 700 001 172',
+            'SUPPLIER-VAT-172',
         ):
             self.assertIn(expected, html)
