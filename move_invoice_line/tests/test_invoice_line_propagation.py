@@ -330,6 +330,22 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         ):
             self.assertIn(expected, html)
 
+    def test_invoice_report_keeps_bank_details_compact(self):
+        view = self.env.ref(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        root = ElementTree.fromstring(view.arch_db)
+        targets = [
+            node
+            for node in root.findall('.//xpath')
+            if node.get('expr') == "//span[@id='payment_terms_note_id']"
+        ]
+
+        self.assertEqual(len(targets), 1)
+        self.assertFalse(targets[0].findall('.//br'))
+        bank_details = targets[0].findall("./div[@class='mt-2']/div")
+        self.assertEqual(len(bank_details), 5)
+
     def test_invoice_report_places_customer_address_on_left(self):
         root = self._combined_view_root(
             'move_invoice_line.report_invoice_document_inherit'
