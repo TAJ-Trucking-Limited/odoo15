@@ -185,6 +185,12 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertEqual(len(hide_options), 1)
         self.assertEqual(hide_options[0].get('t-value'), 'True')
+        compact_options = root.findall(
+            ".//t[@t-call='web.external_layout']"
+            "/t[@t-set='taj_compact_purchase_address']"
+        )
+        self.assertEqual(len(compact_options), 1)
+        self.assertEqual(compact_options[0].get('t-value'), 'True')
 
         document = lxml_html.fromstring(
             self._render_purchase_html(purchase_line.order_id)
@@ -201,6 +207,7 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             [block.get('name') for block in blocks],
             ['address', 'information_block'],
         )
+        self.assertIn('margin-top: -17mm', address_rows[0].get('style', ''))
         self.assertIn(self.vendor.name, blocks[0].text_content())
         self.assertIn(shipping_partner.name, blocks[1].text_content())
         self.assertIn('display: none', blocks[1].get('style', ''))
