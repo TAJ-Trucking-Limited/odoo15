@@ -200,16 +200,20 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             [block.get('name') for block in blocks],
             ['address', 'information_block'],
         )
-        self.assertIn('padding-top: 0', address_rows[0].get('style', ''))
+        self.assertIn('display: none', address_rows[0].get('style', ''))
         self.assertIn(self.vendor.name, blocks[0].text_content())
         self.assertIn(shipping_partner.name, blocks[1].text_content())
         self.assertIn('display: none', blocks[1].get('style', ''))
 
+        header_vendor = document.xpath('//div[@name="taj_header_vendor_address"]')
+        self.assertEqual(len(header_vendor), 1)
+        self.assertIn(self.vendor.name, header_vendor[0].text_content())
+
         paperformat = self.env.ref(
             'move_invoice_line.paperformat_purchase_order'
         )
-        self.assertEqual(paperformat.margin_top, 40)
-        self.assertEqual(paperformat.header_spacing, 40)
+        self.assertEqual(paperformat.margin_top, 52)
+        self.assertEqual(paperformat.header_spacing, 52)
         self.assertEqual(
             self.env.ref('purchase.action_report_purchase_order').paperformat_id,
             paperformat,

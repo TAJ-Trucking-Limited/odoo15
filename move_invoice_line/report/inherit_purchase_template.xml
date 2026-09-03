@@ -1,18 +1,18 @@
 <?xml version="1.0"?>
 <odoo>
-    <!-- ponytail: wkhtmltopdf keeps the logo in a 52mm header band; the vendor
-         address lives in the body, so CSS top:-17mm cannot close that gap.
-         Shrink the PO header band to the actual logo+company-details height. -->
+    <!-- ponytail: wkhtmltopdf splits header/body. Vendor address must live under
+         the logo in the header; body CSS cannot cross that band. Keep 52mm so
+         logo + vendor fit. Upgrade: fold this into a dedicated PO layout. -->
     <record id="paperformat_purchase_order" model="report.paperformat">
         <field name="name">TAJ Purchase Order</field>
         <field name="format">A4</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">40</field>
+        <field name="margin_top">52</field>
         <field name="margin_bottom">32</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">40</field>
+        <field name="header_spacing">52</field>
         <field name="dpi">90</field>
         <field name="css_margins" eval="True"/>
     </record>
@@ -73,10 +73,39 @@
 
     <template id="address_layout_hide_purchase_information" inherit_id="web.address_layout" priority="99">
         <xpath expr="//div[@name='information_block']/.." position="attributes">
-            <attribute name="t-att-style">'padding-top: 0 !important;' if taj_hide_information_block else None</attribute>
+            <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
         </xpath>
         <xpath expr="//div[@name='information_block']" position="attributes">
             <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
+        </xpath>
+    </template>
+
+    <template id="external_layout_standard_po_vendor" inherit_id="web.external_layout_standard">
+        <xpath expr="//div[@name='company_address']" position="before">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="col-6">
+                <t t-out="address or None"/>
+            </div>
+        </xpath>
+    </template>
+    <template id="external_layout_striped_po_vendor" inherit_id="web.external_layout_striped">
+        <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="mt-2">
+                <t t-out="address or None"/>
+            </div>
+        </xpath>
+    </template>
+    <template id="external_layout_boxed_po_vendor" inherit_id="web.external_layout_boxed">
+        <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="mt-2">
+                <t t-out="address or None"/>
+            </div>
+        </xpath>
+    </template>
+    <template id="external_layout_bold_po_vendor" inherit_id="web.external_layout_bold">
+        <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="mt-2">
+                <t t-out="address or None"/>
+            </div>
         </xpath>
     </template>
 </odoo>
