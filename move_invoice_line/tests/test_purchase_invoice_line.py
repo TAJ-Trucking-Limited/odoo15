@@ -179,14 +179,12 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertEqual(len(layout_options), 1)
         self.assertEqual(layout_options[0].get('t-value'), 'True')
-        self.assertIn(
-            'display: none !important;',
-            next(
-                style.text or ''
-                for style in root.findall('.//style')
-                if 'information_block' in (style.text or '')
-            ),
+        hide_options = root.findall(
+            ".//t[@t-call='web.external_layout']"
+            "/t[@t-set='taj_hide_information_block']"
         )
+        self.assertEqual(len(hide_options), 1)
+        self.assertEqual(hide_options[0].get('t-value'), 'True')
 
         document = lxml_html.fromstring(
             self._render_purchase_html(purchase_line.order_id)
@@ -205,3 +203,4 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertIn(self.vendor.name, blocks[0].text_content())
         self.assertIn(shipping_partner.name, blocks[1].text_content())
+        self.assertIn('display: none', blocks[1].get('style', ''))
