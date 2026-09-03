@@ -4,7 +4,6 @@
         <xpath expr="//t[@t-call='web.external_layout']/t[@t-set='o']" position="after">
             <t t-set="custom_layout_address" t-value="True"/>
             <t t-set="taj_hide_information_block" t-value="True"/>
-            <t t-set="taj_compact_purchase_address" t-value="True"/>
         </xpath>
         <xpath expr="//div[@id='informations']" position="replace">
             <div id="informations" class="row mb-4">
@@ -50,9 +49,6 @@
     </template>
 
     <template id="address_layout_hide_purchase_information" inherit_id="web.address_layout" priority="99">
-        <xpath expr="//div[hasclass('address')]" position="attributes">
-            <attribute name="t-att-style">'margin-top: -17mm !important;' if taj_compact_purchase_address else None</attribute>
-        </xpath>
         <xpath expr="//div[@name='information_block']" position="attributes">
             <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
         </xpath>
