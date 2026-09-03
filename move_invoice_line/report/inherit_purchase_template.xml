@@ -5,9 +5,6 @@
             <t t-set="custom_layout_address" t-value="True"/>
             <t t-set="taj_hide_information_block" t-value="True"/>
         </xpath>
-        <xpath expr="//t[@t-set='address']/div[@t-field='o.partner_id']" position="attributes">
-            <attribute name="style">position: relative; top: -17mm; margin-bottom: -17mm;</attribute>
-        </xpath>
         <xpath expr="//div[@id='informations']" position="replace">
             <div id="informations" class="row mb-4">
                 <div t-if="o.partner_ref" class="col">
@@ -52,6 +49,9 @@
     </template>
 
     <template id="address_layout_hide_purchase_information" inherit_id="web.address_layout" priority="99">
+        <xpath expr="//div[@name='information_block']/.." position="attributes">
+            <attribute name="t-att-style">'position: relative; top: -17mm; margin-bottom: -17mm;' if taj_hide_information_block else None</attribute>
+        </xpath>
         <xpath expr="//div[@name='information_block']" position="attributes">
             <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
         </xpath>

@@ -185,15 +185,6 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertEqual(len(hide_options), 1)
         self.assertEqual(hide_options[0].get('t-value'), 'True')
-        supplier_address = root.findall(
-            ".//t[@t-set='address']/div[@t-field='o.partner_id']"
-        )
-        self.assertEqual(len(supplier_address), 1)
-        self.assertIn('top: -17mm', supplier_address[0].get('style', ''))
-        self.assertIn(
-            'margin-bottom: -17mm',
-            supplier_address[0].get('style', ''),
-        )
         document = lxml_html.fromstring(
             self._render_purchase_html(purchase_line.order_id)
         )
@@ -208,6 +199,11 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(
             [block.get('name') for block in blocks],
             ['address', 'information_block'],
+        )
+        self.assertIn('top: -17mm', address_rows[0].get('style', ''))
+        self.assertIn(
+            'margin-bottom: -17mm',
+            address_rows[0].get('style', ''),
         )
         self.assertIn(self.vendor.name, blocks[0].text_content())
         self.assertIn(shipping_partner.name, blocks[1].text_content())
