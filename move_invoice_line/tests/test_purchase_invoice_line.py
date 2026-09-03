@@ -200,11 +200,17 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             [block.get('name') for block in blocks],
             ['address', 'information_block'],
         )
-        self.assertIn('top: -17mm', address_rows[0].get('style', ''))
-        self.assertIn(
-            'margin-bottom: -17mm',
-            address_rows[0].get('style', ''),
-        )
+        self.assertIn('padding-top: 0', address_rows[0].get('style', ''))
         self.assertIn(self.vendor.name, blocks[0].text_content())
         self.assertIn(shipping_partner.name, blocks[1].text_content())
         self.assertIn('display: none', blocks[1].get('style', ''))
+
+        paperformat = self.env.ref(
+            'move_invoice_line.paperformat_purchase_order'
+        )
+        self.assertEqual(paperformat.margin_top, 40)
+        self.assertEqual(paperformat.header_spacing, 40)
+        self.assertEqual(
+            self.env.ref('purchase.action_report_purchase_order').paperformat_id,
+            paperformat,
+        )

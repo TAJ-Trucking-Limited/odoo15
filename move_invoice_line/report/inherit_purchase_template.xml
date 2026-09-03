@@ -1,5 +1,28 @@
 <?xml version="1.0"?>
 <odoo>
+    <!-- ponytail: wkhtmltopdf keeps the logo in a 52mm header band; the vendor
+         address lives in the body, so CSS top:-17mm cannot close that gap.
+         Shrink the PO header band to the actual logo+company-details height. -->
+    <record id="paperformat_purchase_order" model="report.paperformat">
+        <field name="name">TAJ Purchase Order</field>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">40</field>
+        <field name="margin_bottom">32</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">40</field>
+        <field name="dpi">90</field>
+        <field name="css_margins" eval="True"/>
+    </record>
+    <record id="purchase.action_report_purchase_order" model="ir.actions.report">
+        <field name="paperformat_id" ref="paperformat_purchase_order"/>
+    </record>
+    <record id="purchase.report_purchase_quotation" model="ir.actions.report">
+        <field name="paperformat_id" ref="paperformat_purchase_order"/>
+    </record>
+
     <template id="report_purchaseorder_document" inherit_id="purchase.report_purchaseorder_document">
         <xpath expr="//t[@t-call='web.external_layout']/t[@t-set='o']" position="after">
             <t t-set="custom_layout_address" t-value="True"/>
@@ -50,7 +73,7 @@
 
     <template id="address_layout_hide_purchase_information" inherit_id="web.address_layout" priority="99">
         <xpath expr="//div[@name='information_block']/.." position="attributes">
-            <attribute name="t-att-style">'position: relative; top: -17mm; margin-bottom: -17mm;' if taj_hide_information_block else None</attribute>
+            <attribute name="t-att-style">'padding-top: 0 !important;' if taj_hide_information_block else None</attribute>
         </xpath>
         <xpath expr="//div[@name='information_block']" position="attributes">
             <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
