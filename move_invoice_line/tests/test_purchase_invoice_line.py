@@ -1,3 +1,7 @@
+from xml.etree import ElementTree
+
+from lxml import html as lxml_html
+
 from odoo.exceptions import UserError
 from odoo.tests import Form, tagged
 
@@ -45,6 +49,14 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             'price_unit': 100,
             'sale_line_id': sale_line.id if sale_line else False,
         })
+
+    def _render_purchase_html(self, purchase_order):
+        content, report_type = self.env['ir.actions.report']._render_qweb_html(
+            'purchase.action_report_purchase_order',
+            res_ids=purchase_order.ids,
+        )
+        self.assertEqual(report_type, 'html')
+        return content.decode() if isinstance(content, bytes) else content
 
     def test_standard_sale_line_link_has_priority(self):
         first_order = self._sale_order()
@@ -128,13 +140,8 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             'cargo_type': 'REPORT-CARGO-001',
         })
 
-        content, report_type = self.env['ir.actions.report']._render_qweb_html(
-            'purchase.action_report_purchase_order',
-            res_ids=purchase_line.order_id.ids,
-        )
-        html = content.decode() if isinstance(content, bytes) else content
+        html = self._render_purchase_html(purchase_line.order_id)
 
-        self.assertEqual(report_type, 'html')
         for expected in (
             'Truck Number',
             'Container',
@@ -151,3 +158,39 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             'SUPPLIER-VAT-172',
         ):
             self.assertIn(expected, html)
+
+    def test_purchase_report_keeps_supplier_left_and_hides_shipping_address(self):
+        purchase_line = self._purchase_line()
+        shipping_partner = self.env['res.partner'].sudo().create({
+            'name': 'San Francisco',
+            'street': 'PO Box 8648',
+            'city': 'Dar es Salaam',
+        })
+        purchase_line.order_id.dest_address_id = shipping_partner
+
+        root = ElementTree.fromstring(
+            self.env.ref(
+                'move_invoice_line.report_purchaseorder_document'
+            ).get_combined_arch()
+        )
+        layout_options = root.findall(
+            ".//t[@t-call='web.external_layout']"
+            "/t[@t-set='custom_layout_address']"
+        )
+        self.assertEqual(len(layout_options), 1)
+        self.assertEqual(layout_options[0].get('t-value'), 'True')
+
+        document = lxml_html.fromstring(
+            self._render_purchase_html(purchase_line.order_id)
+        )
+        address_rows = document.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), "
+            "' address ')]"
+        )
+        self.assertEqual(len(address_rows), 1)
+        blocks = address_rows[0].xpath(
+            "./div[@name='address' or @name='information_block']"
+        )
+        self.assertEqual([block.get('name') for block in blocks], ['address'])
+        self.assertIn(self.vendor.name, blocks[0].text_content())
+        self.assertNotIn(shipping_partner.name, document.text_content())

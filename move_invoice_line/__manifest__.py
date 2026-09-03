@@ -22,7 +22,7 @@
 
 {
     'name': 'Taj Customizations',
-    'version': '19.0.1.1.7',
+    'version': '19.0.1.1.8',
     'summary': 'customizations for accounting add new fields to help compute profit for track ,route, order',
     'category': 'Accounting',
     'author': 'Madfox',
