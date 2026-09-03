@@ -7,6 +7,13 @@
         <xpath expr="//t[@t-set='information_block']" position="replace">
             <t t-set="information_block" t-value="False"/>
         </xpath>
+        <xpath expr="//div[hasclass('page')]" position="before">
+            <style>
+                div[name="information_block"] {
+                    display: none !important;
+                }
+            </style>
+        </xpath>
         <xpath expr="//div[@id='informations']" position="replace">
             <div id="informations" class="row mb-4">
                 <div t-if="o.partner_ref" class="col">

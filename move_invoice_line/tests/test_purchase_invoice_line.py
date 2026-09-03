@@ -179,6 +179,14 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertEqual(len(layout_options), 1)
         self.assertEqual(layout_options[0].get('t-value'), 'True')
+        self.assertIn(
+            'display: none !important;',
+            next(
+                style.text or ''
+                for style in root.findall('.//style')
+                if 'information_block' in (style.text or '')
+            ),
+        )
 
         document = lxml_html.fromstring(
             self._render_purchase_html(purchase_line.order_id)
@@ -191,6 +199,9 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         blocks = address_rows[0].xpath(
             "./div[@name='address' or @name='information_block']"
         )
-        self.assertEqual([block.get('name') for block in blocks], ['address'])
+        self.assertEqual(
+            [block.get('name') for block in blocks],
+            ['address', 'information_block'],
+        )
         self.assertIn(self.vendor.name, blocks[0].text_content())
-        self.assertNotIn(shipping_partner.name, document.text_content())
+        self.assertIn(shipping_partner.name, blocks[1].text_content())
