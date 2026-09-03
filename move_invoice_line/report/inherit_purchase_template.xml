@@ -5,6 +5,9 @@
             <t t-set="custom_layout_address" t-value="True"/>
             <t t-set="taj_hide_information_block" t-value="True"/>
         </xpath>
+        <xpath expr="//t[@t-set='address']/div[@t-field='o.partner_id']" position="attributes">
+            <attribute name="style">position: relative; top: -17mm; margin-bottom: -17mm;</attribute>
+        </xpath>
         <xpath expr="//div[@id='informations']" position="replace">
             <div id="informations" class="row mb-4">
                 <div t-if="o.partner_ref" class="col">
