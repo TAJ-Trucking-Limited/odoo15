@@ -82,28 +82,40 @@
 
     <template id="external_layout_standard_po_vendor" inherit_id="web.external_layout_standard">
         <xpath expr="//div[@name='company_address']" position="before">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="col-6">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="col-6 p-0 m-0" style="margin-top: 0px !important; padding-top: 0px !important;">
                 <t t-out="address or None"/>
             </div>
         </xpath>
     </template>
+
     <template id="external_layout_striped_po_vendor" inherit_id="web.external_layout_striped">
+        <xpath expr="//img[hasclass('o_company_logo_big')]" position="attributes">
+            <attribute name="style">margin-bottom: 0px !important; padding-bottom: 0px !important;</attribute>
+        </xpath>
         <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="mt-2">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="m-0 p-0" style="margin-top: 2px !important; padding-top: 0px !important; line-height: 1.2;">
                 <t t-out="address or None"/>
             </div>
         </xpath>
     </template>
+
     <template id="external_layout_boxed_po_vendor" inherit_id="web.external_layout_boxed">
+        <xpath expr="//img[hasclass('o_company_logo_big')]" position="attributes">
+            <attribute name="style">margin-bottom: 0px !important; padding-bottom: 0px !important;</attribute>
+        </xpath>
         <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="mt-2">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="m-0 p-0" style="margin-top: 2px !important; padding-top: 0px !important; line-height: 1.2;">
                 <t t-out="address or None"/>
             </div>
         </xpath>
     </template>
+
     <template id="external_layout_bold_po_vendor" inherit_id="web.external_layout_bold">
+        <xpath expr="//img[hasclass('o_company_logo_big')]" position="attributes">
+            <attribute name="style">margin-bottom: 0px !important; padding-bottom: 0px !important;</attribute>
+        </xpath>
         <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="mt-2">
+            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="m-0 p-0" style="margin-top: 2px !important; padding-top: 0px !important; line-height: 1.2;">
                 <t t-out="address or None"/>
             </div>
         </xpath>
