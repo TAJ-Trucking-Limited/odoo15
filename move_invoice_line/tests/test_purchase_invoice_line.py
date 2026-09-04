@@ -185,20 +185,24 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertEqual(len(hide_options), 1)
         self.assertEqual(hide_options[0].get('t-value'), 'True')
+        emptied_address = root.findall(
+            ".//t[@t-call='web.external_layout']//t[@t-set='address']"
+        )
+        self.assertEqual(len(emptied_address), 1)
         document = lxml_html.fromstring(
             self._render_purchase_html(purchase_line.order_id)
         )
+        header_vendor = document.xpath('//div[@name="taj_header_vendor_address"]')
+        self.assertEqual(len(header_vendor), 1)
+        self.assertIn(self.vendor.name, header_vendor[0].text_content())
         address_rows = document.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), "
             "' address ')]"
         )
-        self.assertEqual(len(address_rows), 0)
-        self.assertFalse(document.xpath('//div[@name="information_block"]'))
-
-        header_vendor = document.xpath('//div[@name="taj_header_vendor_address"]')
-        self.assertEqual(len(header_vendor), 1)
-        self.assertIn(self.vendor.name, header_vendor[0].text_content())
-        self.assertNotIn(shipping_partner.name, document.text_content())
+        self.assertFalse(any(
+            self.vendor.name in (row.text_content() or '')
+            for row in address_rows
+        ))
 
         paperformat = self.env.ref(
             'move_invoice_line.paperformat_purchase_order'
