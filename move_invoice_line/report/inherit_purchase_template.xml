@@ -73,10 +73,7 @@
 
     <template id="address_layout_hide_purchase_information" inherit_id="web.address_layout" priority="99">
         <xpath expr="//div[@name='information_block']/.." position="attributes">
-            <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
-        </xpath>
-        <xpath expr="//div[@name='information_block']" position="attributes">
-            <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
+            <attribute name="t-if">address and not taj_hide_information_block</attribute>
         </xpath>
     </template>
 

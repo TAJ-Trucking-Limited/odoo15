@@ -192,22 +192,13 @@ class TestPurchaseInvoiceLinePropagation(AccountTestInvoicingCommon):
             "//div[contains(concat(' ', normalize-space(@class), ' '), "
             "' address ')]"
         )
-        self.assertEqual(len(address_rows), 1)
-        blocks = address_rows[0].xpath(
-            "./div[@name='address' or @name='information_block']"
-        )
-        self.assertEqual(
-            [block.get('name') for block in blocks],
-            ['address', 'information_block'],
-        )
-        self.assertIn('display: none', address_rows[0].get('style', ''))
-        self.assertIn(self.vendor.name, blocks[0].text_content())
-        self.assertIn(shipping_partner.name, blocks[1].text_content())
-        self.assertIn('display: none', blocks[1].get('style', ''))
+        self.assertEqual(len(address_rows), 0)
+        self.assertFalse(document.xpath('//div[@name="information_block"]'))
 
         header_vendor = document.xpath('//div[@name="taj_header_vendor_address"]')
         self.assertEqual(len(header_vendor), 1)
         self.assertIn(self.vendor.name, header_vendor[0].text_content())
+        self.assertNotIn(shipping_partner.name, document.text_content())
 
         paperformat = self.env.ref(
             'move_invoice_line.paperformat_purchase_order'
