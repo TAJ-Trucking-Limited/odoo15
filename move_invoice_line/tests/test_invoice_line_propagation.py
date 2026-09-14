@@ -406,3 +406,15 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         )
         self.assertIn(invoice.partner_id.name, blocks[0].text_content())
         self.assertIn(shipping_partner.name, blocks[1].text_content())
+
+    def test_invoice_report_paperformat_tightens_header_spacing(self):
+        paperformat = self.env.ref(
+            'move_invoice_line.paperformat_invoice'
+        )
+        self.assertEqual(paperformat.margin_top, 30)
+        self.assertEqual(paperformat.header_spacing, 30)
+        self.assertEqual(
+            self.env.ref('account.account_invoices').paperformat_id,
+            paperformat,
+        )
+

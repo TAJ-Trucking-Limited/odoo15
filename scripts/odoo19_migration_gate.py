@@ -214,7 +214,9 @@ try:
             "account_reports.aged_payable_report",
             "account_reports.aged_receivable_report",
             "account.account_invoices",
+            "move_invoice_line.paperformat_invoice",
             "purchase.action_report_purchase_order",
+            "move_invoice_line.paperformat_purchase_order",
         )
         for xml_id in xml_ids:
             ok(

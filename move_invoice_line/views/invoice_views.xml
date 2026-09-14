@@ -1,5 +1,26 @@
 <?xml version="1.0"?>
 <odoo>
+    <!-- Paper format for TAJ Invoices:
+         Reduced margin_top and header_spacing to 30mm so the header band
+         closely wraps the logo and company address, eliminating the large gap. -->
+    <record id="paperformat_invoice" model="report.paperformat">
+        <field name="name">TAJ Invoice</field>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">30</field>
+        <field name="margin_bottom">32</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">30</field>
+        <field name="dpi">90</field>
+        <field name="css_margins" eval="True"/>
+    </record>
+
+    <record id="account.account_invoices" model="ir.actions.report">
+        <field name="paperformat_id" ref="paperformat_invoice"/>
+    </record>
+
     <record id="report_invoice_document_inherit" model="ir.ui.view">
         <field name="name">taj_report_invoice_document</field>
         <field name="inherit_id" ref="account.report_invoice_document"/>
@@ -11,6 +32,18 @@
             <!-- Compact top spacing so the customer address sits close beneath the header (old tight layout) -->
             <xpath expr="//div[hasclass('page')]" position="before">
                 <style>
+                    .article > div.pt-5 {
+                        padding-top: 0 !important;
+                    }
+                    div.address {
+                        margin-top: 0 !important;
+                        padding-top: 0 !important;
+                    }
+                    div.address div[name="address"] {
+                        margin-left: 0 !important;
+                        float: left !important;
+                        padding-top: 0 !important;
+                    }
                     div[name="company_address"] ul[name="company_address_list"] {
                         line-height: 1.3 !important;
                         margin-bottom: 0 !important;
