@@ -30,6 +30,10 @@
                 <field name='weight'/>
                 <field name='srn'/>
             </xpath>
+            <xpath expr="//group[@id='header_right_group']" position="inside">
+                <field name="is_vat_percentage_invoice" invisible="1"/>
+                <field name="vat_percentage" string="VAT (%)" readonly="1" invisible="not is_vat_percentage_invoice"/>
+            </xpath>
         </field>
     </record>
 

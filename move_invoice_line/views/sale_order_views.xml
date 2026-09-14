@@ -18,6 +18,10 @@
 
             </xpath>
 
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="vat_percentage" string="VAT (%)"/>
+            </xpath>
+
         </field>
     </record>
 

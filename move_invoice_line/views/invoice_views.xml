@@ -19,7 +19,39 @@
                 </div>
             </xpath>
 
-            <xpath expr="//div[@id='total']//t[@t-call='account.document_tax_totals']" position="after">
+            <xpath expr="//div[@id='total']//t[@t-call='account.document_tax_totals']" position="replace">
+                <t t-if="o.is_vat_percentage_invoice">
+                    <tr class="o_subtotal">
+                        <td>
+                            <span>Total before Tax</span>
+                        </td>
+                        <td class="text-end">
+                            <span t-out="o.amount_untaxed" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                        </td>
+                    </tr>
+                    <tr class="o_taxes">
+                        <td>
+                            <span t-out="'Total Tax Amount (%s%%)' % ('%g' % o.vat_percentage)"/>
+                        </td>
+                        <td class="text-end o_price_total">
+                            <span class="text-nowrap" t-out="o.amount_tax" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                        </td>
+                    </tr>
+                    <tr class="o_total">
+                        <td>
+                            <strong>Total Amount</strong>
+                        </td>
+                        <td class="text-end">
+                            <strong t-out="o.amount_total" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                        </td>
+                    </tr>
+                </t>
+                <t t-else="">
+                    <t t-if="o.tax_totals" t-call="account.document_tax_totals">
+                        <t t-set="tax_totals" t-value="o.tax_totals"/>
+                        <t t-set="currency" t-value="o.currency_id"/>
+                    </t>
+                </t>
                 <tr t-if="o.tax_totals" class="border-black o_total">
                     <td class="col-6">
                         <strong>Total TSH</strong>
