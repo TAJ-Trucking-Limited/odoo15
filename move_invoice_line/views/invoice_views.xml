@@ -41,7 +41,6 @@
                     }
                     div.address div[name="address"] {
                         margin-left: 0 !important;
-                        float: left !important;
                         padding-top: 0 !important;
                     }
                     div[name="company_address"] ul[name="company_address_list"] {
