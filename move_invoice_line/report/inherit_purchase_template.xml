@@ -1,18 +1,18 @@
 <?xml version="1.0"?>
 <odoo>
-    <!-- ponytail: wkhtmltopdf splits header/body. Vendor address must live under
-         the logo in the header; body CSS cannot cross that band. Keep 52mm so
-         logo + vendor fit. Upgrade: fold this into a dedicated PO layout. -->
+    <!-- Paper format for TAJ Purchase Order:
+         Reduced margin_top and header_spacing to 30mm so the header band
+         closely wraps the logo and company address, eliminating the large gap. -->
     <record id="paperformat_purchase_order" model="report.paperformat">
         <field name="name">TAJ Purchase Order</field>
         <field name="format">A4</field>
         <field name="orientation">Portrait</field>
-        <field name="margin_top">52</field>
+        <field name="margin_top">30</field>
         <field name="margin_bottom">32</field>
         <field name="margin_left">0</field>
         <field name="margin_right">0</field>
         <field name="header_line" eval="False"/>
-        <field name="header_spacing">52</field>
+        <field name="header_spacing">30</field>
         <field name="dpi">90</field>
         <field name="css_margins" eval="True"/>
     </record>
@@ -24,17 +24,27 @@
     </record>
 
     <template id="report_purchaseorder_document" inherit_id="purchase.report_purchaseorder_document">
-        <!-- تفعيل المتغيرات لإخفاء المعلومات الزائدة ونقل العنوان -->
         <xpath expr="//t[@t-call='web.external_layout']/t[@t-set='o']" position="after">
             <t t-set="custom_layout_address" t-value="True"/>
             <t t-set="taj_hide_information_block" t-value="True"/>
         </xpath>
 
-        <!-- مسح العنوان من جسم التقرير لمنع تكراره -->
-        <xpath expr="//t[@t-call='web.external_layout']//t[@t-set='address']" position="replace">
-            <t t-set="address">
-                <span/>
-            </t>
+        <!-- Compact top spacing so the vendor address sits close beneath the header -->
+        <xpath expr="//div[hasclass('page')]" position="before">
+            <style>
+                .article > div.pt-5 {
+                    padding-top: 0 !important;
+                }
+                div.address {
+                    margin-top: 0 !important;
+                    padding-top: 0 !important;
+                }
+                div.address div[name="address"] {
+                    margin-left: 0 !important;
+                    float: left !important;
+                    padding-top: 0 !important;
+                }
+            </style>
         </xpath>
 
         <xpath expr="//div[@id='informations']" position="replace">
@@ -81,43 +91,8 @@
     </template>
 
     <template id="address_layout_hide_purchase_information" inherit_id="web.address_layout" priority="99">
-        <xpath expr="//div[@name='information_block']/.." position="attributes">
-            <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
-        </xpath>
         <xpath expr="//div[@name='information_block']" position="attributes">
             <attribute name="t-att-style">'display: none !important;' if taj_hide_information_block else None</attribute>
-        </xpath>
-    </template>
-
-    <template id="external_layout_standard_po_vendor" inherit_id="web.external_layout_standard">
-        <xpath expr="//div[@name='company_address']" position="before">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address" class="col-6">
-                <div t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["address", "name", "phone", "vat"], "no_marker": True}' style="margin-top: 8px !important; line-height: 1.25;"/>
-            </div>
-        </xpath>
-    </template>
-
-    <template id="external_layout_striped_po_vendor" inherit_id="web.external_layout_striped">
-        <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address">
-                <div t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["address", "name", "phone", "vat"], "no_marker": True}' style="margin-top: 8px !important; line-height: 1.25;"/>
-            </div>
-        </xpath>
-    </template>
-
-    <template id="external_layout_boxed_po_vendor" inherit_id="web.external_layout_boxed">
-        <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address">
-                <div t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["address", "name", "phone", "vat"], "no_marker": True}' style="margin-top: 8px !important; line-height: 1.25;"/>
-            </div>
-        </xpath>
-    </template>
-
-    <template id="external_layout_bold_po_vendor" inherit_id="web.external_layout_bold">
-        <xpath expr="//img[hasclass('o_company_logo_big')]" position="after">
-            <div t-if="taj_hide_information_block" name="taj_header_vendor_address">
-                <div t-field="o.partner_id" t-options='{"widget": "contact", "fields": ["address", "name", "phone", "vat"], "no_marker": True}' style="margin-top: 8px !important; line-height: 1.25;"/>
-            </div>
         </xpath>
     </template>
 </odoo>
