@@ -94,7 +94,7 @@
                     </tr>
                     <tr class="o_taxes">
                         <td>
-                            <span t-out="'Total Tax Amount (%s%%)' % ('%g' % o.vat_percentage)"/>
+                            <span t-out="'Total Tax Amount (' + ('%g' % o.vat_percentage) + '%)'"/>
                         </td>
                         <td class="text-end o_price_total">
                             <span class="text-nowrap" t-out="o.amount_tax" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>

@@ -293,6 +293,22 @@ class TestSaleOrderVatPercentage(AccountTestInvoicingCommon):
         self.assertIn('Total Tax Amount (100%)', html)
         self.assertNotIn('Total Tax Amount (100.0%)', html)
 
+    def test_invoice_tax_label_does_not_format_a_literal_percent(self):
+        view = self.env.ref('move_invoice_line.report_invoice_document_inherit')
+        root = ElementTree.fromstring(view.arch)
+        labels = root.findall(".//span[@t-out]")
+
+        tax_label = next(
+            (
+                label for label in labels
+                if 'Total Tax Amount' in (label.get('t-out') or '')
+            ),
+        )
+        self.assertEqual(
+            tax_label.get('t-out'),
+            "'Total Tax Amount (' + ('%g' % o.vat_percentage) + '%)'",
+        )
+
     def test_manual_invoice_keeps_standard_tax_totals(self):
         invoice = self.init_invoice('out_invoice', products=self.product_vat)
         self.assertFalse(invoice.is_vat_percentage_invoice)
