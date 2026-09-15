@@ -63,19 +63,21 @@
                         padding: 0.35rem 0.25rem;
                     }
                     table[name="invoice_line_table"] th:nth-child(1),
-                    table[name="invoice_line_table"] td:nth-child(1) { width: 26%; }
+                    table[name="invoice_line_table"] td:nth-child(1) { width: 22%; }
                     table[name="invoice_line_table"] th:nth-child(2),
-                    table[name="invoice_line_table"] td:nth-child(2) { width: 10%; }
+                    table[name="invoice_line_table"] td:nth-child(2) { width: 9%; }
                     table[name="invoice_line_table"] th:nth-child(3),
                     table[name="invoice_line_table"] td:nth-child(3) { width: 15%; }
                     table[name="invoice_line_table"] th:nth-child(4),
                     table[name="invoice_line_table"] td:nth-child(4) { width: 13%; }
                     table[name="invoice_line_table"] th:nth-child(5),
-                    table[name="invoice_line_table"] td:nth-child(5) { width: 9%; }
+                    table[name="invoice_line_table"] td:nth-child(5) { width: 10%; }
                     table[name="invoice_line_table"] th:nth-child(6),
-                    table[name="invoice_line_table"] td:nth-child(6) { width: 13%; }
+                    table[name="invoice_line_table"] td:nth-child(6) { width: 12%; }
                     table[name="invoice_line_table"] th:nth-child(7),
-                    table[name="invoice_line_table"] td:nth-child(7) { width: 14%; }
+                    table[name="invoice_line_table"] td:nth-child(7) { width: 9%; }
+                    table[name="invoice_line_table"] th:nth-child(8),
+                    table[name="invoice_line_table"] td:nth-child(8) { width: 10%; }
                     table[name="invoice_line_table"] td {
                         vertical-align: top;
                         padding: 0.35rem 0.25rem;
@@ -86,7 +88,8 @@
                     table[name="invoice_line_table"] th:nth-child(7),
                     table[name="invoice_line_table"] td:nth-child(5),
                     table[name="invoice_line_table"] td:nth-child(6),
-                    table[name="invoice_line_table"] td:nth-child(7) {
+                    table[name="invoice_line_table"] td:nth-child(7),
+                    table[name="invoice_line_table"] td:nth-child(8) {
                         text-align: right !important;
                         white-space: nowrap;
                     }
@@ -113,6 +116,10 @@
                         <span t-field="o.amount_total_signed"/>
                     </td>
                 </tr>
+            </xpath>
+
+            <xpath expr="//t[@t-if=&quot;o.tax_totals and o.tax_totals.get('display_in_company_currency')&quot;]" position="attributes">
+                <attribute name="t-if">False</attribute>
             </xpath>
 
             <xpath expr="//div[@name='address_not_same_as_shipping']/t[@t-set='address']" position="replace">

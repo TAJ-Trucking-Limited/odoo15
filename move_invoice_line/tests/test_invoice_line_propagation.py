@@ -364,6 +364,27 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertIn('white-space: nowrap', table_style)
         self.assertIn('th:nth-child(3)', table_style)
         self.assertIn('width: 15%', table_style)
+        self.assertIn('th:nth-child(8)', table_style)
+        self.assertIn('width: 9%', table_style)
+
+    def test_invoice_report_hides_duplicate_company_currency_tax_summary(self):
+        view = self.env.ref(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        root = ElementTree.fromstring(view.arch_db)
+        target = (
+            "//t[@t-if=\"o.tax_totals and "
+            "o.tax_totals.get('display_in_company_currency')\"]"
+        )
+
+        targets = [
+            node for node in root.findall('.//xpath')
+            if node.get('expr') == target
+        ]
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0].get('position'), 'attributes')
+        attribute = targets[0].find("./attribute[@name='t-if']")
+        self.assertEqual(attribute.text if attribute is not None else None, 'False')
 
     def test_invoice_report_places_customer_address_on_left(self):
         root = self._combined_view_root(
