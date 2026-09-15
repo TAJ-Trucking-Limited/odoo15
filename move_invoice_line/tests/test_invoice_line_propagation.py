@@ -363,9 +363,9 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertIn('vertical-align: middle', table_style)
         self.assertIn('white-space: nowrap', table_style)
         self.assertIn('th:nth-child(3)', table_style)
-        self.assertIn('width: 15%', table_style)
-        self.assertIn('th:nth-child(8)', table_style)
-        self.assertIn('width: 9%', table_style)
+        self.assertIn('width: 16%', table_style)
+        self.assertIn('th:nth-child(7)', table_style)
+        self.assertNotIn('th:nth-child(8)', table_style)
 
     def test_invoice_report_hides_duplicate_company_currency_tax_summary(self):
         view = self.env.ref(
@@ -385,6 +385,32 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(targets[0].get('position'), 'attributes')
         attribute = targets[0].find("./attribute[@name='t-if']")
         self.assertEqual(attribute.text if attribute is not None else None, 'False')
+
+    def test_invoice_report_hides_line_taxes_and_tax_breakdown(self):
+        view = self.env.ref(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        root = ElementTree.fromstring(view.arch_db)
+        xpath_expressions = {
+            node.get('expr'): node
+            for node in root.findall('.//xpath')
+        }
+
+        for expression in (
+            "//table[@name='invoice_line_table']/thead/tr/th[@name='th_taxes']",
+            "//td[@name='td_taxes']",
+            "//td[@name='td_taxes_grouped']",
+        ):
+            self.assertEqual(
+                xpath_expressions[expression].get('position'),
+                'replace',
+            )
+
+        totals = xpath_expressions[
+            "//div[@id='total']//t[@t-call='account.document_tax_totals']"
+        ]
+        self.assertEqual(totals.get('position'), 'replace')
+        self.assertFalse(totals.findall(".//t[@t-call='account.document_tax_totals']"))
 
     def test_invoice_report_places_customer_address_on_left(self):
         root = self._combined_view_root(

@@ -63,21 +63,19 @@
                         padding: 0.35rem 0.25rem;
                     }
                     table[name="invoice_line_table"] th:nth-child(1),
-                    table[name="invoice_line_table"] td:nth-child(1) { width: 22%; }
+                    table[name="invoice_line_table"] td:nth-child(1) { width: 25%; }
                     table[name="invoice_line_table"] th:nth-child(2),
-                    table[name="invoice_line_table"] td:nth-child(2) { width: 9%; }
+                    table[name="invoice_line_table"] td:nth-child(2) { width: 10%; }
                     table[name="invoice_line_table"] th:nth-child(3),
-                    table[name="invoice_line_table"] td:nth-child(3) { width: 15%; }
+                    table[name="invoice_line_table"] td:nth-child(3) { width: 16%; }
                     table[name="invoice_line_table"] th:nth-child(4),
-                    table[name="invoice_line_table"] td:nth-child(4) { width: 13%; }
+                    table[name="invoice_line_table"] td:nth-child(4) { width: 15%; }
                     table[name="invoice_line_table"] th:nth-child(5),
-                    table[name="invoice_line_table"] td:nth-child(5) { width: 10%; }
+                    table[name="invoice_line_table"] td:nth-child(5) { width: 11%; }
                     table[name="invoice_line_table"] th:nth-child(6),
-                    table[name="invoice_line_table"] td:nth-child(6) { width: 12%; }
+                    table[name="invoice_line_table"] td:nth-child(6) { width: 11%; }
                     table[name="invoice_line_table"] th:nth-child(7),
-                    table[name="invoice_line_table"] td:nth-child(7) { width: 9%; }
-                    table[name="invoice_line_table"] th:nth-child(8),
-                    table[name="invoice_line_table"] td:nth-child(8) { width: 10%; }
+                    table[name="invoice_line_table"] td:nth-child(7) { width: 12%; }
                     table[name="invoice_line_table"] td {
                         vertical-align: top;
                         padding: 0.35rem 0.25rem;
@@ -88,8 +86,7 @@
                     table[name="invoice_line_table"] th:nth-child(7),
                     table[name="invoice_line_table"] td:nth-child(5),
                     table[name="invoice_line_table"] td:nth-child(6),
-                    table[name="invoice_line_table"] td:nth-child(7),
-                    table[name="invoice_line_table"] td:nth-child(8) {
+                    table[name="invoice_line_table"] td:nth-child(7) {
                         text-align: right !important;
                         white-space: nowrap;
                     }
@@ -107,7 +104,15 @@
                 </div>
             </xpath>
 
-            <xpath expr="//div[@id='total']//t[@t-call='account.document_tax_totals']" position="after">
+            <xpath expr="//div[@id='total']//t[@t-call='account.document_tax_totals']" position="replace">
+                <tr t-if="o.tax_totals" class="o_total">
+                    <td class="col-6">
+                        <strong>Total</strong>
+                    </td>
+                    <td class="text-end col-6">
+                        <strong t-field="o.amount_total"/>
+                    </td>
+                </tr>
                 <tr t-if="o.tax_totals" class="border-black o_total">
                     <td class="col-6">
                         <strong>Total TSH</strong>
@@ -117,6 +122,10 @@
                     </td>
                 </tr>
             </xpath>
+
+            <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[@name='th_taxes']" position="replace"/>
+            <xpath expr="//td[@name='td_taxes']" position="replace"/>
+            <xpath expr="//td[@name='td_taxes_grouped']" position="replace"/>
 
             <xpath expr="//t[@t-if=&quot;o.tax_totals and o.tax_totals.get('display_in_company_currency')&quot;]" position="attributes">
                 <attribute name="t-if">False</attribute>
