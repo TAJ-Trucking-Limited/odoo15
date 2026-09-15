@@ -360,7 +360,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         table_style = styles[0]
         self.assertIn('table-layout: fixed', table_style)
         self.assertIn('table[name="invoice_line_table"]', table_style)
-        self.assertIn('vertical-align: middle', table_style)
+        self.assertIn('vertical-align: top', table_style)
         self.assertIn('white-space: nowrap', table_style)
         self.assertIn('th:nth-child(3)', table_style)
         self.assertIn('width: 16%', table_style)
@@ -421,11 +421,11 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             ".//xpath[@expr=\"//table[@name='invoice_line_table']/thead/tr/th[1]\"]//th"
         )
 
-        self.assertEqual([header.text for header in headers], [
-            'Truck',
-            'Container No.',
-            'Consignee',
-        ])
+        self.assertEqual(headers[0].text, 'Truck')
+        self.assertEqual(headers[1].text, 'Container')
+        line_break = headers[1].find('br')
+        self.assertEqual(line_break.tail if line_break is not None else None, 'Number')
+        self.assertEqual(headers[2].text, 'Consignee')
 
     def test_invoice_report_places_customer_address_on_left(self):
         root = self._combined_view_root(
