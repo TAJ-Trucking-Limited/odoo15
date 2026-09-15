@@ -57,7 +57,7 @@
                         width: 100%;
                     }
                     table[name="invoice_line_table"] th {
-                        vertical-align: middle !important;
+                        vertical-align: top !important;
                         white-space: nowrap;
                         text-align: center !important;
                         padding: 0.35rem 0.25rem;
@@ -182,7 +182,7 @@
 
             <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[1]" position="after">
                 <th>Truck</th>
-                <th>Container Number</th>
+                <th>Container<br/>Number</th>
                 <th>Consignee</th>
             </xpath>
 
@@ -199,7 +199,7 @@
             </xpath>
 
             <xpath expr="//table[@name='invoice_line_table']/thead/tr/th" position="attributes">
-                <attribute name="style">vertical-align: middle; text-align: center !important; white-space: nowrap;</attribute>
+                <attribute name="style">vertical-align: top; text-align: center !important; white-space: nowrap;</attribute>
             </xpath>
 
             <xpath expr="//span[@id='payment_terms_note_id']" position="after">
