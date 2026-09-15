@@ -116,6 +116,27 @@ class TestSaleOrderVatPercentage(AccountTestInvoicingCommon):
         order.write({'vat_percentage': 0.0})
         self.assertFalse(order.order_line.tax_ids)
 
+    def test_selecting_vat_tax_updates_rate_and_line_taxes(self):
+        order = self._create_order()
+
+        order.write({'vat_tax_id': self.sale_tax_7_5.id})
+
+        self.assertTrue(order.vat_percentage_active)
+        self.assertEqual(order.vat_tax_id, self.sale_tax_7_5)
+        self.assertEqual(order.vat_percentage, 7.5)
+        self.assertEqual(order.order_line.tax_ids, self.sale_tax_7_5)
+
+    def test_clearing_vat_tax_removes_line_taxes(self):
+        order = self._create_order()
+        order.write({'vat_tax_id': self.sale_tax_7_5.id})
+
+        order.write({'vat_tax_id': False})
+
+        self.assertTrue(order.vat_percentage_active)
+        self.assertFalse(order.vat_tax_id)
+        self.assertEqual(order.vat_percentage, 0.0)
+        self.assertFalse(order.order_line.tax_ids)
+
     def test_boundaries_are_accepted_and_out_of_range_rejected(self):
         zero_order = self._create_order(rate=0.0)
         self.assertFalse(zero_order.order_line.tax_ids)
@@ -286,14 +307,19 @@ class TestSaleOrderVatPercentage(AccountTestInvoicingCommon):
     # Views
     # ------------------------------------------------------------------
 
-    def test_sale_order_form_shows_vat_percentage(self):
+    def test_sale_order_form_shows_vat_tax_dropdown(self):
         view = self.env.ref('move_invoice_line.view_sale_form_madfox')
         root = ElementTree.fromstring(view.get_combined_arch())
 
-        nodes = root.findall(".//field[@name='vat_percentage']")
+        nodes = root.findall(".//field[@name='vat_tax_id']")
 
         self.assertEqual(len(nodes), 1)
         self.assertNotEqual(nodes[0].get('invisible'), '1')
+        self.assertIn("('type_tax_use', '=', 'sale')", nodes[0].get('domain'))
+        self.assertEqual(
+            nodes[0].get('options'),
+            "{'no_create': True, 'no_open': True}",
+        )
 
     def test_invoice_form_shows_rate_readonly_without_marker(self):
         view = self.env.ref('move_invoice_line.view_move_form_madfox_17')

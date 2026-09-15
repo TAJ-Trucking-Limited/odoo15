@@ -16,6 +16,13 @@ class SaleOrder(models.Model):
         help="VAT rate applied to every product line of this order. "
              "It replaces the taxes coming from the products.",
     )
+    vat_tax_id = fields.Many2one(
+        'account.tax',
+        string='VAT Tax',
+        check_company=True,
+        help="Select the Sales tax to apply to every product line. Leave "
+             "empty to apply no VAT.",
+    )
     vat_percentage_active = fields.Boolean(
         string='VAT Percentage Applied',
         default=False,
@@ -94,6 +101,39 @@ class SaleOrder(models.Model):
             return self.company_id.account_fiscal_country_id
         return self._get_vat_tax_country()
 
+    def _get_eligible_vat_tax_domain(self, country=None):
+        self.ensure_one()
+        domain = [
+            ('company_id', '=', self.company_id.id),
+            ('active', '=', True),
+            ('type_tax_use', '=', 'sale'),
+            ('amount_type', '=', 'percent'),
+        ]
+        if country:
+            domain.append(('country_id', '=', country.id))
+        return domain
+
+    def _check_vat_tax(self, tax, country=None):
+        self.ensure_one()
+        if not tax:
+            return self.env['account.tax']
+        tax.ensure_one()
+        if country is None:
+            country = self._get_vat_tax_country()
+        if (
+            not tax.active
+            or tax.company_id != self.company_id
+            or tax.type_tax_use != 'sale'
+            or tax.amount_type != 'percent'
+            or tax.price_include
+            or (country and tax.country_id != country)
+        ):
+            raise ValidationError(_(
+                "The selected VAT tax must be an active, tax-excluded "
+                "percentage Sales tax for this company and tax country.",
+            ))
+        return tax
+
     def _get_vat_percentage_tax(self, rate=None, country=None):
         """Return the single eligible sale tax for the order VAT rate.
 
@@ -101,6 +141,8 @@ class SaleOrder(models.Model):
         instead of assigning a 0% tax record.
         """
         self.ensure_one()
+        if rate is None and self.vat_tax_id:
+            return self._check_vat_tax(self.vat_tax_id, country)
         rate = self._check_vat_percentage_range(
             self.vat_percentage if rate is None else rate,
         )
@@ -108,18 +150,13 @@ class SaleOrder(models.Model):
             return self.env['account.tax']
 
         precision = 10 ** -VAT_PERCENTAGE_DIGITS
-        domain = [
-            ('company_id', '=', self.company_id.id),
-            ('active', '=', True),
-            ('type_tax_use', '=', 'sale'),
-            ('amount_type', '=', 'percent'),
+        if country is None:
+            country = self._get_vat_tax_country()
+        domain = self._get_eligible_vat_tax_domain(country)
+        domain += [
             ('amount', '>=', rate - precision),
             ('amount', '<=', rate + precision),
         ]
-        if country is None:
-            country = self._get_vat_tax_country()
-        if country:
-            domain.append(('country_id', '=', country.id))
         taxes = self.env['account.tax'].search(domain).filtered(
             lambda tax: (
                 not tax.price_include
@@ -181,7 +218,13 @@ class SaleOrder(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if 'vat_percentage' in vals:
+            if 'vat_tax_id' in vals:
+                tax = self.env['account.tax'].browse(vals['vat_tax_id'])
+                vals.update({
+                    'vat_percentage': tax.amount if tax else 0.0,
+                    'vat_percentage_active': True,
+                })
+            elif 'vat_percentage' in vals:
                 vals['vat_percentage_active'] = True
                 self._check_vat_percentage_range(vals['vat_percentage'])
         orders = super().create(vals_list)
@@ -189,7 +232,22 @@ class SaleOrder(models.Model):
         return orders
 
     def write(self, vals):
-        if 'vat_percentage' in vals:
+        if 'vat_tax_id' in vals:
+            selected_tax = self.env['account.tax'].browse(vals['vat_tax_id'])
+            for order in self:
+                tax = order._check_vat_tax(
+                    selected_tax,
+                    country=order._get_vat_tax_country_for_vals(vals),
+                )
+                order._check_vat_percentage_change_allowed(
+                    tax.amount if tax else 0.0,
+                )
+            vals = dict(
+                vals,
+                vat_percentage=(selected_tax.amount if selected_tax else 0.0),
+                vat_percentage_active=True,
+            )
+        elif 'vat_percentage' in vals:
             rate = self._check_vat_percentage_range(vals['vat_percentage'])
             for order in self:
                 order._check_vat_percentage_change_allowed(rate)

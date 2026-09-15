@@ -19,7 +19,9 @@
             </xpath>
 
             <xpath expr="//field[@name='payment_term_id']" position="after">
-                <field name="vat_percentage" string="VAT (%)"/>
+                <field name="vat_tax_id" string="VAT"
+                    domain="[('company_id', '=', company_id), ('active', '=', True), ('type_tax_use', '=', 'sale'), ('amount_type', '=', 'percent')]"
+                    options="{'no_create': True, 'no_open': True}"/>
             </xpath>
 
         </field>
