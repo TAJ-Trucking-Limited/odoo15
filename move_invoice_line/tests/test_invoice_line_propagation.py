@@ -330,7 +330,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         ):
             self.assertIn(expected, html)
 
-    def test_invoice_report_keeps_bank_details_compact(self):
+    def test_invoice_report_spaces_bank_details(self):
         view = self.env.ref(
             'move_invoice_line.report_invoice_document_inherit'
         )
@@ -343,8 +343,18 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
 
         self.assertEqual(len(targets), 1)
         self.assertFalse(targets[0].findall('.//br'))
-        bank_details = targets[0].findall("./div[@class='mt-2']/div")
+        bank_detail_wrapper = next(
+            div for div in targets[0].findall('./div')
+            if 'taj-bank-details' in div.get('class', '').split()
+        )
+        bank_details = bank_detail_wrapper.findall('./div')
         self.assertEqual(len(bank_details), 5)
+
+        styles = root.findall('.//style')
+        self.assertTrue(any(
+            '.taj-bank-details > div' in ''.join(style.itertext())
+            for style in styles
+        ))
 
     def test_invoice_report_uses_aligned_fixed_width_line_columns(self):
         view = self.env.ref(
