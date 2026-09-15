@@ -346,6 +346,25 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         bank_details = targets[0].findall("./div[@class='mt-2']/div")
         self.assertEqual(len(bank_details), 5)
 
+    def test_invoice_report_uses_aligned_fixed_width_line_columns(self):
+        view = self.env.ref(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        root = ElementTree.fromstring(view.arch_db)
+        styles = [
+            ''.join(style.itertext())
+            for style in root.findall('.//style')
+        ]
+
+        self.assertTrue(styles)
+        table_style = styles[0]
+        self.assertIn('table-layout: fixed', table_style)
+        self.assertIn('table[name="invoice_line_table"]', table_style)
+        self.assertIn('vertical-align: middle', table_style)
+        self.assertIn('white-space: nowrap', table_style)
+        self.assertIn('th:nth-child(3)', table_style)
+        self.assertIn('width: 15%', table_style)
+
     def test_invoice_report_places_customer_address_on_left(self):
         root = self._combined_view_root(
             'move_invoice_line.report_invoice_document_inherit'
