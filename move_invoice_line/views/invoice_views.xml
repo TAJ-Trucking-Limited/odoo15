@@ -182,7 +182,7 @@
 
             <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[1]" position="after">
                 <th>Truck</th>
-                <th>Container Number</th>
+                <th>Container No.</th>
                 <th>Consignee</th>
             </xpath>
 

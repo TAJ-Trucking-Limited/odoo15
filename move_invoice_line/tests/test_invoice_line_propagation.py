@@ -412,6 +412,21 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(totals.get('position'), 'replace')
         self.assertFalse(totals.findall(".//t[@t-call='account.document_tax_totals']"))
 
+    def test_invoice_report_uses_compact_container_header(self):
+        view = self.env.ref(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        root = ElementTree.fromstring(view.arch_db)
+        headers = root.findall(
+            ".//xpath[@expr=\"//table[@name='invoice_line_table']/thead/tr/th[1]\"]//th"
+        )
+
+        self.assertEqual([header.text for header in headers], [
+            'Truck',
+            'Container No.',
+            'Consignee',
+        ])
+
     def test_invoice_report_places_customer_address_on_left(self):
         root = self._combined_view_root(
             'move_invoice_line.report_invoice_document_inherit'
