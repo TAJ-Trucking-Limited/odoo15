@@ -52,6 +52,9 @@
                         margin-top: 0 !important;
                         padding-top: 0 !important;
                     }
+                    .taj-bank-details &gt; div {
+                        margin-bottom: 0.15rem;
+                    }
                     table[name="invoice_line_table"] {
                         table-layout: fixed;
                         width: 100%;
@@ -203,7 +206,7 @@
             </xpath>
 
             <xpath expr="//span[@id='payment_terms_note_id']" position="after">
-                <div class="mt-2">
+                <div class="mt-2 taj-bank-details">
                     <div>Account Name : TAJ TRUCKING LIMITED</div>
                     <div>Account No. USD : 05233990011</div>
                     <div>Swift Transfer : EUAFTZTZ</div>
