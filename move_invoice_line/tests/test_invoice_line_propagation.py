@@ -462,6 +462,21 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(len(address), 1)
         self.assertNotIn('ms-auto', address[0].get('class', '').split())
 
+    def test_invoice_report_offsets_customer_address_block(self):
+        view = self.env.ref(
+            'move_invoice_line.report_invoice_document_inherit'
+        )
+        root = ElementTree.fromstring(view.arch_db)
+        styles = [
+            ''.join(style.itertext())
+            for style in root.findall('.//style')
+        ]
+
+        self.assertTrue(any(
+            'div.address {\n                        margin-top: 5mm !important;' in style
+            for style in styles
+        ))
+
     def test_invoice_report_places_shipping_address_on_right(self):
         self.env.user.sudo().write({
             'group_ids': [Command.link(
