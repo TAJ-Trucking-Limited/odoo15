@@ -44,7 +44,7 @@
                        longer moves the customer block. Pad the inner column
                        instead: padding never collapses. */
                     div.address div[name="address"] {
-                        padding-top: 1.2mm !important;
+                        padding-top: 4mm !important;
                     }
                     div[name="company_address"] ul[name="company_address_list"],
                     div[name="company_address"] ul[name="company_address_list"] li,

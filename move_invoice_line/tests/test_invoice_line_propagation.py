@@ -483,7 +483,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         ))
         self.assertTrue(any(
             'div.address div[name="address"] {'
-            '\n                        padding-top: 1.2mm !important;' in style
+            '\n                        padding-top: 4mm !important;' in style
             for style in styles
         ))
 
