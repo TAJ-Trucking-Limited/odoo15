@@ -38,7 +38,7 @@
                         margin-left: 0 !important;
                     }
                     div.address {
-                        margin-top: 8mm !important;
+                        margin-top: 13mm !important;
                     }
                     div[name="company_address"] ul[name="company_address_list"],
                     div[name="company_address"] ul[name="company_address_list"] li,
