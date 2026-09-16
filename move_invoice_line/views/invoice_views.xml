@@ -37,6 +37,9 @@
                     div.address div[name="address"] {
                         margin-left: 0 !important;
                     }
+                    div.address {
+                        margin-top: 5mm !important;
+                    }
                     div[name="company_address"] ul[name="company_address_list"],
                     div[name="company_address"] ul[name="company_address_list"] li,
                     div[name="address_not_same_as_shipping"],
