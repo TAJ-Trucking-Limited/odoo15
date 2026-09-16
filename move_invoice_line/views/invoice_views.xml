@@ -40,6 +40,12 @@
                     div.address {
                         margin-top: 15mm !important;
                     }
+                    /* The margin above collapses into .article, so raising it no
+                       longer moves the customer block. Pad the inner column
+                       instead: padding never collapses. */
+                    div.address div[name="address"] {
+                        padding-top: 1.2mm !important;
+                    }
                     div[name="company_address"] ul[name="company_address_list"],
                     div[name="company_address"] ul[name="company_address_list"] li,
                     div[name="address_not_same_as_shipping"],

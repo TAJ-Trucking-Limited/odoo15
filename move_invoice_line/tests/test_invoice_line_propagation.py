@@ -481,6 +481,11 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             'div.address {\n                        margin-top: 15mm !important;' in style
             for style in styles
         ))
+        self.assertTrue(any(
+            'div.address div[name="address"] {'
+            '\n                        padding-top: 1.2mm !important;' in style
+            for style in styles
+        ))
 
     def test_invoice_report_places_shipping_address_on_right(self):
         self.env.user.sudo().write({
