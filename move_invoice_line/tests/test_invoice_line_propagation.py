@@ -355,6 +355,11 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             '.taj-bank-details > div' in ''.join(style.itertext())
             for style in styles
         ))
+        self.assertTrue(any(
+            '.taj-bank-details {\n                        margin-top: 24mm !important;'
+            in ''.join(style.itertext())
+            for style in styles
+        ))
 
     def test_invoice_report_uses_aligned_fixed_width_line_columns(self):
         view = self.env.ref(
@@ -473,7 +478,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         ]
 
         self.assertTrue(any(
-            'div.address {\n                        margin-top: 13mm !important;' in style
+            'div.address {\n                        margin-top: 14mm !important;' in style
             for style in styles
         ))
 

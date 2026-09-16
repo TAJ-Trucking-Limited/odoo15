@@ -38,7 +38,7 @@
                         margin-left: 0 !important;
                     }
                     div.address {
-                        margin-top: 13mm !important;
+                        margin-top: 14mm !important;
                     }
                     div[name="company_address"] ul[name="company_address_list"],
                     div[name="company_address"] ul[name="company_address_list"] li,
@@ -54,6 +54,9 @@
                     .article &gt; div.row:first-child {
                         margin-top: 0 !important;
                         padding-top: 0 !important;
+                    }
+                    .taj-bank-details {
+                        margin-top: 24mm !important;
                     }
                     .taj-bank-details &gt; div {
                         margin-bottom: 0.15rem;
