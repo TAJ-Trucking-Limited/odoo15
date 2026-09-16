@@ -473,7 +473,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         ]
 
         self.assertTrue(any(
-            'div.address {\n                        margin-top: 5mm !important;' in style
+            'div.address {\n                        margin-top: 8mm !important;' in style
             for style in styles
         ))
 
