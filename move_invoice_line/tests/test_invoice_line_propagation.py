@@ -356,7 +356,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             for style in styles
         ))
         self.assertTrue(any(
-            '.taj-bank-details {\n                        margin-top: 24mm !important;'
+            '.taj-bank-details {\n                        margin-top: 34mm !important;'
             in ''.join(style.itertext())
             for style in styles
         ))
@@ -478,7 +478,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         ]
 
         self.assertTrue(any(
-            'div.address {\n                        margin-top: 14mm !important;' in style
+            'div.address {\n                        margin-top: 15mm !important;' in style
             for style in styles
         ))
 
