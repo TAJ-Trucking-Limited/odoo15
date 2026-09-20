@@ -75,6 +75,7 @@ class TestReconciliationViews(TransactionCase):
             help_view.inherit_id, self.env.ref('account_accountant.view_bank_rec_edit_line'))
         self.assertEqual(help_view.model, 'account.move.line')
         self.assertIn('//form/sheet', help_view.arch_db)
+        self.assertIn('role="status"', help_view.arch_db)
         self.assertIn('exact amount applied to the invoice', help_view.arch_db)
 
     def test_wizard_view_configuration(self):
@@ -89,6 +90,7 @@ class TestReconciliationViews(TransactionCase):
             self.assertIn(field_name, arch)
         self.assertIn('action_apply', arch)
         self.assertIn('special="cancel"', arch)
+        self.assertIn('Required by action_apply', arch)
 
     def test_wizard_access_is_restricted_to_accountants(self):
         access = self.env.ref(

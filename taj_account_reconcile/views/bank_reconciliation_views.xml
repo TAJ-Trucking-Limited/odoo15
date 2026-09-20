@@ -12,7 +12,7 @@
         <field name="inherit_id" ref="account_accountant.view_bank_rec_edit_line"/>
         <field name="arch" type="xml">
             <xpath expr="//form/sheet" position="inside">
-                <div class="alert alert-info mt-3 mb-0" role="note">
+                <div class="alert alert-info mt-3 mb-0" role="status">
                     Enter the exact amount applied to the invoice in the Balance field.
                     The remaining amount stays on the bank transaction and can be
                     matched again.
