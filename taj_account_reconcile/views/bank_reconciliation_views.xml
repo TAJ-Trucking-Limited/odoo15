@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Concise help inside the native exact-allocation dialog opened by the
+        pencil action of a reconciliation line. The native fields and the native
+        save mechanism are kept untouched.
+    -->
+    <record id="view_bank_rec_edit_line_taj_help" model="ir.ui.view">
+        <field name="name">account.move.line.bank.rec.edit.line.taj.help</field>
+        <field name="model">account.move.line</field>
+        <field name="inherit_id" ref="account_accountant.view_bank_rec_edit_line"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form/sheet" position="inside">
+                <div class="alert alert-info mt-3 mb-0" role="note">
+                    Enter the exact amount applied to the invoice in the Balance field.
+                    The remaining amount stays on the bank transaction and can be
+                    matched again.
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
