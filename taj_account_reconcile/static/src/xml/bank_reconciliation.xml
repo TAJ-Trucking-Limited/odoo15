@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <!--
+        Bank transaction card: offer the guarded company-currency equivalent
+        wizard beside the two native amount displays. It is only shown for
+        accountants, before the transaction is reviewed or reconciled and while
+        no counterpart line exists.
+    -->
+    <t t-name="taj_account_reconcile.BankRecStatementLine"
+       t-inherit="account_accountant.BankRecStatementLine"
+       t-inherit-mode="extension">
+        <xpath expr="//span[@t-esc='formattedAmount']" position="after">
+            <button t-if="canEditCurrencyAmount"
+                    class="btn btn-link p-0 text-600 ms-2 text-nowrap align-self-center"
+                    t-on-click.stop="actionEditCurrencyAmount"
+                    data-tooltip="Edit the company-currency equivalent of this bank transaction">
+                Edit Currency Amount
+            </button>
+        </xpath>
+    </t>
+
+    <!--
+        Reconciliation line: label the native exact-allocation action. The
+        native toggleEditLine() handler is kept untouched.
+    -->
+    <t t-name="taj_account_reconcile.BankRecLineToReconcile"
+       t-inherit="account_accountant.BankRecLineToReconcile"
+       t-inherit-mode="extension">
+        <xpath expr="//button[@t-if='lineData.has_invalid_analytics']" position="attributes">
+            <attribute name="data-tooltip">Set the exact amount applied to the invoice</attribute>
+        </xpath>
+        <xpath expr="//button[@t-if='lineData.has_invalid_analytics']" position="inside">
+            <span class="ms-1">Set Amount</span>
+        </xpath>
+        <xpath expr="//button[@t-if='!lineData.has_invalid_analytics']" position="attributes">
+            <attribute name="data-tooltip">Set the exact amount applied to the invoice</attribute>
+        </xpath>
+        <xpath expr="//button[@t-if='!lineData.has_invalid_analytics']" position="inside">
+            <span class="ms-1">Set Amount</span>
+        </xpath>
+    </t>
+
+</templates>

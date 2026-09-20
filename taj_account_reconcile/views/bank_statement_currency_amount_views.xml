@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_bank_statement_currency_amount_wizard_form" model="ir.ui.view">
+        <field name="name">taj.bank.statement.currency.amount.wizard.form</field>
+        <field name="model">taj.bank.statement.currency.amount.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Edit Currency Amount">
+                <group>
+                    <group string="Transaction">
+                        <field name="source_amount"/>
+                        <field name="source_currency_id"/>
+                    </group>
+                    <group string="Company Equivalent">
+                        <field name="company_amount"/>
+                        <field name="company_currency_id"/>
+                        <field name="effective_rate"/>
+                    </group>
+                </group>
+                <div class="text-muted mt-2">
+                    The transaction amount stays unchanged. Only the company-currency
+                    equivalent is saved on the bank transaction.
+                </div>
+                <field name="statement_line_id" invisible="1"/>
+                <field name="company_amount_field" invisible="1"/>
+                <footer>
+                    <button name="action_apply" string="Apply" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>
