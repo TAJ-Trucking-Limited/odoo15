@@ -21,7 +21,9 @@
                     The transaction amount stays unchanged. Only the company-currency
                     equivalent is saved on the bank transaction.
                 </div>
+                <!-- Required by action_apply to revalidate the bank transaction at save time. -->
                 <field name="statement_line_id" invisible="1"/>
+                <!-- Required by action_apply to detect currency setup changes after opening. -->
                 <field name="company_amount_field" invisible="1"/>
                 <footer>
                     <button name="action_apply" string="Apply" type="object" class="btn-primary"/>
