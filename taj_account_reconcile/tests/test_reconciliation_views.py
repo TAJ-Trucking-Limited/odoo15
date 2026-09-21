@@ -90,7 +90,16 @@ class TestReconciliationViews(TransactionCase):
             self.assertIn(field_name, arch)
         self.assertIn('action_apply', arch)
         self.assertIn('special="cancel"', arch)
-        self.assertIn('Required by action_apply', arch)
+        invisible_field_reasons = {
+            'statement_line_id': 'revalidate the bank transaction at save time',
+            'company_amount_field': 'detect currency setup changes after opening',
+        }
+        for field_name, reason in invisible_field_reasons.items():
+            self.assertRegex(
+                arch,
+                rf'<field name="{field_name}" invisible="1"\s*/>\s*'
+                rf'<!-- Required by action_apply to {reason}\. -->',
+            )
 
     def test_wizard_access_is_restricted_to_accountants(self):
         access = self.env.ref(
