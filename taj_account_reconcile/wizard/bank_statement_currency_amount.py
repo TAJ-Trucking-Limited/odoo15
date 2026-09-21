@@ -76,10 +76,15 @@ class BankStatementCurrencyAmountWizard(models.TransientModel):
         statement_line._check_currency_amount_edit_allowed()
         statement_line._check_currency_amount_edit_state()
         info = statement_line._get_currency_amount_edit_info()
-        if info['company_amount_field'] != self.company_amount_field:
+        source_currency = info['source_currency']
+        if (
+            info['company_amount_field'] != self.company_amount_field
+            or source_currency != self.source_currency_id
+            or not source_currency.is_zero(info['source_amount'] - self.source_amount)
+        ):
             raise UserError(_(
-                "The currency setup of this bank transaction changed. "
-                "Close this dialog and open it again."
+                "The transaction amount or currency setup changed while this "
+                "dialog was open. Close this dialog and open it again."
             ))
         company_currency = statement_line.company_id.currency_id
         statement_line._check_currency_amount_edit_values(

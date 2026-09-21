@@ -91,11 +91,52 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         counterpart_line = counterpart_move.line_ids.filtered(
             lambda line: line.account_id == suspense_line.account_id)
         (suspense_line + counterpart_line).reconcile()
+        # In Odoo 19, a statement line is only considered reconciled after it
+        # has been reviewed.  Keep the fixture aligned with that real state.
+        statement_line.move_id.checked = True
+        statement_line.invalidate_recordset()
+
+    def _make_partially_reconciled(self, statement_line, partial_ratio=0.5):
+        """Partially reconcile the suspense line of the statement line."""
+        _liquidity_line, suspense_line, _other_lines = \
+            statement_line._seek_for_lines()
+        self.assertTrue(suspense_line)
+        suspense_line.account_id.reconcile = True
+        part_amount_curr = suspense_line.currency_id.round(
+            -suspense_line.amount_currency * partial_ratio)
+        part_balance = self.company_currency.round(
+            -suspense_line.balance * partial_ratio)
+        counterpart_move = self.env['account.move'].create({
+            'journal_id': self.company_data['default_journal_misc'].id,
+            'date': statement_line.date,
+            'line_ids': [
+                Command.create({
+                    'name': 'TAJ partial counterpart',
+                    'account_id': suspense_line.account_id.id,
+                    'currency_id': suspense_line.currency_id.id,
+                    'amount_currency': part_amount_curr,
+                    'balance': part_balance,
+                }),
+                Command.create({
+                    'name': 'TAJ partial counterpart',
+                    'account_id': self.company_data['default_account_revenue'].id,
+                    'currency_id': self.company_currency.id,
+                    'amount_currency': -part_balance,
+                    'balance': -part_balance,
+                }),
+            ],
+        })
+        counterpart_move.action_post()
+        counterpart_line = counterpart_move.line_ids.filtered(
+            lambda line: line.account_id == suspense_line.account_id)
+        (suspense_line + counterpart_line).reconcile()
         statement_line.invalidate_recordset()
 
     def _add_other_line(self, statement_line):
         """Add a balanced counterpart line, like a split or a write-off."""
-        statement_line.move_id.write({
+        # Write through the statement line: its Odoo 19 write override safely
+        # handles changes to the already-posted linked journal entry.
+        statement_line.write({
             'line_ids': [
                 Command.create({
                     'name': 'TAJ split',
@@ -234,6 +275,83 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         }])
         self.assertAlmostEqual(sum(statement_line.move_id.line_ids.mapped('balance')), 0.0, places=2)
 
+    def test_apply_negative_outflow_foreign_currency_journal(self):
+        statement_line = self._create_statement_line(self.bank_journal_foreign, -100.0)
+        wizard = self._open_wizard(statement_line)
+        self.assertEqual(wizard.source_amount, -100.0)
+        self.assertEqual(wizard.source_currency_id, self.foreign_currency)
+        self.assertEqual(wizard.company_currency_id, self.company_currency)
+        self.assertEqual(wizard.company_amount_field, 'amount_currency')
+
+        wizard.company_amount = -60.0
+        result = wizard.action_apply()
+        self.assertEqual(result, {'type': 'ir.actions.act_window_close'})
+
+        statement_line.invalidate_recordset()
+        self.assertEqual(statement_line.amount, -100.0)
+        self.assertEqual(statement_line.currency_id, self.foreign_currency)
+        self.assertEqual(statement_line.foreign_currency_id, self.company_currency)
+        self.assertEqual(statement_line.amount_currency, -60.0)
+
+        liquidity_lines, suspense_lines, other_lines = statement_line._seek_for_lines()
+        self.assertFalse(other_lines)
+        self.assertEqual(len(liquidity_lines), 1)
+        self.assertEqual(len(suspense_lines), 1)
+        self.assertRecordValues(liquidity_lines, [{
+            'currency_id': self.foreign_currency.id,
+            'amount_currency': -100.0,
+            'debit': 0.0,
+            'credit': 60.0,
+        }])
+        self.assertRecordValues(suspense_lines, [{
+            'currency_id': self.company_currency.id,
+            'amount_currency': 60.0,
+            'debit': 60.0,
+            'credit': 0.0,
+        }])
+        balance_sum = sum(statement_line.move_id.line_ids.mapped('balance'))
+        self.assertTrue(self.company_currency.is_zero(balance_sum))
+
+    def test_apply_negative_outflow_company_currency_journal(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, -200.0,
+            foreign_currency=self.foreign_currency, amount_currency=-400.0)
+        wizard = self._open_wizard(statement_line)
+        self.assertEqual(wizard.source_amount, -400.0)
+        self.assertEqual(wizard.source_currency_id, self.foreign_currency)
+        self.assertEqual(wizard.company_amount, -200.0)
+        self.assertEqual(wizard.company_currency_id, self.company_currency)
+        self.assertEqual(wizard.company_amount_field, 'amount')
+
+        wizard.company_amount = -210.0
+        result = wizard.action_apply()
+        self.assertEqual(result, {'type': 'ir.actions.act_window_close'})
+
+        statement_line.invalidate_recordset()
+        self.assertEqual(statement_line.amount, -210.0)
+        self.assertEqual(statement_line.amount_currency, -400.0)
+        self.assertEqual(statement_line.foreign_currency_id, self.foreign_currency)
+        self.assertEqual(statement_line.currency_id, self.company_currency)
+
+        liquidity_lines, suspense_lines, other_lines = statement_line._seek_for_lines()
+        self.assertFalse(other_lines)
+        self.assertEqual(len(liquidity_lines), 1)
+        self.assertEqual(len(suspense_lines), 1)
+        self.assertRecordValues(liquidity_lines, [{
+            'currency_id': self.company_currency.id,
+            'amount_currency': -210.0,
+            'debit': 0.0,
+            'credit': 210.0,
+        }])
+        self.assertRecordValues(suspense_lines, [{
+            'currency_id': self.foreign_currency.id,
+            'amount_currency': 400.0,
+            'debit': 210.0,
+            'credit': 0.0,
+        }])
+        balance_sum = sum(statement_line.move_id.line_ids.mapped('balance'))
+        self.assertTrue(self.company_currency.is_zero(balance_sum))
+
     def test_apply_posts_audit_message(self):
         statement_line = self._create_statement_line(
             self.bank_journal_company, 200.0,
@@ -293,13 +411,31 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         with self.assertRaises(UserError):
             statement_line.action_open_taj_currency_amount_wizard()
 
-    def test_rejects_reconciled_transaction(self):
+    def test_rejects_checked_reconciled_transaction(self):
         statement_line = self._create_statement_line(
             self.bank_journal_company, 200.0,
             foreign_currency=self.foreign_currency, amount_currency=400.0)
         self._make_reconciled(statement_line)
         self.assertTrue(statement_line.is_reconciled)
+        self.assertTrue(statement_line.checked)
+        with self.assertRaises(UserError):
+            statement_line.action_open_taj_currency_amount_wizard()
+
+    def test_rejects_partially_reconciled_transaction(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, 200.0,
+            foreign_currency=self.foreign_currency, amount_currency=400.0)
+        self._make_partially_reconciled(statement_line)
+        self.assertFalse(statement_line.is_reconciled)
         self.assertFalse(statement_line.checked)
+        _liquidity, suspense_lines, _other = statement_line._seek_for_lines()
+        partial_records = \
+            suspense_lines.matched_debit_ids + suspense_lines.matched_credit_ids
+        self.assertTrue(partial_records.exists())
+        self.assertTrue(any(
+            not line.currency_id.is_zero(line.amount_residual)
+            for line in suspense_lines
+        ))
         with self.assertRaises(UserError):
             statement_line.action_open_taj_currency_amount_wizard()
 
@@ -357,3 +493,66 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
             wizard.action_apply()
         statement_line.invalidate_recordset()
         self.assertEqual(statement_line.amount, 200.0)
+
+    def test_apply_rejects_partially_reconciled_transaction(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, 200.0,
+            foreign_currency=self.foreign_currency, amount_currency=400.0)
+        wizard = self._open_wizard(statement_line)
+        # Partially reconcile the suspense line while the wizard is open
+        self._make_partially_reconciled(statement_line)
+        _liquidity, suspense_lines, _other = statement_line._seek_for_lines()
+        partial_records = \
+            suspense_lines.matched_debit_ids + suspense_lines.matched_credit_ids
+        self.assertTrue(partial_records.exists())
+        self.assertFalse(statement_line.is_reconciled)
+        self.assertTrue(any(
+            not line.currency_id.is_zero(line.amount_residual)
+            for line in suspense_lines
+        ))
+        matched_records_before = [
+            (line.matched_debit_ids.ids, line.matched_credit_ids.ids)
+            for line in suspense_lines
+        ]
+        wizard.company_amount = 210.0
+        with self.assertRaises(UserError):
+            wizard.action_apply()
+        # Verify partial reconciliation records are never mutated
+        statement_line.invalidate_recordset()
+        self.assertEqual(statement_line.amount, 200.0)
+        _liquidity, suspense_lines, _other = statement_line._seek_for_lines()
+        matched_records_after = [
+            (line.matched_debit_ids.ids, line.matched_credit_ids.ids)
+            for line in suspense_lines
+        ]
+        self.assertEqual(matched_records_after, matched_records_before)
+
+    def test_apply_rejects_concurrency_amount_drift(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, 200.0,
+            foreign_currency=self.foreign_currency, amount_currency=400.0)
+        wizard = self._open_wizard(statement_line)
+        self.assertEqual(wizard.source_amount, 400.0)
+        # Modify the foreign amount on the statement line while the wizard is open
+        statement_line.write({'amount_currency': 500.0})
+        statement_line.invalidate_recordset()
+        wizard.company_amount = 210.0
+        with self.assertRaises(UserError):
+            wizard.action_apply()
+        statement_line.invalidate_recordset()
+        self.assertEqual(statement_line.amount, 200.0)
+        self.assertEqual(statement_line.amount_currency, 500.0)
+
+    def test_apply_rejects_concurrency_amount_drift_foreign_journal(self):
+        statement_line = self._create_statement_line(self.bank_journal_foreign, 100.0)
+        wizard = self._open_wizard(statement_line)
+        self.assertEqual(wizard.source_amount, 100.0)
+        # Modify the journal amount on the statement line while the wizard is open
+        statement_line.write({'amount': 150.0})
+        statement_line.invalidate_recordset()
+        wizard.company_amount = 60.0
+        with self.assertRaises(UserError):
+            wizard.action_apply()
+        statement_line.invalidate_recordset()
+        self.assertEqual(statement_line.amount, 150.0)
+        self.assertFalse(statement_line.foreign_currency_id)

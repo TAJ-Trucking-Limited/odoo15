@@ -18,7 +18,7 @@ class AccountBankStatementLine(models.Model):
                 "of a bank transaction."
             ))
         self.check_access('write')
-        if self.company_id not in self.env.user.company_ids:
+        if self.company_id not in self.env.companies:
             raise AccessError(_(
                 "You are not allowed to edit bank transactions of this company."
             ))
@@ -36,8 +36,11 @@ class AccountBankStatementLine(models.Model):
                 "This bank transaction is already reconciled. Undo its "
                 "reconciliation before editing its company-currency equivalent."
             ))
-        _liquidity_lines, _suspense_lines, other_lines = self._seek_for_lines()
-        if other_lines:
+        _liquidity_lines, suspense_lines, other_lines = self._seek_for_lines()
+        if other_lines or any(
+            line.matched_debit_ids or line.matched_credit_ids
+            for line in suspense_lines
+        ):
             raise UserError(_(
                 "This bank transaction already has reconciliation lines. "
                 "Remove them and edit the company-currency equivalent before "
