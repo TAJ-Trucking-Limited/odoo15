@@ -63,6 +63,10 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         """Fully reconcile the suspense line of the statement line."""
         _liquidity_line, suspense_line, _other_lines = statement_line._seek_for_lines()
         self.assertTrue(suspense_line)
+        # The default bank suspense account is not necessarily reconcilable in
+        # a fresh Odoo.sh test database. Enable reconciliation explicitly so
+        # this fixture can exercise the already-reconciled transaction guard.
+        suspense_line.account_id.reconcile = True
         counterpart_move = self.env['account.move'].create({
             'journal_id': self.company_data['default_journal_misc'].id,
             'date': statement_line.date,
