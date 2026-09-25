@@ -29,14 +29,15 @@ class TestReconciliationViews(TransactionCase):
         self.assertIn('taj_account_reconcile/static/src/js/bank_reconciliation.js', assets)
         self.assertIn('taj_account_reconcile/static/src/xml/bank_reconciliation.xml', assets)
 
-    def test_statement_line_template_extension(self):
+    def test_button_list_dropdown_template_extension(self):
         content = self._read_asset('static/src/xml/bank_reconciliation.xml')
-        self.assertIn('t-inherit="account_accountant.BankRecStatementLine"', content)
+        self.assertIn('t-inherit="account_accountant.BankRecButtonListDropdown"', content)
         self.assertIn('t-inherit-mode="extension"', content)
+        self.assertIn('BankRecFileUploader', content)
+        self.assertIn('DropdownItem', content)
         self.assertIn('Edit Currency Amount', content)
         self.assertIn('canEditCurrencyAmount', content)
-        self.assertIn('actionEditCurrencyAmount', content)
-        self.assertIn('data-tooltip=', content)
+        self.assertIn('onSelected.bind="actionEditCurrencyAmount"', content)
         self.assertNotIn('position="replace"', content)
 
     def test_line_to_reconcile_extension_labels_native_edit_button(self):
@@ -47,18 +48,18 @@ class TestReconciliationViews(TransactionCase):
         # The native toggleEditLine behaviour must only be decorated, not replaced.
         self.assertNotIn('position="replace"', content)
 
-    def test_statement_line_js_patch(self):
+    def test_button_list_js_patch(self):
         content = self._read_asset('static/src/js/bank_reconciliation.js')
         self.assertIn(
-            '@account_accountant/components/bank_reconciliation/statement_line/statement_line',
+            '@account_accountant/components/bank_reconciliation/button_list/button_list',
             content)
         self.assertIn('@web/core/utils/patch', content)
-        self.assertIn('BankRecStatementLine.prototype', content)
+        self.assertIn('BankRecButtonList.prototype', content)
         self.assertIn('action_open_taj_currency_amount_wizard', content)
         self.assertIn('onClose', content)
-        self.assertIn('this.record.load()', content)
-        self.assertIn('return true;', content)
-        self.assertIn('server action re-checks the currency', content)
+        self.assertIn('this.props.statementLine.load()', content)
+        self.assertIn('!this.statementLineData.checked && !this.statementLineData.is_reconciled', content)
+        self.assertIn('authoritative safety boundary', content)
 
     # -------------------------------------------------------------------------
     # SERVER VIEWS

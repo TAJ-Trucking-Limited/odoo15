@@ -1,30 +1,18 @@
 /** @odoo-module **/
 
 import { patch } from "@web/core/utils/patch";
-import { BankRecStatementLine } from "@account_accountant/components/bank_reconciliation/statement_line/statement_line";
+import { BankRecButtonList } from "@account_accountant/components/bank_reconciliation/button_list/button_list";
 
-patch(BankRecStatementLine.prototype, {
+patch(BankRecButtonList.prototype, {
     /**
-     * Only accountants may open the wizard, only before the transaction is
-     * reviewed/reconciled and only while no counterpart line exists.
+     * Keep the client-side condition intentionally small. The server action is
+     * the authoritative safety boundary and re-checks permissions, review /
+     * reconciliation state, counterpart lines, and the supported FX setup.
      *
      * @returns {boolean}
      */
     get canEditCurrencyAmount() {
-        if (!this.userCanReview) {
-            return false;
-        }
-        if (this.recordData.checked || this.recordData.is_reconciled) {
-            return false;
-        }
-        if (this.linesToReconcile.length) {
-            return false;
-        }
-        // Do not depend on company_id.currency_id being loaded in the kanban
-        // record. Odoo 19 does not expose that nested value consistently in
-        // the reconciliation card. The server action re-checks the currency
-        // setup and rejects company-currency-only / unsupported transactions.
-        return true;
+        return !this.statementLineData.checked && !this.statementLineData.is_reconciled;
     },
 
     /**
@@ -35,10 +23,10 @@ patch(BankRecStatementLine.prototype, {
         const action = await this.orm.call(
             "account.bank.statement.line",
             "action_open_taj_currency_amount_wizard",
-            [this.recordData.id]
+            [this.statementLineData.id]
         );
         await this.action.doAction(action, {
-            onClose: () => this.record.load(),
+            onClose: () => this.props.statementLine.load(),
         });
     },
 });

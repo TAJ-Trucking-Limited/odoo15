@@ -2,21 +2,19 @@
 <templates xml:space="preserve">
 
     <!--
-        Bank transaction card: offer the guarded company-currency equivalent
-        wizard beside the two native amount displays. It is only shown for
-        accountants, before the transaction is reviewed or reconciled and while
-        no counterpart line exists.
+        Put the guarded company-currency equivalent action in Odoo's native
+        bank-reconciliation overflow menu. This avoids squeezing a long action
+        into the fixed-width amount column used by the Odoo 19 grid layout.
     -->
-    <t t-name="taj_account_reconcile.BankRecStatementLine"
-       t-inherit="account_accountant.BankRecStatementLine"
+    <t t-name="taj_account_reconcile.BankRecButtonListDropdown"
+       t-inherit="account_accountant.BankRecButtonListDropdown"
        t-inherit-mode="extension">
-        <xpath expr="//span[@t-esc='formattedAmount']" position="after">
-            <button t-if="canEditCurrencyAmount"
-                    class="btn btn-link p-0 text-600 ms-2 text-nowrap align-self-center"
-                    t-on-click.stop="actionEditCurrencyAmount"
-                    data-tooltip="Edit the company-currency equivalent of this bank transaction">
+        <xpath expr="//BankRecFileUploader" position="before">
+            <DropdownItem t-if="canEditCurrencyAmount"
+                          class="'btn btn-link'"
+                          onSelected.bind="actionEditCurrencyAmount">
                 Edit Currency Amount
-            </button>
+            </DropdownItem>
         </xpath>
     </t>
 
