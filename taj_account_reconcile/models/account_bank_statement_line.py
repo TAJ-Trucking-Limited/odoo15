@@ -55,13 +55,14 @@ class AccountBankStatementLine(models.Model):
             ))
 
     def _check_currency_amount_edit_state(self):
-        """Reject transactions whose counterpart lines already exist."""
+        """Reject reconciled transactions or transactions with counterpart lines.
+
+        In Odoo 19, ``checked=True`` is also the normal state behind the
+        ``Not Matched`` filter.  A reviewed-but-unreconciled transaction is
+        therefore still editable as long as no reconciliation/counterpart lines
+        exist yet.
+        """
         self.ensure_one()
-        if self.checked:
-            raise UserError(_(
-                "This bank transaction is already reviewed. Remove its review "
-                "before editing its company-currency equivalent."
-            ))
         if self.is_reconciled:
             raise UserError(_(
                 "This bank transaction is already reconciled. Undo its "

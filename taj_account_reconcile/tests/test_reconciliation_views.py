@@ -46,7 +46,7 @@ class TestReconciliationViews(TransactionCase):
         content = self._read_asset('static/src/xml/bank_reconciliation.xml')
         self.assertIn('t-inherit="account_accountant.BankRecLineToReconcile"', content)
         self.assertIn('Set Amount', content)
-        self.assertIn('data-tooltip=', content)
+        self.assertIn('name="data-tooltip"', content)
         # The native toggleEditLine behaviour must only be decorated, not replaced.
         self.assertNotIn('position="replace"', content)
 

@@ -228,11 +228,13 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
             foreign_currency=self.third_currency, amount_currency=50.0)
         self.assertFalse(statement_line.taj_can_edit_company_equivalent)
 
-    def test_company_equivalent_eligibility_rejects_checked_transaction(self):
+    def test_company_equivalent_eligibility_allows_checked_unreconciled_transaction(self):
         statement_line = self._create_statement_line(self.bank_journal_foreign, 100.0)
         statement_line.move_id.checked = True
         statement_line.invalidate_recordset()
-        self.assertFalse(statement_line.taj_can_edit_company_equivalent)
+        self.assertTrue(statement_line.checked)
+        self.assertFalse(statement_line.is_reconciled)
+        self.assertTrue(statement_line.taj_can_edit_company_equivalent)
 
     def test_company_equivalent_eligibility_rejects_partial_reconciliation(self):
         statement_line = self._create_statement_line(
@@ -455,13 +457,14 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         self.assertEqual(statement_line.amount, -200.0)
         self.assertEqual(statement_line.amount_currency, -400.0)
 
-    def test_rejects_checked_transaction(self):
+    def test_allows_checked_unreconciled_transaction(self):
         statement_line = self._create_statement_line(self.bank_journal_foreign, 100.0)
         statement_line.move_id.checked = True
         statement_line.invalidate_recordset(['checked'])
         self.assertTrue(statement_line.checked)
-        with self.assertRaises(UserError):
-            statement_line.action_open_taj_currency_amount_wizard()
+        self.assertFalse(statement_line.is_reconciled)
+        action = statement_line.action_open_taj_currency_amount_wizard()
+        self.assertEqual(action['res_model'], 'taj.bank.statement.currency.amount.wizard')
 
     def test_rejects_checked_reconciled_transaction(self):
         statement_line = self._create_statement_line(
@@ -532,19 +535,20 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         with self.assertRaises(AccessError):
             statement_line.with_user(restricted_user).action_open_taj_currency_amount_wizard()
 
-    def test_apply_rechecks_safety(self):
+    def test_apply_allows_reviewed_unreconciled_transaction(self):
         statement_line = self._create_statement_line(
             self.bank_journal_company, 200.0,
             foreign_currency=self.foreign_currency, amount_currency=400.0)
         wizard = self._open_wizard(statement_line)
-        # The transaction is reviewed between opening and applying the wizard.
+        # Odoo 19 uses checked=True for normal Not Matched transactions.
         statement_line.move_id.checked = True
         statement_line.invalidate_recordset(['checked'])
         wizard.company_amount = 210.0
-        with self.assertRaises(UserError):
-            wizard.action_apply()
+        wizard.action_apply()
         statement_line.invalidate_recordset()
-        self.assertEqual(statement_line.amount, 200.0)
+        self.assertTrue(statement_line.checked)
+        self.assertEqual(statement_line.amount, 210.0)
+        self.assertEqual(statement_line.amount_currency, 400.0)
 
     def test_apply_rejects_partially_reconciled_transaction(self):
         statement_line = self._create_statement_line(

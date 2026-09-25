@@ -1,6 +1,6 @@
 {
     'name': 'TAJ Account Reconciliation',
-    'version': '19.0.1.1.0',
+    'version': '19.0.1.1.1',
     'summary': 'Edit the company-currency equivalent of a bank transaction safely',
     'description': """
         Makes the native exact-invoice allocation of the Odoo bank reconciliation

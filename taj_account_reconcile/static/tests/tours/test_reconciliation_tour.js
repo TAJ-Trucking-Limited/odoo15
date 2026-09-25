@@ -1,17 +1,7 @@
 import { registry } from "@web/core/registry";
-import { stepUtils } from "@web_tour/tour_utils";
-import { accountTourSteps } from "@account/js/tours/account";
 
 registry.category("web_tour.tours").add("taj_account_reconcile_browser", {
-    url: "/odoo",
     steps: () => [
-        stepUtils.showAppsMenuItem(),
-        ...accountTourSteps.goToAccountMenu("Open Accounting"),
-        {
-            content: "Open the TAJ FX test journal",
-            trigger: ".o_kanban_record:has(a[name='open_action']:contains('TAJ FX Browser Test')) button[name='action_open_reconcile']",
-            run: "click",
-        },
         {
             trigger: "div.o_bank_reconciliation_kanban_renderer",
         },
