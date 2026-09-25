@@ -5,14 +5,14 @@ import { BankRecButtonList } from "@account_accountant/components/bank_reconcili
 
 patch(BankRecButtonList.prototype, {
     /**
-     * Keep the client-side condition intentionally small. The server action is
-     * the authoritative safety boundary and re-checks permissions, review /
-     * reconciliation state, counterpart lines, and the supported FX setup.
+     * Visibility is decided by the non-stored server field loaded by the native
+     * Odoo 19 bank-reconciliation kanban. The action still revalidates all
+     * conditions when clicked and again when the wizard is applied.
      *
      * @returns {boolean}
      */
     get canEditCurrencyAmount() {
-        return !this.statementLineData.checked && !this.statementLineData.is_reconciled;
+        return Boolean(this.statementLineData.taj_can_edit_company_equivalent);
     },
 
     /**

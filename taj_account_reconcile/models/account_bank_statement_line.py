@@ -1,9 +1,40 @@
-from odoo import _, models
+from odoo import _, fields, models
 from odoo.exceptions import AccessError, UserError
 
 
 class AccountBankStatementLine(models.Model):
     _inherit = 'account.bank.statement.line'
+
+    taj_can_edit_company_equivalent = fields.Boolean(
+        string='Can Edit Company Equivalent',
+        compute='_compute_taj_can_edit_company_equivalent',
+        compute_sudo=False,
+        help=(
+            "Technical UI flag. It is true only when the current user may edit "
+            "the company-currency equivalent and the bank transaction is in a "
+            "safe supported FX state."
+        ),
+    )
+
+    def _compute_taj_can_edit_company_equivalent(self):
+        user_is_accountant = self.env.user.has_group('account.group_account_user')
+        allowed_companies = self.env.companies
+        for statement_line in self:
+            statement_line.taj_can_edit_company_equivalent = False
+            if not user_is_accountant or statement_line.company_id not in allowed_companies:
+                continue
+            try:
+                statement_line._check_currency_amount_edit_state()
+                info = statement_line._get_currency_amount_edit_info()
+                statement_line._check_currency_amount_edit_values(
+                    info['source_amount'],
+                    info['source_currency'],
+                    info['company_amount'],
+                    statement_line.company_id.currency_id,
+                )
+            except UserError:
+                continue
+            statement_line.taj_can_edit_company_equivalent = True
 
     # -------------------------------------------------------------------------
     # SAFETY HELPERS
@@ -140,7 +171,7 @@ class AccountBankStatementLine(models.Model):
         })
         return {
             'type': 'ir.actions.act_window',
-            'name': _("Edit Currency Amount"),
+            'name': _("Edit Company Equivalent"),
             'res_model': 'taj.bank.statement.currency.amount.wizard',
             'res_id': wizard.id,
             'view_mode': 'form',

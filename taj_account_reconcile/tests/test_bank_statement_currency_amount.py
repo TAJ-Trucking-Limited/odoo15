@@ -205,6 +205,58 @@ class TestBankStatementCurrencyAmount(AccountTestInvoicingCommon):
         self.assertAlmostEqual(wizard.effective_rate, 0.525, places=6)
 
     # -------------------------------------------------------------------------
+    # UI ELIGIBILITY FLAG
+    # -------------------------------------------------------------------------
+
+    def test_company_equivalent_eligibility_foreign_currency_journal(self):
+        statement_line = self._create_statement_line(self.bank_journal_foreign, 100.0)
+        self.assertTrue(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_company_currency_journal(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, 200.0,
+            foreign_currency=self.foreign_currency, amount_currency=400.0)
+        self.assertTrue(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_rejects_company_currency_only(self):
+        statement_line = self._create_statement_line(self.bank_journal_company, 100.0)
+        self.assertFalse(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_rejects_third_currency(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_foreign, 100.0,
+            foreign_currency=self.third_currency, amount_currency=50.0)
+        self.assertFalse(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_rejects_checked_transaction(self):
+        statement_line = self._create_statement_line(self.bank_journal_foreign, 100.0)
+        statement_line.move_id.checked = True
+        statement_line.invalidate_recordset()
+        self.assertFalse(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_rejects_partial_reconciliation(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, 200.0,
+            foreign_currency=self.foreign_currency, amount_currency=400.0)
+        self._make_partially_reconciled(statement_line)
+        self.assertFalse(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_rejects_counterpart_lines(self):
+        statement_line = self._create_statement_line(
+            self.bank_journal_company, 200.0,
+            foreign_currency=self.foreign_currency, amount_currency=400.0)
+        self._add_other_line(statement_line)
+        self.assertFalse(statement_line.taj_can_edit_company_equivalent)
+
+    def test_company_equivalent_eligibility_rejects_non_accountant(self):
+        statement_line = self._create_statement_line(self.bank_journal_foreign, 100.0)
+        non_accountant = new_test_user(
+            self.env, login='taj_eligibility_non_accountant',
+            groups='base.group_user,account.group_account_readonly')
+        self.assertFalse(
+            statement_line.with_user(non_accountant).taj_can_edit_company_equivalent)
+
+    # -------------------------------------------------------------------------
     # APPLYING BOTH DIRECTIONS
     # -------------------------------------------------------------------------
 

@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- Load the server-computed eligibility flag in Odoo 19's bank-reconciliation record. -->
+    <record id="view_bank_statement_line_kanban_taj_company_equivalent" model="ir.ui.view">
+        <field name="name">account.bank.statement.line.kanban.taj.company.equivalent</field>
+        <field name="model">account.bank.statement.line</field>
+        <field name="inherit_id" ref="account_accountant.view_bank_statement_line_kanban_bank_rec_widget"/>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban/field[@name='foreign_currency_id']" position="after">
+                <field name="taj_can_edit_company_equivalent"/>
+            </xpath>
+        </field>
+    </record>
+
     <!--
         Concise help inside the native exact-allocation dialog opened by the
         pencil action of a reconciliation line. The native fields and the native

@@ -28,6 +28,8 @@ class TestReconciliationViews(TransactionCase):
         assets = self._read_manifest()['assets']['web.assets_backend']
         self.assertIn('taj_account_reconcile/static/src/js/bank_reconciliation.js', assets)
         self.assertIn('taj_account_reconcile/static/src/xml/bank_reconciliation.xml', assets)
+        test_assets = self._read_manifest()['assets']['web.assets_tests']
+        self.assertIn('taj_account_reconcile/static/tests/tours/**/*', test_assets)
 
     def test_button_list_dropdown_template_extension(self):
         content = self._read_asset('static/src/xml/bank_reconciliation.xml')
@@ -35,7 +37,7 @@ class TestReconciliationViews(TransactionCase):
         self.assertIn('t-inherit-mode="extension"', content)
         self.assertIn('BankRecFileUploader', content)
         self.assertIn('DropdownItem', content)
-        self.assertIn('Edit Currency Amount', content)
+        self.assertIn('Edit Company Equivalent', content)
         self.assertIn('canEditCurrencyAmount', content)
         self.assertIn('onSelected.bind="actionEditCurrencyAmount"', content)
         self.assertNotIn('position="replace"', content)
@@ -58,12 +60,31 @@ class TestReconciliationViews(TransactionCase):
         self.assertIn('action_open_taj_currency_amount_wizard', content)
         self.assertIn('onClose', content)
         self.assertIn('this.props.statementLine.load()', content)
-        self.assertIn('!this.statementLineData.checked && !this.statementLineData.is_reconciled', content)
-        self.assertIn('authoritative safety boundary', content)
+        self.assertIn('this.statementLineData.taj_can_edit_company_equivalent', content)
+        self.assertIn('non-stored server field', content)
 
     # -------------------------------------------------------------------------
     # SERVER VIEWS
     # -------------------------------------------------------------------------
+
+    def test_bank_rec_kanban_loads_company_equivalent_eligibility(self):
+        view = self.env.ref(
+            'taj_account_reconcile.view_bank_statement_line_kanban_taj_company_equivalent')
+        self.assertEqual(
+            view.inherit_id,
+            self.env.ref('account_accountant.view_bank_statement_line_kanban_bank_rec_widget'))
+        self.assertEqual(view.model, 'account.bank.statement.line')
+        self.assertIn('taj_can_edit_company_equivalent', view.arch_db)
+        self.assertIn("foreign_currency_id", view.arch_db)
+
+    def test_browser_tour_is_registered_in_test_assets(self):
+        content = self._read_asset('static/tests/tours/test_reconciliation_tour.js')
+        self.assertIn('taj_account_reconcile_browser', content)
+        self.assertIn('taj-edit-company-equivalent', content)
+        self.assertIn('Edit Company Equivalent', content)
+        self.assertIn('Set Amount', content)
+        self.assertIn("div[name='company_amount'] input", content)
+        self.assertIn("div[name='balance'] input", content)
 
     def test_native_edit_line_view_keeps_editable_amounts(self):
         native_view = self.env.ref('account_accountant.view_bank_rec_edit_line')

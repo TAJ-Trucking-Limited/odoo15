@@ -5,7 +5,7 @@
         <field name="name">taj.bank.statement.currency.amount.wizard.form</field>
         <field name="model">taj.bank.statement.currency.amount.wizard</field>
         <field name="arch" type="xml">
-            <form string="Edit Currency Amount">
+            <form string="Edit Company Equivalent">
                 <group>
                     <group string="Transaction">
                         <field name="source_amount"/>

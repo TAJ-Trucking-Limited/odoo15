@@ -11,9 +11,9 @@
        t-inherit-mode="extension">
         <xpath expr="//BankRecFileUploader" position="before">
             <DropdownItem t-if="canEditCurrencyAmount"
-                          class="'btn btn-link'"
+                          class="'btn btn-link taj-edit-company-equivalent'"
                           onSelected.bind="actionEditCurrencyAmount">
-                Edit Currency Amount
+                Edit Company Equivalent
             </DropdownItem>
         </xpath>
     </t>
