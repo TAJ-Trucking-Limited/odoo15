@@ -191,13 +191,31 @@ class TestNavirecAPI(TransactionCase):
             {
                 "ordering": "time",
                 "page_size": 1000,
-                "account": "acct",
-                "vehicles": "one,two",
+                "vehicle": "one,two",
                 "time__gte": "2026-09-25T00:00:00Z",
                 "time__lte": "2026-09-25T23:59:59Z",
             },
         )
         self.assertIsNone(request.call_args_list[1].kwargs["params"])
+
+    def test_get_vehicle_events_single_vehicle_omits_account(self):
+        response = self._response([])
+        with patch.object(
+            navirec_api.requests, "request", return_value=response
+        ) as request:
+            NavirecClient(token="x").get_vehicle_events(
+                account_id="acct",
+                vehicle_ids=["54c0b29b-2535-4a47-9165-f7d83fb582b8"],
+                time_gte="2026-09-25T00:00:00Z",
+            )
+
+        params = request.call_args.kwargs["params"]
+        self.assertEqual(
+            params["vehicle"],
+            "54c0b29b-2535-4a47-9165-f7d83fb582b8",
+        )
+        self.assertNotIn("account", params)
+        self.assertNotIn("vehicles", params)
 
     def test_get_vehicle_events_requires_filter(self):
         with self.assertRaisesRegex(NavirecAPIError, "require an account or vehicle"):

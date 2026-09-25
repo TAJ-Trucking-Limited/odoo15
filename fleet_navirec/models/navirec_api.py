@@ -67,7 +67,8 @@ class NavirecClient:
 
             if response.status_code in (401, 403):
                 raise NavirecAPIError(
-                    "Invalid token or missing permissions",
+                    "Invalid token or missing permissions for %s (%s)"
+                    % (urlparse(url).path or url, response.status_code),
                     status_code=response.status_code,
                 )
             if response.status_code == 429:
@@ -146,8 +147,9 @@ class NavirecClient:
     ):
         """Return Navirec vehicle events for location/address enrichment.
 
-        The endpoint requires a vehicle/account filter. Time filtering is used
-        to keep the response bounded; callers should pass a recent time_gte.
+        The endpoint accepts one scope filter. Live calls reject `vehicles`
+        and `account` together ("could not be handled"), so a vehicle id uses
+        `vehicle` and account is sent only when no vehicle id was given.
         """
         events = []
         next_url = self.api_url + "vehicle_events/"
@@ -155,21 +157,21 @@ class NavirecClient:
             "ordering": "time",
             "page_size": page_size,
         }
-        if account_id:
-            params["account"] = account_id
+        if isinstance(vehicle_ids, str):
+            vehicle_ids = [vehicle_ids]
+        vehicle_ids = [vehicle_id for vehicle_id in (vehicle_ids or []) if vehicle_id]
         if vehicle_ids:
-            if isinstance(vehicle_ids, str):
-                params["vehicle"] = vehicle_ids
-            else:
-                params["vehicles"] = ",".join(filter(None, vehicle_ids))
+            params["vehicle"] = ",".join(vehicle_ids)
+        elif account_id:
+            params["account"] = account_id
+        else:
+            raise NavirecAPIError(
+                "Vehicle events require an account or vehicle filter"
+            )
         if time_gte:
             params["time__gte"] = time_gte
         if time_lte:
             params["time__lte"] = time_lte
-        if not account_id and not vehicle_ids:
-            raise NavirecAPIError(
-                "Vehicle events require an account or vehicle filter"
-            )
         while next_url:
             response = self._request("GET", next_url, params=params)
             data = response.json()
