@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from urllib.parse import urlparse
 
@@ -263,11 +264,7 @@ class NavirecClient:
             raise NavirecAPIError("Unexpected configuration payload")
         return data
 
-    def _single_visible_user_id(self, account_id=None):
-        """Return the only user id this token can see, if there is exactly one."""
-        params = {"page_size": 2}
-        if account_id:
-            params["account"] = account_id
+    def _one_user_id(self, params):
         response = self._request("GET", "users/", params=params)
         data = response.json()
         if isinstance(data, list):
@@ -279,6 +276,21 @@ class NavirecClient:
         if len(users) != 1 or not isinstance(users[0], dict):
             return False
         return users[0].get("id") or False
+
+    def _configuration_user_id(self, account_id=None):
+        """Prefer the integration user. Fall back to the only visible user."""
+        params = {"page_size": 2}
+        if account_id:
+            params["account"] = account_id
+        try:
+            user_id = self._one_user_id({**params, "is_integration": True})
+        except NavirecAPIError as exc:
+            if exc.status_code != 400:
+                raise
+            user_id = False
+        if user_id:
+            return user_id
+        return self._one_user_id(params)
 
     def get_geocoding_context(self, account_id=None):
         """Return (https geocoding base URL, query params including key).
@@ -294,14 +306,29 @@ class NavirecClient:
         except NavirecAPIError as exc:
             if exc.status_code != 400:
                 raise
-            user_id = self._single_visible_user_id(account_id)
-            if not user_id:
+            user_id = self._configuration_user_id(account_id)
+            if user_id:
+                try:
+                    configuration = self._get_configuration(
+                        account_id=account_id,
+                        user_id=user_id,
+                        version=DEFAULT_WEB_APP_VERSION,
+                    )
+                except NavirecAPIError as retry_exc:
+                    if retry_exc.status_code != 400:
+                        raise
+                    # Passing account without a matching user is what Navirec
+                    # rejects. The token can still identify the account.
+                    configuration = self._get_configuration(
+                        user_id=user_id,
+                        version=DEFAULT_WEB_APP_VERSION,
+                    )
+            elif account_id:
+                configuration = self._get_configuration(
+                    version=DEFAULT_WEB_APP_VERSION,
+                )
+            else:
                 raise
-            configuration = self._get_configuration(
-                account_id=account_id,
-                user_id=user_id,
-                version=DEFAULT_WEB_APP_VERSION,
-            )
         services = configuration.get("services")
         geocoding = services.get("geocoding") if isinstance(services, dict) else None
         if not isinstance(geocoding, dict):
@@ -399,6 +426,16 @@ class NavirecClient:
             "Navirec geocoding rejected the integration token",
             status_code=last_status,
         )
+
+
+def public_navirec_error(message):
+    """Return an error safe to show in the UI. Query keys stay out of it."""
+    text = re.sub(
+        r"(?i)(key(?:\"?\s*[:=]\s*\"?))[^\s&,\"'}]+",
+        r"\1redacted",
+        str(message or ""),
+    )
+    return text[:300]
 
 
 def vehicle_uuid_from_url(url):

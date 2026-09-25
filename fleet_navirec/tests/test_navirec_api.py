@@ -329,7 +329,50 @@ class TestNavirecAPI(TransactionCase):
 
         self.assertEqual(base_url, "https://realtime.navirec.com/geocoding/")
         self.assertEqual(params["key"], "account-key")
+        self.assertTrue(
+            request.call_args_list[1].kwargs["params"]["is_integration"]
+        )
         self.assertEqual(request.call_args_list[2].kwargs["params"]["user"], "user-1")
+        self.assertEqual(request.call_args_list[2].kwargs["params"]["account"], "acct")
+
+    def test_geocoding_context_drops_account_when_that_filter_is_rejected(self):
+        missing_user = self._response(
+            {"detail": "user is required"},
+            status=400,
+            text="user is required",
+        )
+        rejected_account = self._response(
+            {"detail": "account rejected"},
+            status=400,
+            text="account rejected",
+        )
+        users = self._response([{"id": "user-1"}])
+        configuration = self._response({
+            "services": {"geocoding": {"key": "account-key"}},
+            "environment": {
+                "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
+            },
+        })
+        with patch.object(
+            navirec_api.requests,
+            "request",
+            side_effect=[missing_user, users, rejected_account, configuration],
+        ) as request:
+            _base_url, params = NavirecClient(token="secret").get_geocoding_context(
+                account_id="acct"
+            )
+
+        self.assertEqual(params["key"], "account-key")
+        sent = request.call_args_list[3].kwargs["params"]
+        self.assertEqual(sent["user"], "user-1")
+        self.assertNotIn("account", sent)
+
+    def test_public_navirec_error_redacts_geocoding_key(self):
+        text = navirec_api.public_navirec_error(
+            "request failed key=account-key&latitude=1"
+        )
+        self.assertNotIn("account-key", text)
+        self.assertIn("redacted", text)
 
     def test_geocoding_context_rejects_missing_key_without_echoing_secrets(self):
         configuration = self._response({

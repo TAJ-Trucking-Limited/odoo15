@@ -172,14 +172,24 @@ class ResConfigSettings(models.TransientModel):
                     "sticky": True,
                 },
             }
+        message = _("%(label)s completed. Records updated: %(count)s") % {
+            "label": label,
+            "count": count,
+        }
+        note = self.env["fleet.navirec.sync.log"].sudo().search(
+            [("operation", "=", operation)],
+            limit=1,
+        ).message
+        if note:
+            message = "%s\n%s" % (message, note)
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Navirec"),
-                "message": _("%(label)s completed. Records updated: %(count)s")
-                % {"label": label, "count": count},
-                "type": "success",
+                "message": message,
+                "type": "warning" if note else "success",
+                "sticky": bool(note),
             },
         }
 

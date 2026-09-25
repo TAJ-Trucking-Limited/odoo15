@@ -743,6 +743,32 @@ class TestVehicleSync(TransactionCase):
             "-8.9064783, 33.5219450",
         )
 
+    def test_manual_sync_warns_with_the_geocoder_error(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        uuid = "54c0b29b-2535-4a47-9165-f7d83fb582b8"
+        self.vehicle.navirec_uuid = uuid
+        client = self._geocode_client([{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+        }])
+        client.reverse_geocode.side_effect = NavirecAPIError(
+            "Navirec geocoding rejected the integration token"
+        )
+        vehicle_type = type(self.vehicle)
+
+        with patch.object(vehicle_type, "_navirec_client", return_value=client):
+            action = self.vehicle.action_navirec_sync_now()
+
+        self.assertEqual(action["params"]["type"], "warning")
+        self.assertIn(
+            "rejected the integration token",
+            action["params"]["message"],
+        )
+        self.assertTrue(self.vehicle.navirec_has_position)
+        self.assertFalse(self.vehicle.navirec_location_name)
+
     def test_manual_sync_uses_navirec_reverse_geocode(self):
         params = self.env["ir.config_parameter"].sudo()
         params.set_param("fleet_navirec.use_area_names", "True")

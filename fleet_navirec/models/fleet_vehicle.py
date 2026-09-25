@@ -10,6 +10,7 @@ from .navirec_api import (
     DEFAULT_API_URL,
     NavirecAPIError,
     NavirecClient,
+    public_navirec_error,
     vehicle_uuid_from_url,
 )
 
@@ -609,6 +610,7 @@ class FleetVehicle(models.Model):
             context = get_context(account_id=account_id)
         except NavirecAPIError as exc:
             _logger.warning("Navirec reverse geocoding unavailable: %s", exc)
+            client.geocode_error = public_navirec_error(exc)
             return {}
         if (
             not isinstance(context, tuple)
@@ -645,6 +647,7 @@ class FleetVehicle(models.Model):
                     "Navirec reverse geocoding stopped: %s",
                     exc,
                 )
+                client.geocode_error = public_navirec_error(exc)
                 break
             if not isinstance(address, str):
                 address = False
@@ -653,6 +656,8 @@ class FleetVehicle(models.Model):
             attempted.append((lon, lat, address))
             if address:
                 names[uuid] = address
+        if attempted and not names and not getattr(client, "geocode_error", None):
+            client.geocode_error = "Navirec geocoder returned no address"
         _logger.info(
             "Navirec reverse geocode: unresolved=%s named=%s lookups=%s",
             len(states),
@@ -979,6 +984,7 @@ class FleetVehicle(models.Model):
             started_at,
             "success",
             records_updated=updated,
+            message=getattr(client, "geocode_error", None) or None,
         )
 
     def action_navirec_sync_now(self):
@@ -1013,6 +1019,20 @@ class FleetVehicle(models.Model):
             )
         except NavirecAPIError as exc:
             raise UserError(str(exc)) from exc
+        note = getattr(client, "geocode_error", None)
+        if note and not self.navirec_location_name:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Navirec"),
+                    "message": _(
+                        "Vehicle refreshed. Readable location unavailable: %s"
+                    ) % note,
+                    "type": "warning",
+                    "sticky": True,
+                },
+            }
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
