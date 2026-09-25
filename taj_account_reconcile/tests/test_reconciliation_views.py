@@ -57,6 +57,8 @@ class TestReconciliationViews(TransactionCase):
         self.assertIn('action_open_taj_currency_amount_wizard', content)
         self.assertIn('onClose', content)
         self.assertIn('this.record.load()', content)
+        self.assertIn('return true;', content)
+        self.assertIn('server action re-checks the currency', content)
 
     # -------------------------------------------------------------------------
     # SERVER VIEWS

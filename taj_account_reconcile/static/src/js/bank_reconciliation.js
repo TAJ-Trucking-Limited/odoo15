@@ -5,28 +5,6 @@ import { BankRecStatementLine } from "@account_accountant/components/bank_reconc
 
 patch(BankRecStatementLine.prototype, {
     /**
-     * Tell whether the transaction carries a company-currency equivalent that
-     * an accountant can edit.
-     *
-     * @returns {boolean}
-     */
-    get hasEditableCompanyCurrency() {
-        const companyCurrencyId = this.recordData.company_id?.currency_id?.id;
-        const journalCurrencyId = this.recordData.currency_id?.id;
-        const foreignCurrencyId = this.recordData.foreign_currency_id?.id;
-        if (!companyCurrencyId || !journalCurrencyId) {
-            return false;
-        }
-        if (journalCurrencyId !== companyCurrencyId) {
-            // Foreign-currency journal: the company currency must be the only
-            // possible other currency of the transaction.
-            return !foreignCurrencyId || foreignCurrencyId === companyCurrencyId;
-        }
-        // Company-currency journal: a foreign-currency transaction is required.
-        return !!foreignCurrencyId && foreignCurrencyId !== companyCurrencyId;
-    },
-
-    /**
      * Only accountants may open the wizard, only before the transaction is
      * reviewed/reconciled and only while no counterpart line exists.
      *
@@ -42,7 +20,11 @@ patch(BankRecStatementLine.prototype, {
         if (this.linesToReconcile.length) {
             return false;
         }
-        return this.hasEditableCompanyCurrency;
+        // Do not depend on company_id.currency_id being loaded in the kanban
+        // record. Odoo 19 does not expose that nested value consistently in
+        // the reconciliation card. The server action re-checks the currency
+        // setup and rejects company-currency-only / unsupported transactions.
+        return true;
     },
 
     /**
