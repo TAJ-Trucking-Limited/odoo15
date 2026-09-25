@@ -45,8 +45,13 @@ public geocoding service.
 - Country areas are deliberately ignored as current-position labels.
 - If no area matches, the module checks recent `/vehicle_events/` data and uses
   a Navirec-provided event `address` only when the event GPS point is within
-  1 km of the current state. This avoids displaying a readable but stale/wrong
-  address from an older event elsewhere.
+  1 km of the current state.
+- If no nearby event address is available, the module checks recent Navirec
+  `/trips/` start/end addresses and uses one only when that endpoint is within
+  1 km of the current GPS. Manual vehicle refresh uses a longer bounded trip
+  lookback so a truck parked for several days can still resolve its last stop.
+- These distance checks avoid displaying a readable but stale/wrong address from
+  an older event or trip elsewhere.
 - A human-readable name is cached while the vehicle remains within 250 meters,
   which avoids unnecessary repeated event lookups for parked vehicles/GPS jitter.
 - Manual **Sync Navirec** and scheduled state synchronization use the same
@@ -102,7 +107,7 @@ Fleet -> Configuration -> Settings -> Navirec:
 5. Match Vehicles Now, then run Mapping Audit.
 6. Sync All Now and inspect Navirec Sync Logs.
 7. Optionally enable Human-readable Navirec locations. The module will prefer
-   Navirec Areas/POIs and then a nearby Navirec vehicle-event address.
+   Navirec Areas/POIs, then nearby event addresses, then nearby trip addresses.
 8. Optionally configure a verified vehicle deep-link template containing
    `{uuid}`.
 
@@ -155,7 +160,7 @@ odoo-bin --test-tags /fleet_navirec --stop-after-init --log-level=test
 
 The test suite covers API headers/pagination/errors, matching, duplicate plates,
 state synchronization, missing-vs-zero semantics, integration status, stale data,
-Navirec area geometry, nearby event-address enrichment, manual-sync parity,
+Navirec area geometry, nearby event/trip address enrichment, manual-sync parity,
 location-cache safety, deep-link safety, monitoring, report
 isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.

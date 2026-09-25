@@ -415,6 +415,7 @@ class TestVehicleSync(TransactionCase):
             "location": {"coordinates": [39.2, -6.8]},
             "address": "Dar es Salaam, Tanzania",
         }]
+        client.get_trips.return_value = []
 
         self.vehicle._navirec_sync_states(client)
 
@@ -483,6 +484,133 @@ class TestVehicleSync(TransactionCase):
         )
         client.get_vehicle_events.assert_called_once()
 
+    def test_event_api_failure_still_falls_back_to_trip_address(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        uuid = "11111111-1111-4111-8111-111111111111"
+        self.vehicle.navirec_uuid = uuid
+        client = Mock()
+        client.get_last_vehicle_states.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+        }]
+        client.get_areas.return_value = []
+        client.get_vehicle_events.side_effect = NavirecAPIError("events unavailable")
+        client.get_trips.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "start_time": "2026-09-25T18:00:00Z",
+            "end_time": "2026-09-25T19:30:00Z",
+            "end_location": {"coordinates": [33.5220, -8.9065]},
+            "end_address": "Itezi, Mbeya, Tanzania",
+        }]
+
+        self.vehicle._navirec_sync_states(client)
+
+        self.assertEqual(
+            self.vehicle.navirec_location_name,
+            "Itezi, Mbeya, Tanzania",
+        )
+        client.get_trips.assert_called_once()
+
+    def test_state_sync_falls_back_to_nearby_trip_end_address(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        params.set_param("fleet_navirec.account_id", "acct")
+        uuid = "11111111-1111-4111-8111-111111111111"
+        self.vehicle.navirec_uuid = uuid
+        client = Mock()
+        client.get_last_vehicle_states.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+        }]
+        client.get_areas.return_value = []
+        client.get_vehicle_events.return_value = []
+        client.get_trips.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "start_time": "2026-09-25T18:00:00Z",
+            "end_time": "2026-09-25T19:30:00Z",
+            "start_location": {"coordinates": [33.40, -8.80]},
+            "start_address": "Elsewhere, Tanzania",
+            "end_location": {"coordinates": [33.5220, -8.9065]},
+            "end_address": "Itezi, Mbeya, Tanzania",
+        }]
+
+        updated = self.vehicle._navirec_sync_states(client)
+
+        self.assertEqual(updated, 1)
+        self.assertEqual(
+            self.vehicle.navirec_location_name,
+            "Itezi, Mbeya, Tanzania",
+        )
+        client.get_trips.assert_called_once()
+
+    def test_trip_address_is_rejected_when_trip_endpoint_is_far_from_current_gps(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        uuid = "11111111-1111-4111-8111-111111111111"
+        self.vehicle.navirec_uuid = uuid
+        client = Mock()
+        client.get_last_vehicle_states.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+        }]
+        client.get_areas.return_value = []
+        client.get_vehicle_events.return_value = []
+        client.get_trips.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "start_time": "2026-09-25T18:00:00Z",
+            "end_time": "2026-09-25T19:30:00Z",
+            "end_location": {"coordinates": [39.2, -6.8]},
+            "end_address": "Dar es Salaam, Tanzania",
+        }]
+
+        self.vehicle._navirec_sync_states(client)
+
+        self.assertFalse(self.vehicle.navirec_location_name)
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(
+            self.vehicle.navirec_position_display,
+            "-8.9064783, 33.5219450",
+        )
+
+    def test_manual_sync_can_fall_back_to_nearby_trip_address(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        params.set_param("fleet_navirec.account_id", "acct")
+        uuid = "11111111-1111-4111-8111-111111111111"
+        self.vehicle.navirec_uuid = uuid
+        client = Mock()
+        client.get_last_vehicle_states.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+        }]
+        client.get_areas.return_value = []
+        client.get_vehicle_events.return_value = []
+        client.get_trips.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "start_time": "2026-09-20T18:00:00Z",
+            "end_time": "2026-09-20T19:30:00Z",
+            "end_location": {"coordinates": [33.5220, -8.9065]},
+            "end_address": "Itezi, Mbeya, Tanzania",
+        }]
+        vehicle_type = type(self.vehicle)
+
+        with patch.object(vehicle_type, "_navirec_client", return_value=client):
+            action = self.vehicle.action_navirec_sync_now()
+
+        self.assertEqual(action["params"]["type"], "success")
+        self.assertEqual(
+            self.vehicle.navirec_location_name,
+            "Itezi, Mbeya, Tanzania",
+        )
+        kwargs = client.get_trips.call_args.kwargs
+        self.assertIn("start_time_gte", kwargs)
+        self.assertIn("end_time_lte", kwargs)
+
     def test_area_enrichment_failure_does_not_block_position_sync(self):
         params = self.env["ir.config_parameter"].sudo()
         params.set_param("fleet_navirec.use_area_names", "True")
@@ -496,6 +624,9 @@ class TestVehicleSync(TransactionCase):
         client.get_areas.side_effect = NavirecAPIError("missing area permission")
         client.get_vehicle_events.side_effect = NavirecAPIError(
             "missing event permission"
+        )
+        client.get_trips.side_effect = NavirecAPIError(
+            "missing trip permission"
         )
 
         updated = self.vehicle._navirec_sync_states(client)

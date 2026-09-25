@@ -167,6 +167,47 @@ class NavirecClient:
             params = None
         return events
 
+    def get_trips(
+        self,
+        account_id=None,
+        vehicle_ids=None,
+        start_time_gte=None,
+        end_time_lte=None,
+        page_size=1000,
+    ):
+        """Return bounded Navirec trips for readable-location enrichment."""
+        trips = []
+        next_url = self.api_url + "trips/"
+        params = {
+            "ordering": "end_time",
+            "page_size": page_size,
+        }
+        if account_id:
+            params["account"] = account_id
+        if vehicle_ids:
+            if isinstance(vehicle_ids, str):
+                params["vehicle"] = vehicle_ids
+            else:
+                params["vehicle__in"] = ",".join(filter(None, vehicle_ids))
+        if start_time_gte:
+            params["start_time__gte"] = start_time_gte
+        if end_time_lte:
+            params["end_time__lte"] = end_time_lte
+        if not account_id and not vehicle_ids:
+            raise NavirecAPIError("Trips require an account or vehicle filter")
+        while next_url:
+            response = self._request("GET", next_url, params=params)
+            data = response.json()
+            if isinstance(data, list):
+                trips.extend(data)
+            elif isinstance(data, dict):
+                trips.extend(data.get("results", []))
+            else:
+                raise NavirecAPIError("Unexpected trips payload")
+            next_url = response.links.get("next", {}).get("url")
+            params = None
+        return trips
+
     def get_last_vehicle_states(self, account_id=None, vehicle_id=None):
         states = []
         next_url = self.api_url + "last_vehicle_states/"

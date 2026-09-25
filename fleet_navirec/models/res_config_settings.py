@@ -22,7 +22,7 @@ class ResConfigSettings(models.TransientModel):
         default=False,
         help=(
             "When enabled, the state sync prefers a matching Navirec Area/POI "
-            "name and falls back to a nearby Navirec vehicle-event address. "
+            "name and falls back to nearby Navirec event/trip addresses. "
             "GPS synchronization still succeeds if location enrichment is unavailable."
         ),
     )

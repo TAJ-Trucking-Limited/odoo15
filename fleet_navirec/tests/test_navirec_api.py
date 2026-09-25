@@ -205,6 +205,49 @@ class TestNavirecAPI(TransactionCase):
                 time_gte="2026-09-25T00:00:00Z"
             )
 
+    def test_get_trips_uses_bounded_vehicle_filters_and_pagination(self):
+        page_1 = self._response(
+            [{"id": "trip-one", "end_address": "Itezi, Mbeya"}],
+            links={
+                "next": {"url": "https://api.navirec.com/trips/?cursor=next"}
+            },
+        )
+        page_2 = self._response([
+            {"id": "trip-two", "end_address": "Mbeya, Tanzania"},
+        ])
+        with patch.object(
+            navirec_api.requests,
+            "request",
+            side_effect=[page_1, page_2],
+        ) as request:
+            trips = NavirecClient(token="x").get_trips(
+                account_id="acct",
+                vehicle_ids=["one", "two"],
+                start_time_gte="2026-08-25T00:00:00Z",
+                end_time_lte="2026-09-25T23:59:59Z",
+            )
+
+        self.assertEqual([item["id"] for item in trips], ["trip-one", "trip-two"])
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(
+            request.call_args_list[0].kwargs["params"],
+            {
+                "ordering": "end_time",
+                "page_size": 1000,
+                "account": "acct",
+                "vehicle__in": "one,two",
+                "start_time__gte": "2026-08-25T00:00:00Z",
+                "end_time__lte": "2026-09-25T23:59:59Z",
+            },
+        )
+        self.assertIsNone(request.call_args_list[1].kwargs["params"])
+
+    def test_get_trips_requires_filter(self):
+        with self.assertRaisesRegex(NavirecAPIError, "require an account or vehicle"):
+            NavirecClient(token="x").get_trips(
+                start_time_gte="2026-08-25T00:00:00Z"
+            )
+
     def test_last_vehicle_states_follows_pagination(self):
         page_1 = self._response(
             [{"vehicle": "https://api.navirec.com/vehicles/one/"}],
