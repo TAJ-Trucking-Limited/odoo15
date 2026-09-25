@@ -26,12 +26,14 @@
        t-inherit="account_accountant.BankRecLineToReconcile"
        t-inherit-mode="extension">
         <xpath expr="//button[@t-if='lineData.has_invalid_analytics']" position="attributes">
+            <attribute name="class">btn btn-sm btn-outline-secondary px-2 py-0 text-nowrap taj-set-amount</attribute>
             <attribute name="data-tooltip">Set the exact amount applied to the invoice</attribute>
         </xpath>
         <xpath expr="//button[@t-if='lineData.has_invalid_analytics']" position="inside">
             <span class="ms-1">Set Amount</span>
         </xpath>
         <xpath expr="//button[@t-if='!lineData.has_invalid_analytics']" position="attributes">
+            <attribute name="class">btn btn-sm btn-outline-secondary px-2 py-0 text-nowrap taj-set-amount</attribute>
             <attribute name="data-tooltip">Set the exact amount applied to the invoice</attribute>
         </xpath>
         <xpath expr="//button[@t-if='!lineData.has_invalid_analytics']" position="inside">

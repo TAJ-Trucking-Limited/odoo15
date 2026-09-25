@@ -23,11 +23,15 @@
         <field name="model">account.move.line</field>
         <field name="inherit_id" ref="account_accountant.view_bank_rec_edit_line"/>
         <field name="arch" type="xml">
+            <xpath expr="//label[@for='balance']" position="attributes">
+                <attribute name="string">Amount to Apply</attribute>
+            </xpath>
             <xpath expr="//form/sheet" position="inside">
                 <div class="alert alert-info mt-3 mb-0" role="status">
-                    Enter the exact amount applied to the invoice in the Balance field.
-                    The remaining amount stays on the bank transaction and can be
-                    matched again.
+                    Enter the exact amount to apply using the same accounting sign
+                    already shown on the line. For example, if the line shows
+                    -5,150 USD, enter -3,000 USD to apply 3,000 USD. The remaining
+                    bank amount stays available for another match.
                 </div>
             </xpath>
         </field>

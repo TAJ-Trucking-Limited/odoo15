@@ -44,7 +44,7 @@ registry.category("web_tour.tours").add("taj_account_reconcile_browser", {
         },
         {
             content: "Native invoice-allocation editing is exposed as Set Amount",
-            trigger: ".o_statement_line:has(.o_payment_ref:contains('TAJ partial allocation')) button:has(span:contains('Set Amount'))",
+            trigger: ".o_statement_line:has(.o_payment_ref:contains('TAJ partial allocation')) button.taj-set-amount:has(span:contains('Set Amount'))",
             run: "click",
         },
         {

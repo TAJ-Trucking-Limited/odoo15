@@ -1,0 +1,16 @@
+@media (min-width: 768px) {
+    .o_bank_reconciliation_container
+        .o_bank_reconciliation_kanban_renderer
+        .o_statement_line
+        .o_grid_container {
+        grid-template-columns: 90px 3fr minmax(200px, 1fr) 1fr 128px;
+    }
+
+    .o_bank_reconciliation_container .taj-set-amount {
+        white-space: nowrap;
+    }
+
+    .o_bank_reconciliation_container .taj-set-amount .fa {
+        margin-right: 0.35rem;
+    }
+}

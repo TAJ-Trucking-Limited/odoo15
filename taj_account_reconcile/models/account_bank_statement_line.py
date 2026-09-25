@@ -147,6 +147,45 @@ class AccountBankStatementLine(models.Model):
                 "transaction amount."
             ))
 
+    def _check_reconcile_line_amount_sign(self, move_line, record_data):
+        """Prevent accidental sign flips when partially allocating an invoice.
+
+        Odoo's reconciliation editor exposes accounting-signed values.  Changing
+        only the magnitude is valid, but flipping the sign turns a partial
+        allocation into an amount in the opposite direction and can increase the
+        residual instead of reducing it.
+        """
+        self.ensure_one()
+        if not move_line.reconciled_lines_excluding_exchange_diff_ids:
+            return
+
+        fields_to_check = (
+            ('balance', self.company_id.currency_id),
+            ('amount_currency', move_line.currency_id),
+        )
+        for field_name, currency in fields_to_check:
+            if field_name not in record_data:
+                continue
+            current_amount = move_line[field_name]
+            new_amount = record_data[field_name]
+            if currency.is_zero(current_amount) or currency.is_zero(new_amount):
+                continue
+            if (current_amount > 0) != (new_amount > 0):
+                raise UserError(_(
+                    "Keep the same accounting sign as the selected invoice line. "
+                    "Change only the amount, not its direction. For example, if "
+                    "the line currently shows -5,150, enter -3,000 to apply "
+                    "3,000; do not enter +3,000."
+                ))
+
+    def edit_reconcile_line(self, move_line_id, record_data):
+        """Keep native Odoo editing while guarding invoice-allocation signs."""
+        self.ensure_one()
+        move_line = self.env['account.move.line'].browse(move_line_id).exists()
+        if move_line and move_line in self.line_ids:
+            self._check_reconcile_line_amount_sign(move_line, record_data)
+        return super().edit_reconcile_line(move_line_id, record_data)
+
     # -------------------------------------------------------------------------
     # ACTIONS
     # -------------------------------------------------------------------------

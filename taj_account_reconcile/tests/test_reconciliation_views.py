@@ -28,6 +28,7 @@ class TestReconciliationViews(TransactionCase):
         assets = self._read_manifest()['assets']['web.assets_backend']
         self.assertIn('taj_account_reconcile/static/src/js/bank_reconciliation.js', assets)
         self.assertIn('taj_account_reconcile/static/src/xml/bank_reconciliation.xml', assets)
+        self.assertIn('taj_account_reconcile/static/src/scss/bank_reconciliation.scss', assets)
         test_assets = self._read_manifest()['assets']['web.assets_tests']
         self.assertIn('taj_account_reconcile/static/tests/tours/**/*', test_assets)
 
@@ -46,9 +47,19 @@ class TestReconciliationViews(TransactionCase):
         content = self._read_asset('static/src/xml/bank_reconciliation.xml')
         self.assertIn('t-inherit="account_accountant.BankRecLineToReconcile"', content)
         self.assertIn('Set Amount', content)
+        self.assertIn('taj-set-amount', content)
+        self.assertIn('btn-outline-secondary', content)
+        self.assertIn('text-nowrap', content)
         self.assertIn('name="data-tooltip"', content)
         # The native toggleEditLine behaviour must only be decorated, not replaced.
         self.assertNotIn('position="replace"', content)
+
+    def test_set_amount_layout_css_keeps_action_on_one_line(self):
+        content = self._read_asset('static/src/scss/bank_reconciliation.scss')
+        self.assertIn('grid-template-columns', content)
+        self.assertIn('128px', content)
+        self.assertIn('.taj-set-amount', content)
+        self.assertIn('white-space: nowrap', content)
 
     def test_button_list_js_patch(self):
         content = self._read_asset('static/src/js/bank_reconciliation.js')
@@ -99,8 +110,11 @@ class TestReconciliationViews(TransactionCase):
             help_view.inherit_id, self.env.ref('account_accountant.view_bank_rec_edit_line'))
         self.assertEqual(help_view.model, 'account.move.line')
         self.assertIn('//form/sheet', help_view.arch_db)
+        self.assertIn("//label[@for='balance']", help_view.arch_db)
+        self.assertIn('Amount to Apply', help_view.arch_db)
         self.assertIn('role="status"', help_view.arch_db)
-        self.assertIn('exact amount applied to the invoice', help_view.arch_db)
+        self.assertIn('same accounting sign', help_view.arch_db)
+        self.assertIn('-3,000 USD', help_view.arch_db)
 
     def test_wizard_view_configuration(self):
         wizard_view = self.env.ref(
