@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="fleet_navirec_sync_log_view_list" model="ir.ui.view">
+        <field name="name">fleet.navirec.sync.log.list</field>
+        <field name="model">fleet.navirec.sync.log</field>
+        <field name="arch" type="xml">
+            <list string="Navirec Sync Logs" create="0" edit="0" delete="0">
+                <field name="started_at"/>
+                <field name="operation"/>
+                <field name="status" widget="badge"
+                    decoration-success="status == 'success'"
+                    decoration-danger="status == 'error'"/>
+                <field name="records_updated"/>
+                <field name="finished_at"/>
+                <field name="message" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="fleet_navirec_sync_log_action" model="ir.actions.act_window">
+        <field name="name">Navirec Sync Logs</field>
+        <field name="res_model">fleet.navirec.sync.log</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <menuitem id="fleet_navirec_sync_log_menu"
+        name="Navirec Sync Logs"
+        parent="fleet.fleet_configuration"
+        action="fleet_navirec_sync_log_action"
+        sequence="90"
+        groups="fleet.fleet_group_manager"/>
+</odoo>

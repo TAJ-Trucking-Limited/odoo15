@@ -16,28 +16,82 @@
                     string="Open Navirec" class="btn-secondary"
                     invisible="not navirec_uuid"/>
             </xpath>
-            <xpath expr="//sheet" position="inside">
-                <field name="navirec_has_position" invisible="1"/>
-                <field name="navirec_is_stale" invisible="1"/>
-                <group string="Navirec Tracking" invisible="not navirec_uuid">
+
+            <xpath expr="//sheet/notebook" position="inside">
+                <page string="Navirec / Telematics" name="navirec_telematics">
+                    <field name="navirec_has_position" invisible="1"/>
+                    <field name="navirec_has_speed" invisible="1"/>
+                    <field name="navirec_has_ignition" invisible="1"/>
+                    <field name="navirec_has_odometer" invisible="1"/>
+                    <field name="navirec_is_stale" invisible="1"/>
+
+                    <div class="alert alert-warning" role="alert"
+                        invisible="navirec_integration_status != 'stale'">
+                        <strong>Stale GPS data.</strong>
+                        The last Navirec position is older than the configured
+                        freshness threshold and must not be treated as live.
+                    </div>
+                    <div class="alert alert-info" role="status"
+                        invisible="navirec_integration_status != 'not_mapped'">
+                        This Odoo vehicle is not mapped to a Navirec vehicle yet.
+                        Check the license plate and run the vehicle matching job.
+                    </div>
+                    <div class="alert alert-info" role="status"
+                        invisible="navirec_integration_status != 'awaiting_data'">
+                        The vehicle is mapped to Navirec, but no GPS state has
+                        been received yet.
+                    </div>
+
                     <group>
-                        <field name="navirec_uuid"/>
-                        <field name="navirec_ignition"/>
-                        <field name="navirec_last_speed"/>
-                        <field name="navirec_odometer"/>
+                        <group string="Integration">
+                            <field name="navirec_integration_status"
+                                widget="badge"
+                                decoration-success="navirec_integration_status == 'connected'"
+                                decoration-danger="navirec_integration_status == 'stale'"
+                                decoration-warning="navirec_integration_status == 'awaiting_data'"
+                                decoration-info="navirec_integration_status == 'not_mapped'"/>
+                            <field name="navirec_uuid"
+                                invisible="not navirec_uuid"/>
+                            <field name="navirec_last_state_time"
+                                string="Last GPS Communication"
+                                invisible="not navirec_last_state_time"/>
+                        </group>
+
+                        <group string="Current Position"
+                            invisible="navirec_integration_status == 'not_mapped'">
+                            <field name="navirec_position_display"
+                                readonly="1"/>
+                            <field name="navirec_location_name"
+                                string="Location Name"
+                                readonly="1"
+                                invisible="not navirec_location_name"/>
+                            <field name="navirec_last_lat"
+                                string="Latitude"
+                                invisible="not navirec_has_position"/>
+                            <field name="navirec_last_lon"
+                                string="Longitude"
+                                invisible="not navirec_has_position"/>
+                        </group>
                     </group>
-                    <group>
-                        <field name="navirec_last_lat"/>
-                        <field name="navirec_last_lon"/>
-                        <field name="navirec_last_state_time"/>
+
+                    <group invisible="navirec_integration_status == 'not_mapped'">
+                        <group string="Movement">
+                            <field name="navirec_movement_state"
+                                widget="badge"
+                                decoration-success="navirec_movement_state == 'moving'"
+                                decoration-warning="navirec_movement_state == 'idling'"
+                                decoration-info="navirec_movement_state == 'stopped'"/>
+                            <field name="navirec_speed_display"
+                                readonly="1"/>
+                            <field name="navirec_ignition_display"
+                                readonly="1"/>
+                        </group>
+                        <group string="Distance">
+                            <field name="navirec_odometer_display"
+                                readonly="1"/>
+                        </group>
                     </group>
-                </group>
-            </xpath>
-            <xpath expr="//sheet/div[@class='oe_title']" position="after">
-                <div class="alert alert-warning mt-2" role="alert"
-                    invisible="not navirec_uuid or not navirec_is_stale">
-                    Navirec GPS data is stale. Use Sync Navirec or verify the tracker.
-                </div>
+                </page>
             </xpath>
         </field>
     </record>
@@ -48,8 +102,43 @@
         <field name="inherit_id" ref="fleet.fleet_vehicle_view_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='license_plate']" position="after">
-                <field name="navirec_ignition" optional="hide" readonly="1"/>
-                <field name="navirec_last_state_time" optional="hide" readonly="1"/>
+                <field name="navirec_integration_status"
+                    string="Navirec"
+                    widget="badge"
+                    decoration-success="navirec_integration_status == 'connected'"
+                    decoration-danger="navirec_integration_status == 'stale'"
+                    decoration-warning="navirec_integration_status == 'awaiting_data'"
+                    decoration-info="navirec_integration_status == 'not_mapped'"
+                    optional="show"
+                    readonly="1"/>
+                <field name="navirec_position_display"
+                    string="Current Position"
+                    optional="hide"
+                    readonly="1"/>
+                <field name="navirec_last_state_time"
+                    string="Last GPS"
+                    optional="show"
+                    readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="fleet_vehicle_view_search_navirec" model="ir.ui.view">
+        <field name="name">fleet.vehicle.search.navirec</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="inherit_id" ref="fleet.fleet_vehicle_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='license_plate']" position="after">
+                <field name="navirec_uuid" string="Navirec UUID"/>
+            </xpath>
+            <xpath expr="//separator[1]" position="before">
+                <filter name="navirec_mapped"
+                    string="Navirec Mapped"
+                    domain="[('navirec_uuid', '!=', False)]"/>
+                <filter name="navirec_not_mapped"
+                    string="Navirec Not Mapped"
+                    domain="[('navirec_uuid', '=', False)]"/>
+                <separator/>
             </xpath>
         </field>
     </record>

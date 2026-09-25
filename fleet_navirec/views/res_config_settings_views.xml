@@ -7,7 +7,8 @@
         <field name="arch" type="xml">
             <xpath expr="//app[@name='fleet']" position="inside">
                 <block title="Navirec" name="navirec_settings">
-                    <setting string="API Token" help="API token generated in the Navirec web application.">
+                    <setting string="API Token"
+                        help="API token generated in the Navirec web application.">
                         <field name="navirec_api_token" password="True"/>
                     </setting>
                     <setting string="Account ID">
@@ -16,14 +17,79 @@
                     <setting string="API URL">
                         <field name="navirec_api_url"/>
                     </setting>
-                    <setting string="Timezone" help="Optional IANA timezone sent to Navirec, for example Africa/Dar_es_Salaam.">
+                    <setting string="Timezone"
+                        help="Optional IANA timezone sent to Navirec, for example Africa/Dar_es_Salaam.">
                         <field name="navirec_timezone"/>
                     </setting>
                     <setting string="Stale GPS threshold">
-                        <field name="navirec_stale_hours"/><span class="ms-2">hours</span>
+                        <field name="navirec_stale_hours"/>
+                        <span class="ms-2">hours</span>
                     </setting>
                     <setting string="Connection">
-                        <button name="action_navirec_test_connection" type="object" string="Test Connection" class="btn-primary"/>
+                        <button name="action_navirec_test_connection"
+                            type="object"
+                            string="Test Connection"
+                            class="btn-primary"/>
+                    </setting>
+                </block>
+
+                <block title="Navirec Monitoring"
+                    name="navirec_monitoring_settings">
+                    <setting string="Vehicle state synchronization">
+                        <button name="action_navirec_sync_all_now"
+                            type="object"
+                            string="Sync All Now"
+                            class="btn-secondary mb-2"/>
+                        <div class="content-group">
+                            <div>
+                                <span class="fw-bold">Last success:</span>
+                                <field name="navirec_last_state_sync_success"
+                                    class="oe_inline" readonly="1"/>
+                            </div>
+                            <div>
+                                <span class="fw-bold">Vehicles updated:</span>
+                                <field name="navirec_last_state_sync_count"
+                                    class="oe_inline" readonly="1"/>
+                            </div>
+                            <div invisible="not navirec_last_state_sync_error">
+                                <span class="fw-bold text-danger">Last error:</span>
+                                <field name="navirec_last_state_sync_error"
+                                    class="oe_inline" readonly="1"/>
+                                <field name="navirec_last_state_sync_error_time"
+                                    class="oe_inline" readonly="1"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting string="Vehicle matching">
+                        <button name="action_navirec_match_now"
+                            type="object"
+                            string="Match Vehicles Now"
+                            class="btn-secondary mb-2"/>
+                        <div class="content-group">
+                            <div>
+                                <span class="fw-bold">Last success:</span>
+                                <field name="navirec_last_vehicle_match_success"
+                                    class="oe_inline" readonly="1"/>
+                            </div>
+                            <div>
+                                <span class="fw-bold">Vehicles matched:</span>
+                                <field name="navirec_last_vehicle_match_count"
+                                    class="oe_inline" readonly="1"/>
+                            </div>
+                            <div invisible="not navirec_last_vehicle_match_error">
+                                <span class="fw-bold text-danger">Last error:</span>
+                                <field name="navirec_last_vehicle_match_error"
+                                    class="oe_inline" readonly="1"/>
+                                <field name="navirec_last_vehicle_match_error_time"
+                                    class="oe_inline" readonly="1"/>
+                            </div>
+                        </div>
+                    </setting>
+                    <setting string="Synchronization history">
+                        <button name="action_navirec_open_sync_logs"
+                            type="object"
+                            string="View Sync Logs"
+                            class="btn-secondary"/>
                     </setting>
                 </block>
             </xpath>

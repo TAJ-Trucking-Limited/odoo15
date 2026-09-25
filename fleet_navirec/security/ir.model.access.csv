@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_fleet_navirec_sync_log_manager,fleet.navirec.sync.log manager,model_fleet_navirec_sync_log,fleet.fleet_group_manager,1,0,0,0
+access_fleet_navirec_report_subscription_manager,fleet.navirec.report.subscription manager,model_fleet_navirec_report_subscription,fleet.fleet_group_manager,1,1,1,1
+access_fleet_navirec_report_preview_manager,fleet.navirec.report.preview manager,model_fleet_navirec_report_preview,fleet.fleet_group_manager,1,1,1,1
