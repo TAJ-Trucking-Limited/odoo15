@@ -96,6 +96,30 @@ class NavirecClient:
             params = None
         return vehicles
 
+    def get_areas(self, account_id=None):
+        """Return active Navirec areas/POIs available to the integration user."""
+        areas = []
+        next_url = self.api_url + "areas/"
+        params = {
+            "ordering": "id",
+            "page_size": 1000,
+            "active": True,
+        }
+        if account_id:
+            params["account"] = account_id
+        while next_url:
+            response = self._request("GET", next_url, params=params)
+            data = response.json()
+            if isinstance(data, list):
+                areas.extend(data)
+            elif isinstance(data, dict):
+                areas.extend(data.get("results", []))
+            else:
+                raise NavirecAPIError("Unexpected areas payload")
+            next_url = response.links.get("next", {}).get("url")
+            params = None
+        return areas
+
     def get_last_vehicle_states(self, account_id=None, vehicle_id=None):
         states = []
         next_url = self.api_url + "last_vehicle_states/"

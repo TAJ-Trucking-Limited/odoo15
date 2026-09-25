@@ -25,6 +25,15 @@
                         <field name="navirec_stale_hours"/>
                         <span class="ms-2">hours</span>
                     </setting>
+                    <setting string="Human-readable Navirec locations"
+                        help="Use active Navirec Areas / Points of Interest as location labels. GPS sync falls back to coordinates if area access is unavailable.">
+                        <field name="navirec_use_area_names"/>
+                    </setting>
+                    <setting string="Vehicle deep links"
+                        help="Optional verified Navirec vehicle URL template. Use {uuid} where the vehicle UUID belongs.">
+                        <field name="navirec_vehicle_url_template"
+                            placeholder="https://.../{uuid}"/>
+                    </setting>
                     <setting string="Connection">
                         <button name="action_navirec_test_connection"
                             type="object"
@@ -65,6 +74,10 @@
                             type="object"
                             string="Match Vehicles Now"
                             class="btn-secondary mb-2"/>
+                        <button name="action_navirec_mapping_audit"
+                            type="object"
+                            string="Audit Mapping"
+                            class="btn-secondary mb-2 ms-1"/>
                         <div class="content-group">
                             <div>
                                 <span class="fw-bold">Last success:</span>

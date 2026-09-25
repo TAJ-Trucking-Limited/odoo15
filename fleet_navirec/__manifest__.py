@@ -1,6 +1,6 @@
 {
     'name': 'TAJ Navirec Fleet Integration',
-    'version': '19.0.1.1.0',
+    'version': '19.0.1.2.0',
     'summary': 'Sync Navirec vehicle positions and telematics into Odoo Fleet',
     'category': 'Human Resources/Fleet',
     'author': 'TAJ Trucking',

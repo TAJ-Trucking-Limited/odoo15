@@ -1,5 +1,7 @@
 import logging
+import math
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -187,6 +189,107 @@ class FleetVehicle(models.Model):
         )
 
     @staticmethod
+    def _navirec_point_in_ring(lon, lat, ring):
+        """Return whether a GeoJSON [lon, lat] point is inside a linear ring."""
+        if not isinstance(ring, (list, tuple)) or len(ring) < 3:
+            return False
+        inside = False
+        j = len(ring) - 1
+        for i, point in enumerate(ring):
+            previous = ring[j]
+            j = i
+            if not (
+                isinstance(point, (list, tuple)) and len(point) >= 2
+                and isinstance(previous, (list, tuple)) and len(previous) >= 2
+            ):
+                continue
+            try:
+                xi, yi = float(point[0]), float(point[1])
+                xj, yj = float(previous[0]), float(previous[1])
+            except (TypeError, ValueError):
+                continue
+            if (yi > lat) != (yj > lat):
+                x_cross = (xj - xi) * (lat - yi) / (yj - yi) + xi
+                if lon < x_cross:
+                    inside = not inside
+        return inside
+
+    @classmethod
+    def _navirec_point_in_polygon(cls, lon, lat, rings):
+        if not isinstance(rings, (list, tuple)) or not rings:
+            return False
+        if not cls._navirec_point_in_ring(lon, lat, rings[0]):
+            return False
+        return not any(
+            cls._navirec_point_in_ring(lon, lat, hole)
+            for hole in rings[1:]
+        )
+
+    @staticmethod
+    def _navirec_distance_m(lon1, lat1, lon2, lat2):
+        """Haversine distance in meters for Navirec circle areas."""
+        radius = 6371008.8
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = (
+            math.sin(dphi / 2) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+        )
+        return 2 * radius * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    @classmethod
+    def _navirec_point_in_area(cls, lon, lat, area):
+        if not isinstance(area, dict) or area.get("active") is False:
+            return False
+        area_type = area.get("type")
+        center = ((area.get("center") or {}).get("coordinates") or [])
+        radius = area.get("radius")
+        if area_type in ("circle", "point") and cls._valid_coordinates(center):
+            try:
+                radius_m = float(radius)
+            except (TypeError, ValueError):
+                radius_m = 0.0
+            if radius_m > 0:
+                return cls._navirec_distance_m(
+                    lon, lat, float(center[0]), float(center[1])
+                ) <= radius_m
+            # A point without a radius has no documented containment boundary.
+            return False
+
+        shape = area.get("shape") or {}
+        coordinates = shape.get("coordinates") or []
+        geometry_type = shape.get("type") or area_type
+        if geometry_type == "Polygon" or area_type == "polygon":
+            return cls._navirec_point_in_polygon(lon, lat, coordinates)
+        if geometry_type == "MultiPolygon" or area_type == "multipolygon":
+            return any(
+                cls._navirec_point_in_polygon(lon, lat, polygon)
+                for polygon in coordinates
+            )
+        return False
+
+    @classmethod
+    def _navirec_area_name_for_coordinates(cls, areas, lon, lat):
+        matches = []
+        priority = {"point_of_interest": 0, "geofence": 1}
+        for area in areas or []:
+            if area.get("category") == "country":
+                continue
+            if not area.get("name"):
+                continue
+            if cls._navirec_point_in_area(lon, lat, area):
+                matches.append((
+                    priority.get(area.get("category"), 2),
+                    area.get("name"),
+                ))
+        if not matches:
+            return False
+        matches.sort(key=lambda item: (item[0], item[1].casefold()))
+        return matches[0][1]
+
+    @staticmethod
     def _navirec_reset_tracking_values(navirec_uuid=False):
         return {
             "navirec_uuid": navirec_uuid,
@@ -201,6 +304,59 @@ class FleetVehicle(models.Model):
             "navirec_odometer": 0.0,
             "navirec_has_odometer": False,
             "navirec_last_state_time": False,
+        }
+
+    @api.model
+    def _navirec_build_mapping_audit(self, client):
+        """Return a read-only plate-mapping audit for Operations review."""
+        remote_by_plate = {}
+        for item in client.get_vehicles():
+            plate = self._normalize_plate(item.get("registration"))
+            if plate:
+                remote_by_plate.setdefault(plate, []).append(item)
+
+        local_by_plate = {}
+        for vehicle in self.search([]):
+            plate = self._normalize_plate(vehicle.license_plate)
+            if plate:
+                local_by_plate.setdefault(plate, self.browse())
+                local_by_plate[plate] |= vehicle
+
+        duplicate_remote = sorted(
+            plate for plate, items in remote_by_plate.items() if len(items) > 1
+        )
+        duplicate_local = sorted(
+            plate for plate, vehicles in local_by_plate.items() if len(vehicles) > 1
+        )
+        duplicate_remote_set = set(duplicate_remote)
+        duplicate_local_set = set(duplicate_local)
+        remote_unique = set(remote_by_plate) - duplicate_remote_set
+        local_unique = set(local_by_plate) - duplicate_local_set
+        matched_plates = sorted(remote_unique & local_unique)
+
+        unmatched_remote = sorted(
+            (
+                (remote_by_plate[plate][0].get("registration") or plate)
+                for plate in (remote_unique - local_unique)
+            ),
+            key=str.casefold,
+        )
+        odoo_only = sorted(
+            (
+                (local_by_plate[plate][:1].license_plate or plate)
+                for plate in (local_unique - remote_unique)
+            ),
+            key=str.casefold,
+        )
+        return {
+            "remote_vehicle_count": sum(len(items) for items in remote_by_plate.values()),
+            "odoo_plate_candidate_count": sum(len(records) for records in local_by_plate.values()),
+            "matched_count": len(matched_plates),
+            "currently_mapped_count": self.search_count([("navirec_uuid", "!=", False)]),
+            "unmatched_remote": unmatched_remote,
+            "odoo_only": odoo_only,
+            "duplicate_remote": duplicate_remote,
+            "duplicate_local": duplicate_local,
         }
 
     @api.model
@@ -272,6 +428,20 @@ class FleetVehicle(models.Model):
         params = self.env["ir.config_parameter"].sudo()
         account_id = params.get_param("fleet_navirec.account_id") or None
         states = client.get_last_vehicle_states(account_id=account_id)
+        use_area_names = str(
+            params.get_param("fleet_navirec.use_area_names", "False") or "False"
+        ).lower() in ("1", "true", "yes")
+        areas = []
+        if use_area_names:
+            try:
+                areas = client.get_areas(account_id=account_id)
+            except NavirecAPIError as exc:
+                # Area naming is enrichment only. Never make position sync depend
+                # on an optional permission or a secondary API endpoint.
+                _logger.warning(
+                    "Navirec area-name enrichment unavailable; using coordinates: %s",
+                    exc,
+                )
         vehicles = {
             vehicle.navirec_uuid: vehicle
             for vehicle in self.search([("navirec_uuid", "!=", False)])
@@ -288,16 +458,22 @@ class FleetVehicle(models.Model):
                     "Skipping Navirec state for unknown vehicle UUID %s", uuid
                 )
                 continue
-            vehicle._write_navirec_state(state)
+            location = (state.get("location") or {}).get("coordinates") or []
+            area_name = False
+            if areas and self._valid_coordinates(location):
+                area_name = self._navirec_area_name_for_coordinates(
+                    areas, float(location[0]), float(location[1])
+                )
+            vehicle._write_navirec_state(state, location_name=area_name)
             updated += 1
         return updated
 
-    def _write_navirec_state(self, state):
+    def _write_navirec_state(self, state, location_name=False):
         self.ensure_one()
         coords = ((state.get("location") or {}).get("coordinates") or [])
         vals = {
             "navirec_has_position": False,
-            "navirec_location_name": False,
+            "navirec_location_name": location_name or False,
             "navirec_has_speed": False,
             "navirec_has_ignition": False,
             "navirec_has_odometer": False,
@@ -491,8 +667,16 @@ class FleetVehicle(models.Model):
         self.ensure_one()
         if not self.navirec_uuid:
             raise UserError(_("This vehicle is not matched to Navirec yet."))
+        params = self.env["ir.config_parameter"].sudo()
+        template = (
+            params.get_param("fleet_navirec.vehicle_url_template") or ""
+        ).strip()
+        if template.startswith("https://") and "{uuid}" in template:
+            url = template.replace("{uuid}", quote(self.navirec_uuid, safe=""))
+        else:
+            url = "https://app.navirec.com/"
         return {
             "type": "ir.actions.act_url",
-            "url": "https://app.navirec.com/",
+            "url": url,
             "target": "new",
         }

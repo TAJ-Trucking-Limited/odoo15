@@ -16,6 +16,24 @@ class ResConfigSettings(models.TransientModel):
     navirec_stale_hours = fields.Integer(
         config_parameter="fleet_navirec.stale_hours", default=24
     )
+    navirec_use_area_names = fields.Boolean(
+        string="Use Navirec Area / POI Names",
+        config_parameter="fleet_navirec.use_area_names",
+        default=False,
+        help=(
+            "When enabled, the state sync also reads active Navirec areas and "
+            "uses a matching area/POI name as the human-readable position. "
+            "GPS synchronization still succeeds if area access is unavailable."
+        ),
+    )
+    navirec_vehicle_url_template = fields.Char(
+        string="Vehicle Deep-Link Template",
+        config_parameter="fleet_navirec.vehicle_url_template",
+        help=(
+            "Optional verified Navirec vehicle URL containing {uuid}. "
+            "When empty, Open Navirec opens the Navirec application home page."
+        ),
+    )
     navirec_last_state_sync_success = fields.Datetime(
         compute="_compute_navirec_monitoring",
         string="Last Successful State Sync",
@@ -48,6 +66,18 @@ class ResConfigSettings(models.TransientModel):
         compute="_compute_navirec_monitoring",
         string="Vehicle Match Error Time",
     )
+
+    @api.constrains("navirec_vehicle_url_template")
+    def _check_navirec_vehicle_url_template(self):
+        for settings in self:
+            template = (settings.navirec_vehicle_url_template or "").strip()
+            if not template:
+                continue
+            if not template.startswith("https://") or "{uuid}" not in template:
+                raise ValidationError(_(
+                    "The Navirec vehicle deep-link template must be an HTTPS URL "
+                    "containing the {uuid} placeholder."
+                ))
 
     @api.constrains("navirec_stale_hours")
     def _check_navirec_stale_hours(self):
@@ -155,6 +185,59 @@ class ResConfigSettings(models.TransientModel):
     def action_navirec_match_now(self):
         return self._navirec_run_sync_action("vehicle_match")
 
+    def action_navirec_mapping_audit(self):
+        self.ensure_one()
+        if not self.navirec_api_token:
+            raise UserError(_("Please enter a Navirec API token first."))
+        self.set_values()
+        client = self.env["fleet.vehicle"]._navirec_client()
+        if not client:
+            raise UserError(_("Navirec API token is not configured."))
+        try:
+            audit = self.env["fleet.vehicle"]._navirec_build_mapping_audit(client)
+        except NavirecAPIError as exc:
+            raise UserError(str(exc)) from exc
+
+        details = []
+        if audit["duplicate_remote"]:
+            details.append(_("Duplicate Navirec plates: %(plates)s") % {
+                "plates": ", ".join(audit["duplicate_remote"][:10]),
+            })
+        if audit["duplicate_local"]:
+            details.append(_("Duplicate Odoo plates: %(plates)s") % {
+                "plates": ", ".join(audit["duplicate_local"][:10]),
+            })
+        if audit["unmatched_remote"]:
+            details.append(_("Unmatched Navirec: %(plates)s") % {
+                "plates": ", ".join(audit["unmatched_remote"][:10]),
+            })
+        if audit["odoo_only"]:
+            details.append(_("Odoo-only plate candidates: %(plates)s") % {
+                "plates": ", ".join(audit["odoo_only"][:10]),
+            })
+
+        summary = _(
+            "Navirec vehicles: %(remote)s | Odoo plate candidates: %(local)s | "
+            "Deterministic matches: %(matched)s | Currently mapped: %(mapped)s"
+        ) % {
+            "remote": audit["remote_vehicle_count"],
+            "local": audit["odoo_plate_candidate_count"],
+            "matched": audit["matched_count"],
+            "mapped": audit["currently_mapped_count"],
+        }
+        if details:
+            summary += "\n" + "\n".join(details)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Navirec Mapping Audit"),
+                "message": summary,
+                "type": "warning" if details else "success",
+                "sticky": True,
+            },
+        }
+
     def action_navirec_sync_all_now(self):
         return self._navirec_run_sync_action("state_sync")
 
@@ -169,12 +252,15 @@ class ResConfigSettings(models.TransientModel):
             raise UserError(_("Please enter a Navirec API token first."))
         params = self.env["ir.config_parameter"].sudo()
         try:
-            NavirecClient(
+            client = NavirecClient(
                 api_url=self.navirec_api_url,
                 token=self.navirec_api_token,
                 version=params.get_param("fleet_navirec.api_version") or None,
                 timezone=self.navirec_timezone,
-            ).test_connection()
+            )
+            client.test_connection()
+            if self.navirec_use_area_names:
+                client.get_areas(account_id=self.navirec_account_id or None)
         except NavirecAPIError as exc:
             raise UserError(str(exc)) from exc
         return {

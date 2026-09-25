@@ -132,6 +132,34 @@ class TestNavirecAPI(TransactionCase):
             ):
                 NavirecClient(token="x").test_connection()
 
+    def test_get_areas_follows_pagination_and_filters_active_account(self):
+        page_1 = self._response(
+            [{"id": "area-one", "name": "Depot"}],
+            links={"next": {"url": "https://api.navirec.com/areas/?page=2"}},
+        )
+        page_2 = self._response([
+            {"id": "area-two", "name": "Border"},
+        ])
+        with patch.object(
+            navirec_api.requests,
+            "request",
+            side_effect=[page_1, page_2],
+        ) as request:
+            areas = NavirecClient(token="x").get_areas(account_id="acct")
+
+        self.assertEqual([item["id"] for item in areas], ["area-one", "area-two"])
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(
+            request.call_args_list[0].kwargs["params"],
+            {
+                "ordering": "id",
+                "page_size": 1000,
+                "active": True,
+                "account": "acct",
+            },
+        )
+        self.assertIsNone(request.call_args_list[1].kwargs["params"])
+
     def test_last_vehicle_states_follows_pagination(self):
         page_1 = self._response(
             [{"vehicle": "https://api.navirec.com/vehicles/one/"}],
