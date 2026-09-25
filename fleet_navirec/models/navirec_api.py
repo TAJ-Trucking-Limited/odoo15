@@ -120,6 +120,53 @@ class NavirecClient:
             params = None
         return areas
 
+    def get_vehicle_events(
+        self,
+        account_id=None,
+        vehicle_ids=None,
+        time_gte=None,
+        time_lte=None,
+        page_size=1000,
+    ):
+        """Return Navirec vehicle events for location/address enrichment.
+
+        The endpoint requires a vehicle/account filter. Time filtering is used
+        to keep the response bounded; callers should pass a recent time_gte.
+        """
+        events = []
+        next_url = self.api_url + "vehicle_events/"
+        params = {
+            "ordering": "time",
+            "page_size": page_size,
+        }
+        if account_id:
+            params["account"] = account_id
+        if vehicle_ids:
+            if isinstance(vehicle_ids, str):
+                params["vehicle"] = vehicle_ids
+            else:
+                params["vehicles"] = ",".join(filter(None, vehicle_ids))
+        if time_gte:
+            params["time__gte"] = time_gte
+        if time_lte:
+            params["time__lte"] = time_lte
+        if not account_id and not vehicle_ids:
+            raise NavirecAPIError(
+                "Vehicle events require an account or vehicle filter"
+            )
+        while next_url:
+            response = self._request("GET", next_url, params=params)
+            data = response.json()
+            if isinstance(data, list):
+                events.extend(data)
+            elif isinstance(data, dict):
+                events.extend(data.get("results", []))
+            else:
+                raise NavirecAPIError("Unexpected vehicle events payload")
+            next_url = response.links.get("next", {}).get("url")
+            params = None
+        return events
+
     def get_last_vehicle_states(self, account_id=None, vehicle_id=None):
         states = []
         next_url = self.api_url + "last_vehicle_states/"

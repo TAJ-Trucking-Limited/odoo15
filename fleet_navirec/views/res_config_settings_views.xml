@@ -26,7 +26,7 @@
                         <span class="ms-2">hours</span>
                     </setting>
                     <setting string="Human-readable Navirec locations"
-                        help="Use active Navirec Areas / Points of Interest as location labels. GPS sync falls back to coordinates if area access is unavailable.">
+                        help="Prefer active Navirec Area / POI names, then nearby Navirec vehicle-event addresses. GPS sync falls back to coordinates if no reliable human-readable location is available.">
                         <field name="navirec_use_area_names"/>
                     </setting>
                     <setting string="Vehicle deep links"

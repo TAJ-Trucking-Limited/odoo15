@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 from odoo import _, api, fields, models
@@ -290,6 +290,186 @@ class FleetVehicle(models.Model):
         return matches[0][1]
 
     @staticmethod
+    def _navirec_state_uuid(state):
+        return (
+            vehicle_uuid_from_url((state or {}).get("vehicle"))
+            or (state or {}).get("vehicle_id")
+        )
+
+    @staticmethod
+    def _navirec_datetime_to_iso_utc(value):
+        if not value:
+            return False
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        else:
+            value = value.astimezone(timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+
+    @classmethod
+    def _navirec_event_address_index(cls, events):
+        by_vehicle = {}
+        for event in events or []:
+            address = (event.get("address") or "").strip()
+            coords = ((event.get("location") or {}).get("coordinates") or [])
+            uuid = cls._navirec_state_uuid(event)
+            if not uuid or not address or not cls._valid_coordinates(coords):
+                continue
+            event_time = cls._parse_state_time(
+                event.get("time") or event.get("detected_at")
+            )
+            by_vehicle.setdefault(uuid, []).append((event_time, event))
+        for uuid, items in by_vehicle.items():
+            items.sort(
+                key=lambda item: item[0] or datetime.min,
+                reverse=True,
+            )
+            by_vehicle[uuid] = [item[1] for item in items]
+        return by_vehicle
+
+    @classmethod
+    def _navirec_event_address_for_state(
+        cls,
+        state,
+        events_by_vehicle,
+        max_distance_m=1000.0,
+    ):
+        coords = ((state.get("location") or {}).get("coordinates") or [])
+        uuid = cls._navirec_state_uuid(state)
+        if not uuid or not cls._valid_coordinates(coords):
+            return False
+        lon, lat = float(coords[0]), float(coords[1])
+        for event in events_by_vehicle.get(uuid, []):
+            event_coords = (
+                (event.get("location") or {}).get("coordinates") or []
+            )
+            if not cls._valid_coordinates(event_coords):
+                continue
+            distance = cls._navirec_distance_m(
+                lon,
+                lat,
+                float(event_coords[0]),
+                float(event_coords[1]),
+            )
+            if distance <= max_distance_m:
+                address = (event.get("address") or "").strip()
+                if address:
+                    return address
+        return False
+
+    @classmethod
+    def _navirec_can_reuse_location_name(
+        cls,
+        vehicle,
+        coords,
+        max_distance_m=250.0,
+    ):
+        if not (
+            vehicle
+            and vehicle.navirec_location_name
+            and vehicle.navirec_has_position
+            and cls._valid_coordinates(coords)
+        ):
+            return False
+        return cls._navirec_distance_m(
+            float(coords[0]),
+            float(coords[1]),
+            vehicle.navirec_last_lon,
+            vehicle.navirec_last_lat,
+        ) <= max_distance_m
+
+    @api.model
+    def _navirec_location_names_for_states(
+        self,
+        client,
+        states,
+        account_id=None,
+        vehicles_by_uuid=None,
+        event_lookback_hours=24,
+    ):
+        """Resolve human-readable names without making state sync fragile.
+
+        Priority: Navirec Area/POI -> cached nearby name -> nearby Navirec
+        vehicle-event address -> coordinates in the display layer.
+        """
+        params = self.env["ir.config_parameter"].sudo()
+        enabled = str(
+            params.get_param("fleet_navirec.use_area_names", "False") or "False"
+        ).lower() in ("1", "true", "yes")
+        if not enabled:
+            return {}
+
+        states = list(states or [])
+        vehicles_by_uuid = vehicles_by_uuid or {}
+        names = {}
+        areas = []
+        try:
+            areas = client.get_areas(account_id=account_id)
+        except NavirecAPIError as exc:
+            _logger.warning(
+                "Navirec area-name enrichment unavailable: %s",
+                exc,
+            )
+
+        needs_event_lookup = []
+        for state in states:
+            uuid = self._navirec_state_uuid(state)
+            coords = ((state.get("location") or {}).get("coordinates") or [])
+            if not uuid or not self._valid_coordinates(coords):
+                continue
+            lon, lat = float(coords[0]), float(coords[1])
+            name = self._navirec_area_name_for_coordinates(areas, lon, lat)
+            if name:
+                names[uuid] = name
+                continue
+            vehicle = vehicles_by_uuid.get(uuid)
+            if self._navirec_can_reuse_location_name(vehicle, coords):
+                names[uuid] = vehicle.navirec_location_name
+                continue
+            needs_event_lookup.append(state)
+
+        if not needs_event_lookup:
+            return names
+
+        parsed_times = [
+            self._parse_state_time(state.get("time"))
+            for state in needs_event_lookup
+        ]
+        parsed_times = [value for value in parsed_times if value]
+        reference_time = max(parsed_times) if parsed_times else fields.Datetime.now()
+        since = reference_time - timedelta(hours=event_lookback_hours)
+        until = reference_time + timedelta(minutes=5)
+        vehicle_ids = [
+            self._navirec_state_uuid(state)
+            for state in needs_event_lookup
+            if self._navirec_state_uuid(state)
+        ]
+        try:
+            events = client.get_vehicle_events(
+                account_id=account_id,
+                vehicle_ids=vehicle_ids,
+                time_gte=self._navirec_datetime_to_iso_utc(since),
+                time_lte=self._navirec_datetime_to_iso_utc(until),
+            )
+        except NavirecAPIError as exc:
+            _logger.warning(
+                "Navirec event-address enrichment unavailable; using coordinates: %s",
+                exc,
+            )
+            return names
+
+        events_by_vehicle = self._navirec_event_address_index(events)
+        for state in needs_event_lookup:
+            uuid = self._navirec_state_uuid(state)
+            address = self._navirec_event_address_for_state(
+                state,
+                events_by_vehicle,
+            )
+            if address:
+                names[uuid] = address
+        return names
+
+    @staticmethod
     def _navirec_reset_tracking_values(navirec_uuid=False):
         return {
             "navirec_uuid": navirec_uuid,
@@ -428,43 +608,29 @@ class FleetVehicle(models.Model):
         params = self.env["ir.config_parameter"].sudo()
         account_id = params.get_param("fleet_navirec.account_id") or None
         states = client.get_last_vehicle_states(account_id=account_id)
-        use_area_names = str(
-            params.get_param("fleet_navirec.use_area_names", "False") or "False"
-        ).lower() in ("1", "true", "yes")
-        areas = []
-        if use_area_names:
-            try:
-                areas = client.get_areas(account_id=account_id)
-            except NavirecAPIError as exc:
-                # Area naming is enrichment only. Never make position sync depend
-                # on an optional permission or a secondary API endpoint.
-                _logger.warning(
-                    "Navirec area-name enrichment unavailable; using coordinates: %s",
-                    exc,
-                )
         vehicles = {
             vehicle.navirec_uuid: vehicle
             for vehicle in self.search([("navirec_uuid", "!=", False)])
         }
+        location_names = self._navirec_location_names_for_states(
+            client,
+            states,
+            account_id=account_id,
+            vehicles_by_uuid=vehicles,
+        )
         updated = 0
         for state in states:
-            uuid = (
-                vehicle_uuid_from_url(state.get("vehicle"))
-                or state.get("vehicle_id")
-            )
+            uuid = self._navirec_state_uuid(state)
             vehicle = vehicles.get(uuid)
             if not vehicle:
                 _logger.debug(
                     "Skipping Navirec state for unknown vehicle UUID %s", uuid
                 )
                 continue
-            location = (state.get("location") or {}).get("coordinates") or []
-            area_name = False
-            if areas and self._valid_coordinates(location):
-                area_name = self._navirec_area_name_for_coordinates(
-                    areas, float(location[0]), float(location[1])
-                )
-            vehicle._write_navirec_state(state, location_name=area_name)
+            vehicle._write_navirec_state(
+                state,
+                location_name=location_names.get(uuid),
+            )
             updated += 1
         return updated
 
@@ -638,7 +804,20 @@ class FleetVehicle(models.Model):
                 raise UserError(
                     _("Navirec returned no GPS state for this vehicle.")
                 )
-            self._write_navirec_state(states[0])
+            state = states[0]
+            params = self.env["ir.config_parameter"].sudo()
+            account_id = params.get_param("fleet_navirec.account_id") or None
+            location_names = self._navirec_location_names_for_states(
+                client,
+                [state],
+                account_id=account_id,
+                vehicles_by_uuid={self.navirec_uuid: self},
+                event_lookback_hours=168,
+            )
+            self._write_navirec_state(
+                state,
+                location_name=location_names.get(self.navirec_uuid),
+            )
         except NavirecAPIError as exc:
             raise UserError(str(exc)) from exc
         return {

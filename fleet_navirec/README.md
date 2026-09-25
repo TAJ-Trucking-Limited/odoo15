@@ -33,17 +33,26 @@ and delivers client-specific Fleet Position reports on configurable schedules.
 ### Human-readable location enrichment
 
 The Navirec `last_vehicle_states` resource does not return a human-readable
-address. The module can optionally enrich synchronized coordinates with active
-Navirec Areas / Points of Interest from `/areas/`.
+address. The module can optionally enrich synchronized coordinates using
+Navirec's own location data, without sending fleet coordinates to a separate
+public geocoding service.
 
-- Enable **Use Navirec Area / POI Names** in Fleet settings.
+- Enable **Human-readable Navirec locations** in Fleet settings.
+- First preference is an active Navirec Area / Point of Interest from `/areas/`.
 - Circle, polygon and multipolygon containment is evaluated locally using the
   official Navirec GeoJSON coordinates.
 - Point-of-interest matches are preferred over general geofence matches.
 - Country areas are deliberately ignored as current-position labels.
-- If the token does not have Areas permission or the endpoint is temporarily
-  unavailable, GPS synchronization still succeeds and coordinates remain the
-  fallback. Area enrichment is never allowed to block current-state sync.
+- If no area matches, the module checks recent `/vehicle_events/` data and uses
+  a Navirec-provided event `address` only when the event GPS point is within
+  1 km of the current state. This avoids displaying a readable but stale/wrong
+  address from an older event elsewhere.
+- A human-readable name is cached while the vehicle remains within 250 meters,
+  which avoids unnecessary repeated event lookups for parked vehicles/GPS jitter.
+- Manual **Sync Navirec** and scheduled state synchronization use the same
+  enrichment path.
+- If Areas or event-address enrichment is unavailable, GPS synchronization still
+  succeeds and coordinates remain the final fallback.
 
 ### Navirec links
 
@@ -92,8 +101,8 @@ Fleet -> Configuration -> Settings -> Navirec:
 4. Test Connection.
 5. Match Vehicles Now, then run Mapping Audit.
 6. Sync All Now and inspect Navirec Sync Logs.
-7. Optionally enable Navirec Area / POI names after confirming the token has
-   access to `/areas/`.
+7. Optionally enable Human-readable Navirec locations. The module will prefer
+   Navirec Areas/POIs and then a nearby Navirec vehicle-event address.
 8. Optionally configure a verified vehicle deep-link template containing
    `{uuid}`.
 
@@ -104,7 +113,10 @@ Fleet -> Configuration -> Settings -> Navirec:
 - Compare several GPS fixes, timestamps, speed and ignition values with Navirec.
 - Confirm a true `0` speed is displayed as zero rather than Not available.
 - Confirm stale GPS is visibly marked stale.
-- If area names are enabled, test vehicles inside and outside known Navirec areas.
+- If human-readable locations are enabled, test one vehicle inside a known
+  Navirec Area and one vehicle outside Areas but near a recent addressed event.
+- Confirm manual **Sync Navirec** keeps/refreshes the same readable location as
+  the scheduled sync rather than reverting to coordinates.
 - Create an internal tracking subscription with only a small vehicle subset.
 - Preview the report and verify no vehicle outside the subscription appears.
 - Test all three schedule slots using staging times, then restore production times.
@@ -120,9 +132,9 @@ These are not safe to invent in code and are not Phase-1 connector defects:
   attachment format. Current delivery is HTML email/report preview.
 - The exact Navirec vehicle-specific web route. Configure the deep-link template
   only after verifying it in the client's Navirec web account.
-- Whether Navirec Area/POI labels are sufficient as the contractual
-  human-readable location. External reverse geocoding is not used without
-  explicit approval.
+- Whether Navirec Area/POI names plus nearby Navirec event addresses satisfy
+  the contractual human-readable-location requirement. External reverse
+  geocoding is not used without explicit approval/provider configuration.
 - Final Operations approval of truck/trailer/driver master-data quality.
 - Real external email delivery confirmation in a non-neutralized mail environment.
 
@@ -143,6 +155,7 @@ odoo-bin --test-tags /fleet_navirec --stop-after-init --log-level=test
 
 The test suite covers API headers/pagination/errors, matching, duplicate plates,
 state synchronization, missing-vs-zero semantics, integration status, stale data,
-Navirec area geometry/enrichment fallback, deep-link safety, monitoring, report
+Navirec area geometry, nearby event-address enrichment, manual-sync parity,
+location-cache safety, deep-link safety, monitoring, report
 isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.

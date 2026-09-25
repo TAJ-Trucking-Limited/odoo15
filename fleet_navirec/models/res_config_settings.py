@@ -17,13 +17,13 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="fleet_navirec.stale_hours", default=24
     )
     navirec_use_area_names = fields.Boolean(
-        string="Use Navirec Area / POI Names",
+        string="Use Navirec Human-readable Locations",
         config_parameter="fleet_navirec.use_area_names",
         default=False,
         help=(
-            "When enabled, the state sync also reads active Navirec areas and "
-            "uses a matching area/POI name as the human-readable position. "
-            "GPS synchronization still succeeds if area access is unavailable."
+            "When enabled, the state sync prefers a matching Navirec Area/POI "
+            "name and falls back to a nearby Navirec vehicle-event address. "
+            "GPS synchronization still succeeds if location enrichment is unavailable."
         ),
     )
     navirec_vehicle_url_template = fields.Char(
