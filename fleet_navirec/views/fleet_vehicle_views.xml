@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="fleet_vehicle_view_form_navirec" model="ir.ui.view">
+        <field name="name">fleet.vehicle.form.navirec</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="inherit_id" ref="fleet.fleet_vehicle_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header" position="inside">
+                <button name="action_navirec_sync_now" type="object"
+                    string="Sync Navirec" class="btn-secondary"
+                    invisible="not navirec_uuid"/>
+                <button name="action_view_on_map" type="object"
+                    string="View on Map" class="btn-secondary"
+                    invisible="not navirec_uuid or not navirec_has_position"/>
+                <button name="action_open_in_navirec" type="object"
+                    string="Open Navirec" class="btn-secondary"
+                    invisible="not navirec_uuid"/>
+            </xpath>
+            <xpath expr="//sheet" position="inside">
+                <field name="navirec_has_position" invisible="1"/>
+                <field name="navirec_is_stale" invisible="1"/>
+                <group string="Navirec Tracking" invisible="not navirec_uuid">
+                    <group>
+                        <field name="navirec_uuid"/>
+                        <field name="navirec_ignition"/>
+                        <field name="navirec_last_speed"/>
+                        <field name="navirec_odometer"/>
+                    </group>
+                    <group>
+                        <field name="navirec_last_lat"/>
+                        <field name="navirec_last_lon"/>
+                        <field name="navirec_last_state_time"/>
+                    </group>
+                </group>
+            </xpath>
+            <xpath expr="//sheet/div[@class='oe_title']" position="after">
+                <div class="alert alert-warning mt-2" role="alert"
+                    invisible="not navirec_uuid or not navirec_is_stale">
+                    Navirec GPS data is stale. Use Sync Navirec or verify the tracker.
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="fleet_vehicle_view_tree_navirec" model="ir.ui.view">
+        <field name="name">fleet.vehicle.list.navirec</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="inherit_id" ref="fleet.fleet_vehicle_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='license_plate']" position="after">
+                <field name="navirec_ignition" optional="hide" readonly="1"/>
+                <field name="navirec_last_state_time" optional="hide" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

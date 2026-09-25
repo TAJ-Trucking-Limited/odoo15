@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_navirec" model="ir.ui.view">
+        <field name="name">res.config.settings.form.navirec</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="fleet.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='fleet']" position="inside">
+                <block title="Navirec" name="navirec_settings">
+                    <setting string="API Token" help="API token generated in the Navirec web application.">
+                        <field name="navirec_api_token" password="True"/>
+                    </setting>
+                    <setting string="Account ID">
+                        <field name="navirec_account_id"/>
+                    </setting>
+                    <setting string="API URL">
+                        <field name="navirec_api_url"/>
+                    </setting>
+                    <setting string="Timezone" help="Optional IANA timezone sent to Navirec, for example Africa/Dar_es_Salaam.">
+                        <field name="navirec_timezone"/>
+                    </setting>
+                    <setting string="Stale GPS threshold">
+                        <field name="navirec_stale_hours"/><span class="ms-2">hours</span>
+                    </setting>
+                    <setting string="Connection">
+                        <button name="action_navirec_test_connection" type="object" string="Test Connection" class="btn-primary"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>
