@@ -279,3 +279,132 @@ class TestNavirecAPI(TransactionCase):
             "11111111-1111-4111-8111-111111111111",
         )
         self.assertFalse(vehicle_uuid_from_url(""))
+
+    def test_geocoding_context_reads_configuration_without_storing_key(self):
+        configuration = self._response({
+            "services": {"geocoding": {"key": "account-key", "backends": ["navirec"]}},
+            "environment": {
+                "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
+            },
+        })
+        with patch.object(
+            navirec_api.requests, "request", return_value=configuration
+        ) as request:
+            base_url, params = NavirecClient(token="secret").get_geocoding_context(
+                account_id="acct"
+            )
+
+        self.assertEqual(base_url, "https://realtime.navirec.com/geocoding/")
+        self.assertEqual(params, {"key": "account-key", "backends": "navirec"})
+        sent = request.call_args.kwargs["params"]
+        self.assertEqual(sent["app"], "web")
+        self.assertEqual(sent["account"], "acct")
+        self.assertEqual(sent["version"], navirec_api.DEFAULT_WEB_APP_VERSION)
+        self.assertEqual(
+            request.call_args.kwargs["headers"]["Authorization"],
+            "Token secret",
+        )
+
+    def test_geocoding_context_retries_when_configuration_requires_user(self):
+        missing_user = self._response(
+            {"detail": "user is required"},
+            status=400,
+            text="user is required",
+        )
+        users = self._response([{"id": "user-1"}])
+        configuration = self._response({
+            "services": {"geocoding": {"key": "account-key"}},
+            "environment": {
+                "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
+            },
+        })
+        with patch.object(
+            navirec_api.requests,
+            "request",
+            side_effect=[missing_user, users, configuration],
+        ) as request:
+            base_url, params = NavirecClient(token="secret").get_geocoding_context(
+                account_id="acct"
+            )
+
+        self.assertEqual(base_url, "https://realtime.navirec.com/geocoding/")
+        self.assertEqual(params["key"], "account-key")
+        self.assertEqual(request.call_args_list[2].kwargs["params"]["user"], "user-1")
+
+    def test_geocoding_context_rejects_missing_key_without_echoing_secrets(self):
+        configuration = self._response({
+            "services": {"geocoding": {"api_key": "secret-value"}},
+            "environment": {
+                "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
+            },
+        })
+        with patch.object(
+            navirec_api.requests, "request", return_value=configuration
+        ):
+            with self.assertRaises(NavirecAPIError) as caught:
+                NavirecClient(token="secret").get_geocoding_context()
+
+        self.assertIn("api_key", str(caught.exception))
+        self.assertNotIn("secret-value", str(caught.exception))
+
+    def test_reverse_geocode_reads_formatted_address_with_bearer(self):
+        payload = self._response({
+            "features": [{
+                "properties": {"formatted_address": "Itezi, Mbeya, Tanzania"}
+            }]
+        })
+        with patch.object(
+            navirec_api.requests, "request", return_value=payload
+        ) as request:
+            address = NavirecClient(token="secret").reverse_geocode(
+                33.5219450,
+                -8.9064783,
+                "https://realtime.navirec.com/geocoding/",
+                {"key": "account-key", "backends": "navirec"},
+            )
+
+        self.assertEqual(address, "Itezi, Mbeya, Tanzania")
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(
+            request.call_args.kwargs["headers"]["Authorization"],
+            "Bearer secret",
+        )
+        self.assertEqual(
+            request.call_args.kwargs["params"],
+            {
+                "key": "account-key",
+                "backends": "navirec",
+                "longitude": 33.5219450,
+                "latitude": -8.9064783,
+            },
+        )
+        self.assertTrue(request.call_args.args[1].endswith("/reverse/"))
+
+    def test_reverse_geocode_retries_with_token_scheme_after_bearer_401(self):
+        denied = self._response({"detail": "Could not validate credentials"}, status=401)
+        payload = self._response({
+            "features": [{
+                "properties": {"formatted_address": "Itezi, Mbeya, Tanzania"}
+            }]
+        })
+        with patch.object(
+            navirec_api.requests,
+            "request",
+            side_effect=[denied, payload],
+        ) as request:
+            address = NavirecClient(token="secret").reverse_geocode(
+                33.5219450,
+                -8.9064783,
+                "https://realtime.navirec.com/geocoding/",
+                {"key": "account-key"},
+            )
+
+        self.assertEqual(address, "Itezi, Mbeya, Tanzania")
+        self.assertEqual(
+            request.call_args_list[0].kwargs["headers"]["Authorization"],
+            "Bearer secret",
+        )
+        self.assertEqual(
+            request.call_args_list[1].kwargs["headers"]["Authorization"],
+            "Token secret",
+        )

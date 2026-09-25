@@ -50,14 +50,20 @@ public geocoding service.
   `/trips/` start/end addresses and uses one only when that endpoint is within
   1 km of the current GPS. Manual vehicle refresh uses a longer bounded trip
   lookback so a truck parked for several days can still resolve its last stop.
+- If Areas, events, and trips still have no nearby address, the module asks
+  Navirec's own reverse geocoder (`/configuration/` supplies the account
+  geocoding key; `GET <geocoding_api_url>/reverse/` returns
+  `formatted_address`). The key is not stored in the module or in git.
 - These distance checks avoid displaying a readable but stale/wrong address from
-  an older event or trip elsewhere.
+  an older event or trip elsewhere. A geocoded name is kept only while the
+  vehicle stays within 250 meters, and identical nearby points in one sync
+  share a single reverse lookup.
 - A human-readable name is cached while the vehicle remains within 250 meters,
   which avoids unnecessary repeated event lookups for parked vehicles/GPS jitter.
 - Manual **Sync Navirec** and scheduled state synchronization use the same
   enrichment path.
-- If Areas or event-address enrichment is unavailable, GPS synchronization still
-  succeeds and coordinates remain the final fallback.
+- If Areas, events, trips, or the Navirec geocoder are unavailable, GPS
+  synchronization still succeeds and coordinates remain the final fallback.
 
 ### Navirec links
 
@@ -107,7 +113,8 @@ Fleet -> Configuration -> Settings -> Navirec:
 5. Match Vehicles Now, then run Mapping Audit.
 6. Sync All Now and inspect Navirec Sync Logs.
 7. Optionally enable Human-readable Navirec locations. The module will prefer
-   Navirec Areas/POIs, then nearby event addresses, then nearby trip addresses.
+   Navirec Areas/POIs, then nearby event addresses, then nearby trip addresses,
+   then Navirec's reverse geocoder.
 8. Optionally configure a verified vehicle deep-link template containing
    `{uuid}`.
 
@@ -137,9 +144,9 @@ These are not safe to invent in code and are not Phase-1 connector defects:
   attachment format. Current delivery is HTML email/report preview.
 - The exact Navirec vehicle-specific web route. Configure the deep-link template
   only after verifying it in the client's Navirec web account.
-- Whether Navirec Area/POI names plus nearby Navirec event addresses satisfy
-  the contractual human-readable-location requirement. External reverse
-  geocoding is not used without explicit approval/provider configuration.
+- Whether Navirec's reverse geocoder is enabled for the integration user.
+  The module reads `services.geocoding` from `/configuration/` and does not
+  call a public geocoding service.
 - Final Operations approval of truck/trailer/driver master-data quality.
 - Real external email delivery confirmation in a non-neutralized mail environment.
 

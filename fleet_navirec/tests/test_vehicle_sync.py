@@ -640,6 +640,130 @@ class TestVehicleSync(TransactionCase):
             "-6.8000000, 39.2000000",
         )
 
+    def _geocode_client(self, states, address="Itezi, Mbeya, Tanzania"):
+        client = Mock()
+        client.get_last_vehicle_states.return_value = states
+        client.get_areas.return_value = []
+        client.get_vehicle_events.return_value = []
+        client.get_trips.return_value = []
+        client.get_geocoding_context.return_value = (
+            "https://realtime.navirec.com/geocoding/",
+            {"key": "account-key"},
+        )
+        client.reverse_geocode.return_value = address
+        return client
+
+    def test_state_sync_uses_navirec_reverse_geocode_after_area_event_trip_miss(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        params.set_param("fleet_navirec.account_id", "acct")
+        uuid = "54c0b29b-2535-4a47-9165-f7d83fb582b8"
+        self.vehicle.navirec_uuid = uuid
+        client = self._geocode_client([{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+            "speed": 0,
+            "ignition": False,
+        }])
+
+        updated = self.vehicle._navirec_sync_states(client)
+
+        self.assertEqual(updated, 1)
+        self.assertEqual(
+            self.vehicle.navirec_location_name,
+            "Itezi, Mbeya, Tanzania",
+        )
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(
+            self.vehicle.navirec_position_display,
+            "Itezi, Mbeya, Tanzania",
+        )
+        self.assertAlmostEqual(self.vehicle.navirec_last_lat, -8.9064783)
+        self.assertAlmostEqual(self.vehicle.navirec_last_lon, 33.5219450)
+        client.get_geocoding_context.assert_called_once_with(account_id="acct")
+        client.reverse_geocode.assert_called_once()
+
+    def test_reverse_geocode_is_reused_for_a_nearby_vehicle_in_the_same_sync(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        first = "54c0b29b-2535-4a47-9165-f7d83fb582b8"
+        second = "22222222-2222-4222-8222-222222222222"
+        self.vehicle.navirec_uuid = first
+        other = self.env["fleet.vehicle"].create({
+            "model_id": self.model.id,
+            "license_plate": "T000-BBB",
+            "navirec_uuid": second,
+        })
+        client = self._geocode_client([
+            {
+                "vehicle": f"https://api.navirec.com/vehicles/{first}/",
+                "time": "2026-09-25T20:18:00Z",
+                "location": {"coordinates": [33.5219450, -8.9064783]},
+            },
+            {
+                "vehicle": f"https://api.navirec.com/vehicles/{second}/",
+                "time": "2026-09-25T20:18:00Z",
+                "location": {"coordinates": [33.52210, -8.90660]},
+            },
+        ])
+
+        updated = self.vehicle._navirec_sync_states(client)
+
+        self.assertEqual(updated, 2)
+        self.assertEqual(self.vehicle.navirec_location_name, "Itezi, Mbeya, Tanzania")
+        self.assertEqual(other.navirec_location_name, "Itezi, Mbeya, Tanzania")
+        self.assertEqual(client.reverse_geocode.call_count, 1)
+        client.get_geocoding_context.assert_called_once()
+
+    def test_reverse_geocode_failure_does_not_block_position_sync(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        uuid = "54c0b29b-2535-4a47-9165-f7d83fb582b8"
+        self.vehicle.navirec_uuid = uuid
+        client = self._geocode_client([{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+            "speed": 0,
+            "ignition": False,
+        }])
+        client.reverse_geocode.side_effect = NavirecAPIError(
+            "Navirec geocoding error 503"
+        )
+
+        updated = self.vehicle._navirec_sync_states(client)
+
+        self.assertEqual(updated, 1)
+        self.assertTrue(self.vehicle.navirec_has_position)
+        self.assertFalse(self.vehicle.navirec_location_name)
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(
+            self.vehicle.navirec_position_display,
+            "-8.9064783, 33.5219450",
+        )
+
+    def test_manual_sync_uses_navirec_reverse_geocode(self):
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("fleet_navirec.use_area_names", "True")
+        uuid = "54c0b29b-2535-4a47-9165-f7d83fb582b8"
+        self.vehicle.navirec_uuid = uuid
+        client = self._geocode_client([{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": "2026-09-25T20:18:00Z",
+            "location": {"coordinates": [33.5219450, -8.9064783]},
+        }])
+        vehicle_type = type(self.vehicle)
+
+        with patch.object(vehicle_type, "_navirec_client", return_value=client):
+            action = self.vehicle.action_navirec_sync_now()
+
+        self.assertEqual(action["params"]["type"], "success")
+        self.assertEqual(
+            self.vehicle.navirec_location_name,
+            "Itezi, Mbeya, Tanzania",
+        )
+
     def test_open_navirec_uses_verified_configured_deep_link_template(self):
         self.vehicle.navirec_uuid = "11111111-1111-4111-8111-111111111111"
         params = self.env["ir.config_parameter"].sudo()

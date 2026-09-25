@@ -452,8 +452,8 @@ class FleetVehicle(models.Model):
         """Resolve human-readable names without making state sync fragile.
 
         Priority: Navirec Area/POI -> cached nearby name -> nearby Navirec
-        vehicle-event address -> nearby Navirec trip address -> coordinates in
-        the display layer.
+        vehicle-event address -> nearby Navirec trip address -> Navirec
+        reverse geocoder -> coordinates in the display layer.
         """
         params = self.env["ir.config_parameter"].sudo()
         enabled = str(
@@ -561,10 +561,10 @@ class FleetVehicle(models.Model):
             )
         except NavirecAPIError as exc:
             _logger.warning(
-                "Navirec trip-address enrichment unavailable; using coordinates: %s",
+                "Navirec trip-address enrichment unavailable: %s",
                 exc,
             )
-            return names
+            trips = []
 
         trips_by_vehicle = self._navirec_trip_address_index(trips)
         for state in needs_trip_lookup:
@@ -575,6 +575,90 @@ class FleetVehicle(models.Model):
             )
             if address:
                 names[uuid] = address
+
+        needs_geocode = [
+            state
+            for state in needs_trip_lookup
+            if self._navirec_state_uuid(state) not in names
+        ]
+        if not needs_geocode:
+            return names
+
+        geocode = self._navirec_reverse_geocode_states(
+            client,
+            needs_geocode,
+            account_id=account_id,
+        )
+        names.update(geocode)
+        return names
+
+    @classmethod
+    def _navirec_reverse_geocode_states(cls, client, states, account_id=None):
+        """Resolve names from Navirec's geocoder for points nothing else matched.
+
+        One configuration lookup per sync. Points within 250 m share one
+        reverse lookup. A geocoder failure leaves those vehicles on coordinates.
+        ponytail: worst case is one reverse call per vehicle that moved more
+        than 250 m. Upgrade path: a batch reverse endpoint if Navirec adds one.
+        """
+        get_context = getattr(client, "get_geocoding_context", None)
+        reverse = getattr(client, "reverse_geocode", None)
+        if not get_context or not reverse:
+            return {}
+        try:
+            context = get_context(account_id=account_id)
+        except NavirecAPIError as exc:
+            _logger.warning("Navirec reverse geocoding unavailable: %s", exc)
+            return {}
+        if (
+            not isinstance(context, tuple)
+            or len(context) != 2
+            or not isinstance(context[1], dict)
+        ):
+            return {}
+        base_url, query_params = context
+        names = {}
+        # (lon, lat, address or False). False remembers a lookup with no address.
+        attempted = []
+        for state in states:
+            uuid = cls._navirec_state_uuid(state)
+            coords = ((state.get("location") or {}).get("coordinates") or [])
+            if not uuid or not cls._valid_coordinates(coords):
+                continue
+            lon, lat = float(coords[0]), float(coords[1])
+            reused = False
+            for previous_lon, previous_lat, previous_address in attempted:
+                if cls._navirec_distance_m(
+                    lon, lat, previous_lon, previous_lat
+                ) > 250.0:
+                    continue
+                if previous_address:
+                    names[uuid] = previous_address
+                reused = True
+                break
+            if reused:
+                continue
+            try:
+                address = reverse(lon, lat, base_url, query_params)
+            except NavirecAPIError as exc:
+                _logger.warning(
+                    "Navirec reverse geocoding stopped: %s",
+                    exc,
+                )
+                break
+            if not isinstance(address, str):
+                address = False
+            else:
+                address = address.strip() or False
+            attempted.append((lon, lat, address))
+            if address:
+                names[uuid] = address
+        _logger.info(
+            "Navirec reverse geocode: unresolved=%s named=%s lookups=%s",
+            len(states),
+            len(names),
+            len(attempted),
+        )
         return names
 
     @staticmethod
