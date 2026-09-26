@@ -1,7 +1,11 @@
+import base64
+import binascii
+import json
 import logging
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
+from uuid import UUID
 
 import requests
 
@@ -25,12 +29,13 @@ class NavirecAPIError(Exception):
 
 class NavirecClient:
     def __init__(self, api_url=DEFAULT_API_URL, token=None, version=None,
-                 user_agent=DEFAULT_USER_AGENT, timezone=None):
+                 user_agent=DEFAULT_USER_AGENT, timezone=None, user_id=None):
         self.api_url = (api_url or DEFAULT_API_URL).rstrip("/") + "/"
         self.token = token or ""
         self.version = version or DEFAULT_API_VERSION
         self.user_agent = user_agent
         self.timezone = timezone
+        self.user_id = user_id
 
     @property
     def headers(self):
@@ -145,45 +150,57 @@ class NavirecClient:
         time_lte=None,
         page_size=1000,
     ):
-        """Return Navirec vehicle events for location/address enrichment.
+        """Use exactly one scope: vehicle for one ID, vehicles for a batch.
 
-        The endpoint accepts one scope filter. Live calls reject `vehicles`
-        and `account` together ("could not be handled"), so a vehicle id uses
-        `vehicle` and account is sent only when no vehicle id was given.
+        Do not combine vehicle scopes with account. Normalize and deduplicate
+        IDs before deciding which documented filter to use. Never widen an
+        explicitly empty/invalid vehicle selection to the whole account.
         """
-        events = []
-        next_url = self.api_url + "vehicle_events/"
-        params = {
-            "ordering": "time",
-            "page_size": page_size,
-        }
-        if isinstance(vehicle_ids, str):
-            vehicle_ids = [vehicle_ids]
-        vehicle_ids = [vehicle_id for vehicle_id in (vehicle_ids or []) if vehicle_id]
-        if vehicle_ids:
-            params["vehicle"] = ",".join(vehicle_ids)
+        params = {"ordering": "time", "page_size": page_size}
+        if vehicle_ids is not None:
+            if isinstance(vehicle_ids, str):
+                vehicle_ids = vehicle_ids.split(",")
+            if not isinstance(vehicle_ids, (list, tuple, set)) or any(
+                not isinstance(value, str) for value in vehicle_ids
+            ):
+                raise NavirecAPIError("Vehicle IDs must be strings")
+            ids = list(dict.fromkeys(value.strip() for value in vehicle_ids if value.strip()))
+            if not ids or any("," in value for value in ids):
+                raise NavirecAPIError("Provide a non-empty list of individual vehicle IDs")
+            params["vehicle" if len(ids) == 1 else "vehicles"] = ",".join(ids)
         elif account_id:
             params["account"] = account_id
         else:
-            raise NavirecAPIError(
-                "Vehicle events require an account or vehicle filter"
-            )
+            raise NavirecAPIError("Vehicle events require an account or vehicle filter")
         if time_gte:
             params["time__gte"] = time_gte
         if time_lte:
             params["time__lte"] = time_lte
-        while next_url:
+        events = []
+        next_url = self.api_url + "vehicle_events/"
+        visited = set()
+        # Enrichment must not paginate without a bound inside a GPS cron.
+        for _page in range(20):
+            if next_url in visited:
+                raise NavirecAPIError("Navirec repeated a vehicle-events pagination URL")
+            visited.add(next_url)
             response = self._request("GET", next_url, params=params)
             data = response.json()
-            if isinstance(data, list):
-                events.extend(data)
-            elif isinstance(data, dict):
-                events.extend(data.get("results", []))
-            else:
+            rows = data if isinstance(data, list) else (
+                data.get("results") if isinstance(data, dict) else None
+            )
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                 raise NavirecAPIError("Unexpected vehicle events payload")
-            next_url = response.links.get("next", {}).get("url")
+            events.extend(rows)
+            next_link = response.links.get("next", {}).get("url")
+            if not next_link:
+                return events
+            next_url = urljoin(next_url, next_link)
+            parsed, origin = urlparse(next_url), urlparse(self.api_url)
+            if (parsed.scheme, parsed.netloc) != (origin.scheme, origin.netloc):
+                raise NavirecAPIError("Unsafe Navirec vehicle-events pagination URL")
             params = None
-        return events
+        raise NavirecAPIError("Navirec vehicle-events pagination limit reached")
 
     def get_trips(
         self,
@@ -266,71 +283,84 @@ class NavirecClient:
             raise NavirecAPIError("Unexpected configuration payload")
         return data
 
-    def _one_user_id(self, params):
-        response = self._request("GET", "users/", params=params)
-        data = response.json()
-        if isinstance(data, list):
-            users = data
-        elif isinstance(data, dict):
-            users = data.get("results") or []
-        else:
+    @staticmethod
+    def _uuid(value):
+        if not isinstance(value, str):
             return False
-        if len(users) != 1 or not isinstance(users[0], dict):
+        try:
+            return str(UUID(value.strip()))
+        except (ValueError, AttributeError):
             return False
-        return users[0].get("id") or False
+
+    def _token_user_id(self):
+        """Read ONLY a UUID user_id routing hint from our own token.
+
+        This is NOT local authentication or JWT signature validation. Navirec
+        receives the unchanged token and authenticates every request. Never use
+        this hint to grant access, select another user, or change account scope.
+        Opaque tokens need an explicitly configured token-owner UUID instead.
+        """
+        if not isinstance(self.token, str) or len(self.token) > 32768:
+            return False
+        parts = self.token.split(".")
+        if len(parts) != 3 or not all(parts):
+            return False
+        try:
+            payload = parts[1].encode("ascii")
+            payload += b"=" * (-len(payload) % 4)
+            claims = json.loads(base64.b64decode(payload, altchars=b"-_", validate=True))
+        except (ValueError, UnicodeError, binascii.Error):
+            return False
+        return self._uuid(claims.get("user_id")) if isinstance(claims, dict) else False
 
     def _configuration_user_id(self, account_id=None):
-        """Prefer the integration user. Fall back to the only visible user."""
-        params = {"page_size": 2}
-        if account_id:
-            params["account"] = account_id
-        try:
-            user_id = self._one_user_id({**params, "is_integration": True})
-        except NavirecAPIError as exc:
-            if exc.status_code != 400:
-                raise
-            user_id = False
-        if user_id:
-            return user_id
-        return self._one_user_id(params)
+        """Resolve the token owner; never guess from a list of account users."""
+        token_user = self._token_user_id()
+        explicit = self._uuid(self.user_id) if self.user_id else False
+        if self.user_id and not explicit:
+            raise NavirecAPIError("Navirec Integration User UUID is not a valid UUID")
+        if explicit and token_user and explicit != token_user:
+            raise NavirecAPIError(
+                "Navirec Integration User UUID does not match the token user_id"
+            )
+        if explicit or token_user:
+            return explicit or token_user
+        raise NavirecAPIError(
+            "Cannot determine this token's owner. Set Integration User UUID in "
+            "Fleet > Settings > Navirec to the user that owns this API token."
+        )
 
     def get_geocoding_context(self, account_id=None):
-        """Return (https geocoding base URL, query params including key).
+        """Request configuration with the account AND the token-owner user.
 
-        The key comes from the account configuration Navirec's web app uses.
-        It is never logged or stored by this method.
+        A 403 is a permission denial, not a reason to drop account scope or try
+        another user. Geocoding keys remain only in memory, never in logs/git.
         """
+        if not account_id:
+            raise NavirecAPIError("Set the Navirec Account ID before checking geocoding")
+        user_id = self._configuration_user_id(account_id)
         try:
             configuration = self._get_configuration(
                 account_id=account_id,
+                user_id=user_id,
                 version=DEFAULT_WEB_APP_VERSION,
             )
         except NavirecAPIError as exc:
-            if exc.status_code != 400:
-                raise
-            user_id = self._configuration_user_id(account_id)
-            if user_id:
-                try:
-                    configuration = self._get_configuration(
-                        account_id=account_id,
-                        user_id=user_id,
-                        version=DEFAULT_WEB_APP_VERSION,
-                    )
-                except NavirecAPIError as retry_exc:
-                    if retry_exc.status_code != 400:
-                        raise
-                    # Passing account without a matching user is what Navirec
-                    # rejects. The token can still identify the account.
-                    configuration = self._get_configuration(
-                        user_id=user_id,
-                        version=DEFAULT_WEB_APP_VERSION,
-                    )
-            elif account_id:
-                configuration = self._get_configuration(
-                    version=DEFAULT_WEB_APP_VERSION,
-                )
-            else:
-                raise
+            if exc.status_code == 403:
+                raise NavirecAPIError(
+                    "Navirec denied /configuration/ (403) with account and token owner. "
+                    "Confirm this integration user's configuration/geocoding access "
+                    "with Navirec. GPS access alone does not prove geocoding access.",
+                    status_code=403,
+                ) from None
+            raise
+        for name, expected in (("account", account_id), ("user", user_id)):
+            scope = configuration.get(name)
+            returned_id = scope.get("id") if isinstance(scope, dict) else (
+                vehicle_uuid_from_url(scope) if isinstance(scope, str) else None
+            )
+            if returned_id and str(returned_id) != str(expected):
+                raise NavirecAPIError("Navirec configuration scope does not match the request")
         services = configuration.get("services")
         geocoding = services.get("geocoding") if isinstance(services, dict) else None
         if not isinstance(geocoding, dict):
@@ -363,17 +393,30 @@ class NavirecClient:
         if isinstance(environment, dict):
             base_url = environment.get("geocoding_api_url") or ""
         base_url = str(base_url or DEFAULT_GEOCODING_URL).strip()
-        if not base_url.startswith("https://"):
-            raise NavirecAPIError("Navirec geocoding URL is not HTTPS")
+        self._check_geocoding_url(base_url)
         return base_url, params
+
+    @staticmethod
+    def _check_geocoding_url(base_url):
+        try:
+            parsed = urlparse(str(base_url))
+        except ValueError:
+            raise NavirecAPIError("Malformed Navirec geocoding URL") from None
+        if (
+            parsed.scheme != "https"
+            or parsed.netloc not in ("realtime.navirec.com", "realtime.navirec.com:443")
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+        ):
+            raise NavirecAPIError("Navirec geocoding URL is not an approved HTTPS endpoint")
 
     def reverse_geocode(self, longitude, latitude, base_url, query_params):
         """Return formatted_address from Navirec's reverse geocoder, or False.
 
-        Official contract: GET <geocoding_api_url>/reverse/ with key, longitude,
+        Observed Navirec web-client format: GET /reverse/ with key, longitude,
         latitude, and HTTP Bearer. A Token scheme retry covers integration
         tokens that the geocoder accepts on the API scheme instead.
         """
+        self._check_geocoding_url(base_url)
         params = dict(query_params or {})
         if not params.get("key"):
             raise NavirecAPIError("Navirec geocoding configuration has no key")
@@ -393,6 +436,7 @@ class NavirecClient:
                     },
                     params=params,
                     timeout=30,
+                    allow_redirects=False,
                 )
             except requests.RequestException:
                 # The requests error includes the URL, and the URL contains the key.
@@ -405,7 +449,7 @@ class NavirecClient:
                     "Navirec geocoding rejected the integration token",
                     status_code=response.status_code,
                 )
-            if response.status_code >= 400:
+            if response.status_code >= 300:
                 raise NavirecAPIError(
                     f"Navirec geocoding error {response.status_code}",
                     status_code=response.status_code,
@@ -417,10 +461,10 @@ class NavirecClient:
                     "Navirec geocoding returned invalid JSON"
                 ) from exc
             features = data.get("features") if isinstance(data, dict) else None
-            if not features or not isinstance(features[0], dict):
+            if not isinstance(features, list) or not features or not isinstance(features[0], dict):
                 return False
             props = features[0].get("properties") or {}
-            address = props.get("formatted_address")
+            address = props.get("formatted_address") if isinstance(props, dict) else None
             if not isinstance(address, str):
                 return False
             return address.strip() or False

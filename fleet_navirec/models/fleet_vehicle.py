@@ -159,6 +159,7 @@ class FleetVehicle(models.Model):
             token=token,
             version=params.get_param("fleet_navirec.api_version") or None,
             timezone=params.get_param("fleet_navirec.timezone") or None,
+            user_id=params.get_param("fleet_navirec.integration_user_id") or None,
         )
 
     @staticmethod

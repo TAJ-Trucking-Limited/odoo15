@@ -14,6 +14,10 @@
                     <setting string="Account ID">
                         <field name="navirec_account_id"/>
                     </setting>
+                    <setting string="Integration User UUID"
+                        help="Optional. Auto-read from the API token user_id when present. Otherwise enter the UUID of the user that owns this integration token, not an administrator.">
+                        <field name="navirec_integration_user_id"/>
+                    </setting>
                     <setting string="API URL">
                         <field name="navirec_api_url"/>
                     </setting>

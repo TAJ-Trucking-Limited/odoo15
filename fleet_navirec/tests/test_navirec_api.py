@@ -1,3 +1,6 @@
+import base64
+import json
+
 from unittest.mock import Mock, patch
 
 from odoo.tests import tagged
@@ -191,7 +194,7 @@ class TestNavirecAPI(TransactionCase):
             {
                 "ordering": "time",
                 "page_size": 1000,
-                "vehicle": "one,two",
+                "vehicles": "one,two",
                 "time__gte": "2026-09-25T00:00:00Z",
                 "time__lte": "2026-09-25T23:59:59Z",
             },
@@ -298,92 +301,113 @@ class TestNavirecAPI(TransactionCase):
         )
         self.assertFalse(vehicle_uuid_from_url(""))
 
-    def test_geocoding_context_reads_configuration_without_storing_key(self):
-        configuration = self._response({
+    USER_ID = "11111111-1111-4111-8111-111111111111"
+    OTHER_USER_ID = "22222222-2222-4222-8222-222222222222"
+
+    def _jwt(self, claims):
+        # Synthetic token: never sent to a real service. Only HTTP mocks use it.
+        def encode(data):
+            return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode()
+        return "%s.%s.test-signature" % (encode({"alg": "HS256"}), encode(claims))
+
+    def _geocoding_configuration(self):
+        return self._response({
+            "account": {"id": "acct"},
+            "user": {"id": self.USER_ID},
             "services": {"geocoding": {"key": "account-key", "backends": ["navirec"]}},
             "environment": {
                 "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
             },
         })
-        with patch.object(
-            navirec_api.requests, "request", return_value=configuration
-        ) as request:
-            base_url, params = NavirecClient(token="secret").get_geocoding_context(
-                account_id="acct"
-            )
 
+    def test_geocoding_context_sends_account_and_explicit_owner_first(self):
+        client = NavirecClient(token="secret", user_id=self.USER_ID)
+        with patch.object(navirec_api.requests, "request", return_value=self._geocoding_configuration()) as request:
+            base_url, params = client.get_geocoding_context(account_id="acct")
         self.assertEqual(base_url, "https://realtime.navirec.com/geocoding/")
         self.assertEqual(params, {"key": "account-key", "backends": "navirec"})
-        sent = request.call_args.kwargs["params"]
-        self.assertEqual(sent["app"], "web")
-        self.assertEqual(sent["account"], "acct")
-        self.assertEqual(sent["version"], navirec_api.DEFAULT_WEB_APP_VERSION)
-        self.assertEqual(
-            request.call_args.kwargs["headers"]["Authorization"],
-            "Token secret",
-        )
-
-    def test_geocoding_context_retries_when_configuration_requires_user(self):
-        missing_user = self._response(
-            {"detail": "user is required"},
-            status=400,
-            text="user is required",
-        )
-        users = self._response([{"id": "user-1"}])
-        configuration = self._response({
-            "services": {"geocoding": {"key": "account-key"}},
-            "environment": {
-                "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
-            },
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(request.call_args.kwargs["params"], {
+            "app": "web", "account": "acct", "user": self.USER_ID,
+            "version": navirec_api.DEFAULT_WEB_APP_VERSION,
         })
-        with patch.object(
-            navirec_api.requests,
-            "request",
-            side_effect=[missing_user, users, configuration],
-        ) as request:
-            base_url, params = NavirecClient(token="secret").get_geocoding_context(
-                account_id="acct"
-            )
+        self.assertEqual(request.call_args.kwargs["headers"]["Authorization"], "Token secret")
+        self.assertNotIn("account-key", repr(vars(client)))
 
-        self.assertEqual(base_url, "https://realtime.navirec.com/geocoding/")
-        self.assertEqual(params["key"], "account-key")
-        self.assertTrue(
-            request.call_args_list[1].kwargs["params"]["is_integration"]
-        )
-        self.assertEqual(request.call_args_list[2].kwargs["params"]["user"], "user-1")
-        self.assertEqual(request.call_args_list[2].kwargs["params"]["account"], "acct")
+    def test_geocoding_context_uses_own_token_user_id_without_listing_users(self):
+        token = self._jwt({"user_id": self.USER_ID})
+        with patch.object(navirec_api.requests, "request", return_value=self._geocoding_configuration()) as request:
+            NavirecClient(token=token).get_geocoding_context(account_id="acct")
+        self.assertEqual(request.call_count, 1)
+        self.assertTrue(request.call_args.args[1].endswith("/configuration/"))
+        self.assertEqual(request.call_args.kwargs["params"]["user"], self.USER_ID)
+        self.assertEqual(request.call_args.kwargs["headers"]["Authorization"], "Token " + token)
 
-    def test_geocoding_context_drops_account_when_that_filter_is_rejected(self):
-        missing_user = self._response(
-            {"detail": "user is required"},
-            status=400,
-            text="user is required",
-        )
-        rejected_account = self._response(
-            {"detail": "account rejected"},
-            status=400,
-            text="account rejected",
-        )
-        users = self._response([{"id": "user-1"}])
-        configuration = self._response({
-            "services": {"geocoding": {"key": "account-key"}},
-            "environment": {
-                "geocoding_api_url": "https://realtime.navirec.com/geocoding/"
-            },
-        })
-        with patch.object(
-            navirec_api.requests,
-            "request",
-            side_effect=[missing_user, users, rejected_account, configuration],
-        ) as request:
-            _base_url, params = NavirecClient(token="secret").get_geocoding_context(
-                account_id="acct"
-            )
+    def test_geocoding_opaque_token_requires_explicit_owner_without_http(self):
+        with patch.object(navirec_api.requests, "request") as request:
+            with self.assertRaisesRegex(NavirecAPIError, "Set Integration User UUID"):
+                NavirecClient(token="opaque-secret").get_geocoding_context(account_id="acct")
+        request.assert_not_called()
 
-        self.assertEqual(params["key"], "account-key")
-        sent = request.call_args_list[3].kwargs["params"]
-        self.assertEqual(sent["user"], "user-1")
-        self.assertNotIn("account", sent)
+    def test_geocoding_rejects_owner_mismatch_without_http(self):
+        token = self._jwt({"user_id": self.USER_ID})
+        with patch.object(navirec_api.requests, "request") as request:
+            with self.assertRaisesRegex(NavirecAPIError, "does not match"):
+                NavirecClient(token=token, user_id=self.OTHER_USER_ID).get_geocoding_context(account_id="acct")
+        request.assert_not_called()
+
+    def test_geocoding_requires_account_and_never_drops_scope(self):
+        with patch.object(navirec_api.requests, "request") as request:
+            with self.assertRaisesRegex(NavirecAPIError, "Account ID"):
+                NavirecClient(token="secret", user_id=self.USER_ID).get_geocoding_context()
+        request.assert_not_called()
+
+    def test_configuration_403_does_not_retry_or_try_other_users(self):
+        denied = self._response({"detail": "denied"}, status=403)
+        client = NavirecClient(token="secret", user_id=self.USER_ID)
+        with patch.object(navirec_api.requests, "request", return_value=denied) as request:
+            with self.assertRaises(NavirecAPIError) as caught:
+                client.get_geocoding_context(account_id="acct")
+        self.assertEqual(caught.exception.status_code, 403)
+        self.assertIn("configuration/geocoding access", str(caught.exception))
+        self.assertNotIn("secret", str(caught.exception))
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(request.call_args.kwargs["params"]["user"], self.USER_ID)
+        self.assertEqual(request.call_args.kwargs["params"]["account"], "acct")
+        self.assertTrue(request.call_args.args[1].endswith("/configuration/"))
+
+    def test_configuration_400_is_not_retried_with_broader_scope(self):
+        denied = self._response({}, status=400, text="Bad request")
+        with patch.object(navirec_api.requests, "request", return_value=denied) as request:
+            with self.assertRaises(NavirecAPIError) as caught:
+                NavirecClient(token="secret", user_id=self.USER_ID).get_geocoding_context(account_id="acct")
+        self.assertEqual(caught.exception.status_code, 400)
+        self.assertEqual(request.call_count, 1)
+
+    def test_configuration_rejects_wrong_account_or_user_response(self):
+        for field in ("account", "user"):
+            with self.subTest(field=field):
+                response = self._geocoding_configuration()
+                payload = response.json.return_value
+                payload[field] = {"id": self.OTHER_USER_ID}
+                with patch.object(navirec_api.requests, "request", return_value=response):
+                    with self.assertRaisesRegex(NavirecAPIError, "scope does not match"):
+                        NavirecClient(token="secret", user_id=self.USER_ID).get_geocoding_context(account_id="acct")
+
+    def test_invalid_token_metadata_is_never_used_as_user_identity(self):
+        tokens = ["opaque", "a.@@.z", "a..z", "a.e30.z", "x" * 40000,
+                  self._jwt([]), self._jwt({"user_id": 42}),
+                  self._jwt({"user_id": "not-a-uuid"}),
+                  self._jwt({"sub": self.USER_ID})]
+        for token in tokens:
+            with self.subTest(token_length=len(token)):
+                self.assertFalse(NavirecClient(token=token)._token_user_id())
+
+    def test_invalid_explicit_user_uuid_is_rejected_without_http(self):
+        with patch.object(navirec_api.requests, "request") as request:
+            with self.assertRaisesRegex(NavirecAPIError, "valid UUID"):
+                NavirecClient(token="secret", user_id="not-a-uuid").get_geocoding_context(account_id="acct")
+        request.assert_not_called()
 
     def test_public_navirec_error_redacts_geocoding_key(self):
         text = navirec_api.public_navirec_error(
@@ -403,7 +427,7 @@ class TestNavirecAPI(TransactionCase):
             navirec_api.requests, "request", return_value=configuration
         ):
             with self.assertRaises(NavirecAPIError) as caught:
-                NavirecClient(token="secret").get_geocoding_context()
+                NavirecClient(token="secret", user_id=self.USER_ID).get_geocoding_context(account_id="acct")
 
         self.assertIn("api_key", str(caught.exception))
         self.assertNotIn("secret-value", str(caught.exception))
@@ -469,3 +493,115 @@ class TestNavirecAPI(TransactionCase):
             request.call_args_list[1].kwargs["headers"]["Authorization"],
             "Token secret",
         )
+
+    def test_events_batch_contract_never_sends_a_list_in_vehicle(self):
+        ids = [self.USER_ID, self.OTHER_USER_ID]
+        def server_contract(method, url, **kwargs):
+            params = kwargs["params"]
+            self.assertNotIn("account", params)
+            if "vehicle" in params and "," in params["vehicle"]:
+                return self._response({}, status=400, text='{"vehicle":["This query argument could not be handled"]}')
+            self.assertEqual(params.get("vehicles"), ",".join(ids))
+            return self._response([])
+        with patch.object(navirec_api.requests, "request", side_effect=server_contract) as request:
+            self.assertEqual(NavirecClient(token="x").get_vehicle_events(account_id="acct", vehicle_ids=ids), [])
+        self.assertEqual(request.call_count, 1)
+
+    def test_events_deduplicate_and_choose_single_scope(self):
+        with patch.object(navirec_api.requests, "request", return_value=self._response([])) as request:
+            NavirecClient(token="x").get_vehicle_events(account_id="acct", vehicle_ids=[" " + self.USER_ID, self.USER_ID])
+        self.assertEqual(request.call_args.kwargs["params"]["vehicle"], self.USER_ID)
+        self.assertNotIn("vehicles", request.call_args.kwargs["params"])
+        self.assertNotIn("account", request.call_args.kwargs["params"])
+
+    def test_events_account_scope_without_vehicle_list(self):
+        with patch.object(navirec_api.requests, "request", return_value=self._response([])) as request:
+            NavirecClient(token="x").get_vehicle_events(account_id="acct")
+        self.assertEqual(request.call_args.kwargs["params"]["account"], "acct")
+        self.assertNotIn("vehicle", request.call_args.kwargs["params"])
+        self.assertNotIn("vehicles", request.call_args.kwargs["params"])
+
+    def test_events_empty_or_invalid_explicit_list_never_widens_to_account(self):
+        for value in ([], [" "], [None], 42, {"id": "one"}, ["one,two"]):
+            with self.subTest(value=value):
+                with patch.object(navirec_api.requests, "request") as request:
+                    with self.assertRaises(NavirecAPIError):
+                        NavirecClient(token="x").get_vehicle_events(account_id="acct", vehicle_ids=value)
+                request.assert_not_called()
+
+    def test_events_rejects_malformed_results(self):
+        for payload in ({"results": None}, {"results": {}}, [None], "invalid"):
+            with self.subTest(payload=payload):
+                with patch.object(navirec_api.requests, "request", return_value=self._response(payload)):
+                    with self.assertRaisesRegex(NavirecAPIError, "Unexpected vehicle events"):
+                        NavirecClient(token="x").get_vehicle_events(vehicle_ids=[self.USER_ID])
+
+    def test_events_pagination_stays_on_navirec_origin(self):
+        response = self._response([], links={"next": {"url": "https://other.invalid/events/"}})
+        with patch.object(navirec_api.requests, "request", return_value=response) as request:
+            with self.assertRaisesRegex(NavirecAPIError, "Unsafe"):
+                NavirecClient(token="x").get_vehicle_events(vehicle_ids=[self.USER_ID])
+        self.assertEqual(request.call_count, 1)
+
+    def test_events_repeated_pagination_url_stops(self):
+        response = self._response([], links={"next": {"url": "https://api.navirec.com/vehicle_events/"}})
+        with patch.object(navirec_api.requests, "request", return_value=response) as request:
+            with self.assertRaisesRegex(NavirecAPIError, "repeated"):
+                NavirecClient(token="x").get_vehicle_events(vehicle_ids=[self.USER_ID])
+        self.assertEqual(request.call_count, 1)
+
+    def test_events_pagination_has_a_hard_limit(self):
+        counter = iter(range(30))
+        def page(*args, **kwargs):
+            return self._response([], links={"next": {"url": "https://api.navirec.com/vehicle_events/?page=%s" % next(counter)}})
+        with patch.object(navirec_api.requests, "request", side_effect=page) as request:
+            with self.assertRaisesRegex(NavirecAPIError, "limit reached"):
+                NavirecClient(token="x").get_vehicle_events(vehicle_ids=[self.USER_ID])
+        self.assertEqual(request.call_count, 20)
+
+    def test_reverse_geocode_rejects_untrusted_hosts_without_sending_credentials(self):
+        for url in ("https://[invalid", "http://realtime.navirec.com/geocoding/", "https://other.invalid/",
+                    "https://realtime.navirec.com.other.invalid/", "https://user@realtime.navirec.com/",
+                    "https://realtime.navirec.com/geocoding/?key=secret"):
+            with self.subTest(url=url):
+                with patch.object(navirec_api.requests, "request") as request:
+                    with self.assertRaises(NavirecAPIError):
+                        NavirecClient(token="secret").reverse_geocode(1, 2, url, {"key": "account-key"})
+                request.assert_not_called()
+
+    def test_reverse_geocode_does_not_follow_redirects_or_retry_403(self):
+        for status in (302, 403):
+            with self.subTest(status=status):
+                with patch.object(navirec_api.requests, "request", return_value=self._response({}, status=status)) as request:
+                    with self.assertRaises(NavirecAPIError):
+                        NavirecClient(token="secret").reverse_geocode(1, 2, navirec_api.DEFAULT_GEOCODING_URL, {"key": "account-key"})
+                self.assertEqual(request.call_count, 1)
+                self.assertFalse(request.call_args.kwargs["allow_redirects"])
+
+    def test_reverse_geocode_malformed_feature_is_a_safe_no_result(self):
+        for data in ({"features": {}}, {"features": [None]}, {"features": [{"properties": []}]},
+                     {"features": [{"properties": "invalid"}]}, []):
+            with self.subTest(data=data):
+                with patch.object(navirec_api.requests, "request", return_value=self._response(data)):
+                    self.assertFalse(NavirecClient(token="secret").reverse_geocode(1, 2, navirec_api.DEFAULT_GEOCODING_URL, {"key": "account-key"}))
+
+    def test_configuration_owner_is_sent_before_server_permission_check(self):
+        def server_contract(method, url, **kwargs):
+            query = kwargs["params"]
+            if not query.get("user"):
+                return self._response({}, status=403)
+            self.assertEqual(query["user"], self.USER_ID)
+            self.assertEqual(query["account"], "acct")
+            return self._geocoding_configuration()
+        token = self._jwt({"user_id": self.USER_ID})
+        with patch.object(navirec_api.requests, "request", side_effect=server_contract) as request:
+            _base_url, params = NavirecClient(token=token).get_geocoding_context(account_id="acct")
+        self.assertEqual(params["key"], "account-key")
+        self.assertEqual(request.call_count, 1)
+
+    def test_events_relative_pagination_keeps_the_events_endpoint(self):
+        pages = [self._response([], links={"next": {"url": "?cursor=two"}}), self._response([])]
+        with patch.object(navirec_api.requests, "request", side_effect=pages) as request:
+            self.assertEqual(NavirecClient(token="x").get_vehicle_events(vehicle_ids=[self.USER_ID]), [])
+        self.assertEqual(request.call_args_list[1].args[1], "https://api.navirec.com/vehicle_events/?cursor=two")
+        self.assertIsNone(request.call_args_list[1].kwargs["params"])

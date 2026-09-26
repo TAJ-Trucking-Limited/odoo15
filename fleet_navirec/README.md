@@ -162,7 +162,10 @@ outside this Phase 1 module.
 Run on an Odoo 19 runtime:
 
 ```bash
-odoo-bin --test-tags /fleet_navirec --stop-after-init --log-level=test
+# Use a disposable test database/clone, not the shared UAT database.
+# Use -i fleet_navirec instead of -u when the module is not installed yet.
+odoo-bin -d <disposable_test_db> -u fleet_navirec --test-tags /fleet_navirec \
+  --stop-after-init --no-http --max-cron-threads=0 --log-level=test
 ```
 
 The test suite covers API headers/pagination/errors, matching, duplicate plates,
@@ -171,3 +174,47 @@ Navirec area geometry, nearby event/trip address enrichment, manual-sync parity,
 location-cache safety, deep-link safety, monitoring, report
 isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.
+
+
+## Readable-location request fixes (19.0.1.2.6)
+
+- Events use `vehicle=<uuid>` for one vehicle or `vehicles=<uuid1>,<uuid2>`
+  for a batch. Neither request also sends `account`. Duplicate IDs collapse
+  before scope selection; an explicit empty/invalid list is not widened to
+  the account. Events pagination is bounded to 20 pages and rejects cycles
+  and links to another origin.
+- Geocoding configuration always sends both the configured Account ID and
+  the owner of the current API token. A UUID `user_id` from that same token
+  can supply the routing hint; this does NOT authenticate the token locally.
+  Navirec authenticates the unchanged token on every request.
+- For tokens without that claim, set **Integration User UUID** in Fleet
+  settings to the owner of this integration token. Do not enter an admin's
+  UUID or a different integration user's UUID. Conflicting token/setting
+  identities are rejected before any request.
+- No users list is searched to guess an owner. The client never retries a
+  denied configuration call with another user or by dropping account scope.
+  A real 403 remains a Navirec permission/configuration issue. Confirm access
+  with Navirec; base GPS permission does not establish geocoding permission.
+- Test Connection now reports optional Area/geocoding-configuration failures
+  separately from a successful base connector check. It does not perform a
+  reverse lookup or send a report.
+- Reverse requests are restricted to the approved Navirec HTTPS geocoding
+  host and never follow redirects with tokens/keys.
+
+### Read-only staging diagnosis
+
+Run in a **fresh Odoo shell** on the `19_upgrade` staging database after the
+module upgrade (not in a shell with unsaved work):
+
+```python
+exec(open('/home/odoo/src/user/fleet_navirec/scripts/diagnose_readable_location.py').read())
+```
+
+The script uses vehicle 39 by default and performs only bounded authenticated
+GET requests. It checks one-vehicle and two-vehicle Events filters, resolves
+configuration using the token owner, and attempts at most one reverse lookup.
+It never prints tokens, geocoding keys, headers, or full configuration payloads;
+it sends no email and writes no Odoo records. Set `NAVIREC_DIAG_VEHICLE_ID` in
+the shell environment to diagnose a different vehicle. Results from mocked
+unit tests are not live Navirec acceptance and are not an Odoo integration-suite
+pass. Final UAT still requires both the live result and the Odoo test suite.

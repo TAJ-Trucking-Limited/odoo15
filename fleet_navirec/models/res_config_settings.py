@@ -1,7 +1,9 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
-from .navirec_api import DEFAULT_API_URL, NavirecAPIError, NavirecClient
+from .navirec_api import (
+    DEFAULT_API_URL, NavirecAPIError, NavirecClient, public_navirec_error,
+)
 
 
 class ResConfigSettings(models.TransientModel):
@@ -9,6 +11,15 @@ class ResConfigSettings(models.TransientModel):
 
     navirec_api_token = fields.Char(config_parameter="fleet_navirec.api_token")
     navirec_account_id = fields.Char(config_parameter="fleet_navirec.account_id")
+    navirec_integration_user_id = fields.Char(
+        string="Integration User UUID",
+        config_parameter="fleet_navirec.integration_user_id",
+        help=(
+            "Optional token-owner UUID for configuration/geocoding. Leave empty "
+            "when the API token contains a UUID user_id claim. For opaque tokens, "
+            "enter the UUID of the user that owns this API token, not an admin."
+        ),
+    )
     navirec_api_url = fields.Char(
         config_parameter="fleet_navirec.api_url", default=DEFAULT_API_URL
     )
@@ -79,6 +90,13 @@ class ResConfigSettings(models.TransientModel):
                     "The Navirec vehicle deep-link template must be an HTTPS URL "
                     "containing the {uuid} placeholder."
                 ))
+
+    @api.constrains("navirec_integration_user_id")
+    def _check_navirec_integration_user_id(self):
+        for settings in self:
+            value = settings.navirec_integration_user_id
+            if value and not NavirecClient._uuid(value):
+                raise ValidationError(_("Navirec Integration User UUID must be a valid UUID."))
 
     @api.constrains("navirec_stale_hours")
     def _check_navirec_stale_hours(self):
@@ -268,14 +286,33 @@ class ResConfigSettings(models.TransientModel):
                 token=self.navirec_api_token,
                 version=params.get_param("fleet_navirec.api_version") or None,
                 timezone=self.navirec_timezone,
+                user_id=self.navirec_integration_user_id or None,
             )
             client.test_connection()
-            if self.navirec_use_area_names:
-                client.get_areas(account_id=self.navirec_account_id or None)
         except NavirecAPIError as exc:
-            raise UserError(str(exc)) from exc
+            raise UserError(public_navirec_error(exc)) from exc
+        notes = []
+        if self.navirec_use_area_names:
+            # Base GPS access and readable-location permissions are different.
+            # Test both optional services, but never report a GPS failure for them.
+            for label, check in (
+                (_("Areas"), client.get_areas),
+                (_("Geocoding configuration"), client.get_geocoding_context),
+            ):
+                try:
+                    check(account_id=self.navirec_account_id or None)
+                except NavirecAPIError as exc:
+                    notes.append("%s: %s" % (label, public_navirec_error(exc)))
+        message = _("Navirec connection successful.")
+        if notes:
+            message += "\n" + "\n".join(notes)
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
-            "params": {"title": _("Navirec"), "message": _("Connection successful."), "type": "success"},
+            "params": {
+                "title": _("Navirec"),
+                "message": message,
+                "type": "warning" if notes else "success",
+                "sticky": bool(notes),
+            },
         }

@@ -5,6 +5,8 @@ from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
+from ..models.navirec_api import NavirecAPIError
+
 
 @tagged("post_install", "-at_install")
 class TestNavirecSyncMonitoring(TransactionCase):
@@ -108,6 +110,7 @@ class TestNavirecSyncMonitoring(TransactionCase):
         self.assertIn("action_navirec_mapping_audit", arch)
         self.assertIn("action_navirec_open_sync_logs", arch)
         self.assertIn("navirec_use_area_names", arch)
+        self.assertIn("navirec_integration_user_id", arch)
         self.assertIn("navirec_vehicle_url_template", arch)
 
     def test_mapping_audit_action_returns_operational_summary(self):
@@ -165,6 +168,7 @@ class TestNavirecSyncMonitoring(TransactionCase):
             action = settings.action_navirec_test_connection()
         client.test_connection.assert_called_once_with()
         client.get_areas.assert_called_once_with(account_id="acct")
+        client.get_geocoding_context.assert_called_once_with(account_id="acct")
         self.assertEqual(action["params"]["type"], "success")
 
     def test_sync_now_persists_unsaved_navirec_settings(self):
@@ -194,4 +198,46 @@ class TestNavirecSyncMonitoring(TransactionCase):
             params.get_param("fleet_navirec.account_id"),
             "form-account",
         )
+        self.assertEqual(action["params"]["type"], "success")
+
+    def test_integration_user_uuid_validation_and_client_wiring(self):
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.env["res.config.settings"].create({
+                "navirec_integration_user_id": "not-a-uuid",
+            })
+        user_id = "11111111-1111-4111-8111-111111111111"
+        settings = self.env["res.config.settings"].create({
+            "navirec_api_token": "test-token",
+            "navirec_integration_user_id": user_id,
+        })
+        settings.set_values()
+        self.assertEqual(self.env["fleet.vehicle"]._navirec_client().user_id, user_id)
+
+    def test_test_connection_warns_on_configuration_403_without_failing_gps(self):
+        user_id = "11111111-1111-4111-8111-111111111111"
+        settings = self.env["res.config.settings"].create({
+            "navirec_api_token": "test-token", "navirec_account_id": "acct",
+            "navirec_integration_user_id": user_id, "navirec_use_area_names": True,
+        })
+        with patch("odoo.addons.fleet_navirec.models.res_config_settings.NavirecClient") as factory:
+            client = factory.return_value
+            client.get_geocoding_context.side_effect = NavirecAPIError(
+                "Navirec denied /configuration/ (403)", status_code=403,
+            )
+            action = settings.action_navirec_test_connection()
+        self.assertEqual(factory.call_args.kwargs["user_id"], user_id)
+        client.test_connection.assert_called_once()
+        client.get_geocoding_context.assert_called_once_with(account_id="acct")
+        self.assertEqual(action["params"]["type"], "warning")
+        self.assertIn("403", action["params"]["message"])
+        client.reverse_geocode.assert_not_called()
+
+    def test_test_connection_skips_location_apis_when_disabled(self):
+        settings = self.env["res.config.settings"].create({
+            "navirec_api_token": "test-token", "navirec_use_area_names": False,
+        })
+        with patch("odoo.addons.fleet_navirec.models.res_config_settings.NavirecClient") as factory:
+            action = settings.action_navirec_test_connection()
+        factory.return_value.get_areas.assert_not_called()
+        factory.return_value.get_geocoding_context.assert_not_called()
         self.assertEqual(action["params"]["type"], "success")
