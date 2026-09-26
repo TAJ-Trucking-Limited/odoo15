@@ -309,57 +309,6 @@ class FleetVehicle(models.Model):
         return value.isoformat().replace("+00:00", "Z")
 
     @classmethod
-    def _navirec_event_address_index(cls, events):
-        by_vehicle = {}
-        for event in events or []:
-            address = (event.get("address") or "").strip()
-            coords = ((event.get("location") or {}).get("coordinates") or [])
-            uuid = cls._navirec_state_uuid(event)
-            if not uuid or not address or not cls._valid_coordinates(coords):
-                continue
-            event_time = cls._parse_state_time(
-                event.get("time") or event.get("detected_at")
-            )
-            by_vehicle.setdefault(uuid, []).append((event_time, event))
-        for uuid, items in by_vehicle.items():
-            items.sort(
-                key=lambda item: item[0] or datetime.min,
-                reverse=True,
-            )
-            by_vehicle[uuid] = [item[1] for item in items]
-        return by_vehicle
-
-    @classmethod
-    def _navirec_event_address_for_state(
-        cls,
-        state,
-        events_by_vehicle,
-        max_distance_m=1000.0,
-    ):
-        coords = ((state.get("location") or {}).get("coordinates") or [])
-        uuid = cls._navirec_state_uuid(state)
-        if not uuid or not cls._valid_coordinates(coords):
-            return False
-        lon, lat = float(coords[0]), float(coords[1])
-        for event in events_by_vehicle.get(uuid, []):
-            event_coords = (
-                (event.get("location") or {}).get("coordinates") or []
-            )
-            if not cls._valid_coordinates(event_coords):
-                continue
-            distance = cls._navirec_distance_m(
-                lon,
-                lat,
-                float(event_coords[0]),
-                float(event_coords[1]),
-            )
-            if distance <= max_distance_m:
-                address = (event.get("address") or "").strip()
-                if address:
-                    return address
-        return False
-
-    @classmethod
     def _navirec_trip_address_index(cls, trips):
         by_vehicle = {}
         for trip in trips or []:
@@ -448,14 +397,14 @@ class FleetVehicle(models.Model):
         states,
         account_id=None,
         vehicles_by_uuid=None,
-        event_lookback_hours=24,
         trip_lookback_hours=168,
     ):
         """Resolve human-readable names without making state sync fragile.
 
-        Priority: Navirec Area/POI -> cached nearby name -> nearby Navirec
-        vehicle-event address -> nearby Navirec trip address -> Navirec
-        reverse geocoder -> coordinates in the display layer.
+        Priority: Navirec Area/POI -> cached nearby name -> nearby Navirec trip
+        address -> optional Navirec reverse geocoder -> coordinates in the
+        display layer. Vehicle Events are intentionally excluded because the
+        live integration token rejects its documented filters.
         """
         params = self.env["ir.config_parameter"].sudo()
         enabled = str(
@@ -476,7 +425,7 @@ class FleetVehicle(models.Model):
                 exc,
             )
 
-        needs_event_lookup = []
+        needs_trip_lookup = []
         for state in states:
             uuid = self._navirec_state_uuid(state)
             coords = ((state.get("location") or {}).get("coordinates") or [])
@@ -491,53 +440,8 @@ class FleetVehicle(models.Model):
             if self._navirec_can_reuse_location_name(vehicle, coords):
                 names[uuid] = vehicle.navirec_location_name
                 continue
-            needs_event_lookup.append(state)
+            needs_trip_lookup.append(state)
 
-        if not needs_event_lookup:
-            return names
-
-        parsed_times = [
-            self._parse_state_time(state.get("time"))
-            for state in needs_event_lookup
-        ]
-        parsed_times = [value for value in parsed_times if value]
-        reference_time = max(parsed_times) if parsed_times else fields.Datetime.now()
-        since = reference_time - timedelta(hours=event_lookback_hours)
-        until = reference_time + timedelta(minutes=5)
-        vehicle_ids = [
-            self._navirec_state_uuid(state)
-            for state in needs_event_lookup
-            if self._navirec_state_uuid(state)
-        ]
-        try:
-            events = client.get_vehicle_events(
-                account_id=account_id,
-                vehicle_ids=None if account_id else vehicle_ids,
-                time_gte=self._navirec_datetime_to_iso_utc(since),
-                time_lte=self._navirec_datetime_to_iso_utc(until),
-            )
-        except NavirecAPIError as exc:
-            _logger.warning(
-                "Navirec event-address enrichment unavailable: %s",
-                exc,
-            )
-            events = []
-
-        events_by_vehicle = self._navirec_event_address_index(events)
-        for state in needs_event_lookup:
-            uuid = self._navirec_state_uuid(state)
-            address = self._navirec_event_address_for_state(
-                state,
-                events_by_vehicle,
-            )
-            if address:
-                names[uuid] = address
-
-        needs_trip_lookup = [
-            state
-            for state in needs_event_lookup
-            if self._navirec_state_uuid(state) not in names
-        ]
         if not needs_trip_lookup:
             return names
 
@@ -1012,7 +916,6 @@ class FleetVehicle(models.Model):
                 [state],
                 account_id=account_id,
                 vehicles_by_uuid={self.navirec_uuid: self},
-                event_lookback_hours=168,
                 trip_lookback_hours=720,
             )
             self._write_navirec_state(

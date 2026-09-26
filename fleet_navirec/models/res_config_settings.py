@@ -33,9 +33,9 @@ class ResConfigSettings(models.TransientModel):
         default=False,
         help=(
             "When enabled, the state sync prefers a matching Navirec Area/POI "
-            "name, then a nearby Navirec event or trip address, then Navirec's "
-            "own reverse geocoder. GPS synchronization still succeeds if "
-            "location enrichment is unavailable."
+            "name, then a nearby Navirec trip address, then Navirec's optional "
+            "reverse geocoder. GPS synchronization still succeeds if location "
+            "enrichment is unavailable."
         ),
     )
     navirec_vehicle_url_template = fields.Char(

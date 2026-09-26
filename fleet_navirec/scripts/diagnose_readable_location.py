@@ -5,7 +5,6 @@ Never log tokens/keys/raw configuration, change records, or send reports.
 import ast
 import math
 import os
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from odoo.addons.fleet_navirec.models import navirec_api
@@ -68,28 +67,10 @@ def diagnose(odoo_env):
     state_list = rows(state_data)
     state = next((item for item in state_list if isinstance(item, dict)
                   and vehicle._navirec_state_uuid(item) == vehicle.navirec_uuid), None)
-    ref = vehicle._parse_state_time(state.get("time")) if state else None
-    ref = ref or datetime.now(timezone.utc).replace(tzinfo=None)
-    bounds = {
-        "time__gte": (ref - timedelta(minutes=30)).replace(tzinfo=timezone.utc).isoformat(),
-        "time__lte": (ref + timedelta(minutes=5)).replace(tzinfo=timezone.utc).isoformat(),
-        "ordering": "time", "page_size": 1,
-    }
-    if account:
-        event_data = first_page("EVENT_ACCOUNT", "vehicle_events/", {
-            **bounds, "account": account,
-        })
-        event_items = rows(event_data)
-        selected = [
-            item for item in event_items
-            if isinstance(item, dict)
-            and vehicle._navirec_state_uuid(item) == vehicle.navirec_uuid
-        ]
-        print("EVENT_ACCOUNT_SELECTED_VEHICLE_RECORDS", len(selected))
-    else:
-        first_page("EVENT_VEHICLE_FALLBACK", "vehicle_events/", {
-            **bounds, "vehicle": vehicle.navirec_uuid,
-        })
+    print(
+        "VEHICLE_EVENT_ENRICHMENT",
+        "DISABLED: live integration token rejected vehicle/vehicles/account filters",
+    )
 
     try:
         base_url, context = client.get_geocoding_context(account_id=account)

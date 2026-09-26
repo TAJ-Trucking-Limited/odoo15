@@ -30,7 +30,7 @@
                         <span class="ms-2">hours</span>
                     </setting>
                     <setting string="Human-readable Navirec locations"
-                        help="Prefer active Navirec Area / POI names, then nearby Navirec event or trip addresses, then Navirec's reverse geocoder. GPS sync falls back to coordinates if no reliable human-readable location is available.">
+                        help="Prefer active Navirec Area / POI names, then nearby Navirec trip addresses, then Navirec's optional reverse geocoder. GPS sync falls back to coordinates if no reliable human-readable location is available.">
                         <field name="navirec_use_area_names"/>
                     </setting>
                     <setting string="Vehicle deep links"

@@ -43,26 +43,28 @@ public geocoding service.
   official Navirec GeoJSON coordinates.
 - Point-of-interest matches are preferred over general geofence matches.
 - Country areas are deliberately ignored as current-position labels.
-- If no area matches, the module checks recent `/vehicle_events/` data and uses
-  a Navirec-provided event `address` only when the event GPS point is within
-  1 km of the current state.
-- If no nearby event address is available, the module checks recent Navirec
-  `/trips/` start/end addresses and uses one only when that endpoint is within
-  1 km of the current GPS. Manual vehicle refresh uses a longer bounded trip
-  lookback so a truck parked for several days can still resolve its last stop.
-- If Areas, events, and trips still have no nearby address, the module asks
-  Navirec's own reverse geocoder (`/configuration/` supplies the account
-  geocoding key; `GET <geocoding_api_url>/reverse/` returns
-  `formatted_address`). The key is not stored in the module or in git.
-- These distance checks avoid displaying a readable but stale/wrong address from
-  an older event or trip elsewhere. A geocoded name is kept only while the
-  vehicle stays within 250 meters, and identical nearby points in one sync
-  share a single reverse lookup.
+- If no area matches, the module checks recent Navirec `/trips/` start/end
+  addresses and uses one only when that endpoint is within 1 km of the current
+  GPS. Manual vehicle refresh uses a longer bounded trip lookback so a truck
+  parked for several days can still resolve its last stop.
+- Automatic `/vehicle_events/` enrichment is intentionally disabled. Live TAJ
+  integration-token tests on 2026-09-26 returned HTTP 400 for the documented
+  `vehicle`, `vehicles`, and `account` filters. The API helper remains isolated
+  for future use if Navirec confirms a supported integration-token contract.
+- If Areas and trips still have no nearby address, the module can ask Navirec's
+  own reverse geocoder (`/configuration/` supplies the account geocoding key;
+  `GET <geocoding_api_url>/reverse/` returns `formatted_address`). This is an
+  optional fallback because the current integration token receives HTTP 403 from
+  `/configuration/`. The key is not stored in the module or in git.
+- Trip distance checks avoid displaying a readable but stale/wrong address from
+  an older stop elsewhere. A geocoded name is kept only while the vehicle stays
+  within 250 meters, and identical nearby points in one sync share a single
+  reverse lookup.
 - A human-readable name is cached while the vehicle remains within 250 meters,
-  which avoids unnecessary repeated event lookups for parked vehicles/GPS jitter.
+  which avoids unnecessary fallback calls for parked vehicles/GPS jitter.
 - Manual **Sync Navirec** and scheduled state synchronization use the same
   enrichment path.
-- If Areas, events, trips, or the Navirec geocoder are unavailable, GPS
+- If Areas, trips, or the optional Navirec geocoder are unavailable, GPS
   synchronization still succeeds and coordinates remain the final fallback.
 
 ### Navirec links
@@ -113,8 +115,8 @@ Fleet -> Configuration -> Settings -> Navirec:
 5. Match Vehicles Now, then run Mapping Audit.
 6. Sync All Now and inspect Navirec Sync Logs.
 7. Optionally enable Human-readable Navirec locations. The module will prefer
-   Navirec Areas/POIs, then nearby event addresses, then nearby trip addresses,
-   then Navirec's reverse geocoder.
+   Navirec Areas/POIs, then nearby trip addresses, then Navirec's optional
+   reverse geocoder.
 8. Optionally configure a verified vehicle deep-link template containing
    `{uuid}`.
 
@@ -170,20 +172,19 @@ odoo-bin -d <disposable_test_db> -u fleet_navirec --test-tags /fleet_navirec \
 
 The test suite covers API headers/pagination/errors, matching, duplicate plates,
 state synchronization, missing-vs-zero semantics, integration status, stale data,
-Navirec area geometry, nearby event/trip address enrichment, manual-sync parity,
+Navirec area geometry, nearby trip-address enrichment, manual-sync parity,
 location-cache safety, deep-link safety, monitoring, report
 isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.
 
 
-## Readable-location request fixes (19.0.1.2.6-19.0.1.2.7)
+## Readable-location request fixes (19.0.1.2.6-19.0.1.2.8)
 
-- Vehicle-event enrichment now prefers one bounded `account=<account_uuid>`
-  request per sync and groups the returned rows locally by each event's
-  `vehicle` URL. This avoids the live Navirec `vehicle could not be handled`
-  response observed with TAJ's integration token. Vehicle filters remain a
-  fallback only when no Account ID is configured. Events pagination is bounded
-  to 20 pages and rejects cycles and links to another origin.
+- `19.0.1.2.8` disables automatic Vehicle Events enrichment after live staging
+  proved that TAJ's integration token receives HTTP 400 for all tested documented
+  event scopes (`vehicle`, `vehicles`, and `account`). Production readable-location
+  sync therefore no longer calls `/vehicle_events/`; the isolated client helper
+  remains available for future contract verification.
 - Geocoding configuration always sends both the configured Account ID and
   the owner of the current API token. A UUID `user_id` from that same token
   can supply the routing hint; this does NOT authenticate the token locally.
@@ -212,7 +213,7 @@ exec(open('/home/odoo/src/user/fleet_navirec/scripts/diagnose_readable_location.
 ```
 
 The script uses vehicle 39 by default and performs only bounded authenticated
-GET requests. It checks the account-scoped Events request used by production, resolves
+GET requests. It records that Vehicle Events enrichment is disabled, resolves
 configuration using the token owner, and attempts at most one reverse lookup.
 It never prints tokens, geocoding keys, headers, or full configuration payloads;
 it sends no email and writes no Odoo records. Set `NAVIREC_DIAG_VEHICLE_ID` in
