@@ -396,6 +396,9 @@ class TestVehicleSync(TransactionCase):
             "Itezi, Mbeya, Tanzania",
         )
         client.get_vehicle_events.assert_called_once()
+        event_kwargs = client.get_vehicle_events.call_args.kwargs
+        self.assertEqual(event_kwargs["account_id"], "acct")
+        self.assertIsNone(event_kwargs["vehicle_ids"])
 
     def test_event_address_is_rejected_when_not_near_current_gps(self):
         params = self.env["ir.config_parameter"].sudo()

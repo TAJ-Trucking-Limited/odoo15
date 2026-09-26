@@ -512,7 +512,7 @@ class FleetVehicle(models.Model):
         try:
             events = client.get_vehicle_events(
                 account_id=account_id,
-                vehicle_ids=vehicle_ids,
+                vehicle_ids=None if account_id else vehicle_ids,
                 time_gte=self._navirec_datetime_to_iso_utc(since),
                 time_lte=self._navirec_datetime_to_iso_utc(until),
             )
@@ -610,7 +610,8 @@ class FleetVehicle(models.Model):
         try:
             context = get_context(account_id=account_id)
         except NavirecAPIError as exc:
-            _logger.warning("Navirec reverse geocoding unavailable: %s", exc)
+            log = _logger.info if exc.status_code == 403 else _logger.warning
+            log("Navirec reverse geocoding unavailable: %s", exc)
             client.geocode_error = public_navirec_error(exc)
             return {}
         if (

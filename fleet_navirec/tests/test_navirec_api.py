@@ -194,14 +194,14 @@ class TestNavirecAPI(TransactionCase):
             {
                 "ordering": "time",
                 "page_size": 1000,
-                "vehicles": "one,two",
+                "account": "acct",
                 "time__gte": "2026-09-25T00:00:00Z",
                 "time__lte": "2026-09-25T23:59:59Z",
             },
         )
         self.assertIsNone(request.call_args_list[1].kwargs["params"])
 
-    def test_get_vehicle_events_single_vehicle_omits_account(self):
+    def test_get_vehicle_events_prefers_account_over_single_vehicle_filter(self):
         response = self._response([])
         with patch.object(
             navirec_api.requests, "request", return_value=response
@@ -213,11 +213,8 @@ class TestNavirecAPI(TransactionCase):
             )
 
         params = request.call_args.kwargs["params"]
-        self.assertEqual(
-            params["vehicle"],
-            "54c0b29b-2535-4a47-9165-f7d83fb582b8",
-        )
-        self.assertNotIn("account", params)
+        self.assertEqual(params["account"], "acct")
+        self.assertNotIn("vehicle", params)
         self.assertNotIn("vehicles", params)
 
     def test_get_vehicle_events_requires_filter(self):
@@ -494,22 +491,28 @@ class TestNavirecAPI(TransactionCase):
             "Token secret",
         )
 
-    def test_events_batch_contract_never_sends_a_list_in_vehicle(self):
+    def test_events_account_scope_avoids_live_vehicle_filter_rejection(self):
         ids = [self.USER_ID, self.OTHER_USER_ID]
         def server_contract(method, url, **kwargs):
             params = kwargs["params"]
-            self.assertNotIn("account", params)
-            if "vehicle" in params and "," in params["vehicle"]:
-                return self._response({}, status=400, text='{"vehicle":["This query argument could not be handled"]}')
-            self.assertEqual(params.get("vehicles"), ",".join(ids))
+            self.assertEqual(params.get("account"), "acct")
+            self.assertNotIn("vehicle", params)
+            self.assertNotIn("vehicles", params)
             return self._response([])
         with patch.object(navirec_api.requests, "request", side_effect=server_contract) as request:
-            self.assertEqual(NavirecClient(token="x").get_vehicle_events(account_id="acct", vehicle_ids=ids), [])
+            self.assertEqual(
+                NavirecClient(token="x").get_vehicle_events(
+                    account_id="acct", vehicle_ids=ids
+                ),
+                [],
+            )
         self.assertEqual(request.call_count, 1)
 
-    def test_events_deduplicate_and_choose_single_scope(self):
+    def test_events_vehicle_scope_remains_fallback_without_account(self):
         with patch.object(navirec_api.requests, "request", return_value=self._response([])) as request:
-            NavirecClient(token="x").get_vehicle_events(account_id="acct", vehicle_ids=[" " + self.USER_ID, self.USER_ID])
+            NavirecClient(token="x").get_vehicle_events(
+                vehicle_ids=[" " + self.USER_ID, self.USER_ID]
+            )
         self.assertEqual(request.call_args.kwargs["params"]["vehicle"], self.USER_ID)
         self.assertNotIn("vehicles", request.call_args.kwargs["params"])
         self.assertNotIn("account", request.call_args.kwargs["params"])
@@ -521,13 +524,25 @@ class TestNavirecAPI(TransactionCase):
         self.assertNotIn("vehicle", request.call_args.kwargs["params"])
         self.assertNotIn("vehicles", request.call_args.kwargs["params"])
 
-    def test_events_empty_or_invalid_explicit_list_never_widens_to_account(self):
+    def test_events_invalid_vehicle_fallback_is_rejected_without_account(self):
         for value in ([], [" "], [None], 42, {"id": "one"}, ["one,two"]):
             with self.subTest(value=value):
                 with patch.object(navirec_api.requests, "request") as request:
                     with self.assertRaises(NavirecAPIError):
-                        NavirecClient(token="x").get_vehicle_events(account_id="acct", vehicle_ids=value)
+                        NavirecClient(token="x").get_vehicle_events(vehicle_ids=value)
                 request.assert_not_called()
+
+    def test_events_account_scope_does_not_depend_on_vehicle_filter_shape(self):
+        with patch.object(
+            navirec_api.requests, "request", return_value=self._response([])
+        ) as request:
+            NavirecClient(token="x").get_vehicle_events(
+                account_id="acct", vehicle_ids=["value server rejects in vehicle filter"]
+            )
+        params = request.call_args.kwargs["params"]
+        self.assertEqual(params["account"], "acct")
+        self.assertNotIn("vehicle", params)
+        self.assertNotIn("vehicles", params)
 
     def test_events_rejects_malformed_results(self):
         for payload in ({"results": None}, {"results": {}}, [None], "invalid"):

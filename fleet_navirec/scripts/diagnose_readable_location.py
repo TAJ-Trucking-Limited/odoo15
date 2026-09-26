@@ -75,19 +75,21 @@ def diagnose(odoo_env):
         "time__lte": (ref + timedelta(minutes=5)).replace(tzinfo=timezone.utc).isoformat(),
         "ordering": "time", "page_size": 1,
     }
-    first_page("EVENT_SINGLE", "vehicle_events/", {
-        **bounds, "vehicle": vehicle.navirec_uuid,
-    })
-    other = odoo_env["fleet.vehicle"].search([
-        ("navirec_uuid", "!=", False), ("navirec_uuid", "!=", vehicle.navirec_uuid),
-        ("company_id", "=", vehicle.company_id.id),
-    ], limit=1)
-    if other:
-        first_page("EVENT_BATCH", "vehicle_events/", {
-            **bounds, "vehicles": ",".join([vehicle.navirec_uuid, other.navirec_uuid]),
+    if account:
+        event_data = first_page("EVENT_ACCOUNT", "vehicle_events/", {
+            **bounds, "account": account,
         })
+        event_items = rows(event_data)
+        selected = [
+            item for item in event_items
+            if isinstance(item, dict)
+            and vehicle._navirec_state_uuid(item) == vehicle.navirec_uuid
+        ]
+        print("EVENT_ACCOUNT_SELECTED_VEHICLE_RECORDS", len(selected))
     else:
-        print("EVENT_BATCH", "SKIPPED: no second mapped vehicle")
+        first_page("EVENT_VEHICLE_FALLBACK", "vehicle_events/", {
+            **bounds, "vehicle": vehicle.navirec_uuid,
+        })
 
     try:
         base_url, context = client.get_geocoding_context(account_id=account)

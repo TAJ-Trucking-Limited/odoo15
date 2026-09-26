@@ -176,13 +176,14 @@ isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.
 
 
-## Readable-location request fixes (19.0.1.2.6)
+## Readable-location request fixes (19.0.1.2.6-19.0.1.2.7)
 
-- Events use `vehicle=<uuid>` for one vehicle or `vehicles=<uuid1>,<uuid2>`
-  for a batch. Neither request also sends `account`. Duplicate IDs collapse
-  before scope selection; an explicit empty/invalid list is not widened to
-  the account. Events pagination is bounded to 20 pages and rejects cycles
-  and links to another origin.
+- Vehicle-event enrichment now prefers one bounded `account=<account_uuid>`
+  request per sync and groups the returned rows locally by each event's
+  `vehicle` URL. This avoids the live Navirec `vehicle could not be handled`
+  response observed with TAJ's integration token. Vehicle filters remain a
+  fallback only when no Account ID is configured. Events pagination is bounded
+  to 20 pages and rejects cycles and links to another origin.
 - Geocoding configuration always sends both the configured Account ID and
   the owner of the current API token. A UUID `user_id` from that same token
   can supply the routing hint; this does NOT authenticate the token locally.
@@ -211,7 +212,7 @@ exec(open('/home/odoo/src/user/fleet_navirec/scripts/diagnose_readable_location.
 ```
 
 The script uses vehicle 39 by default and performs only bounded authenticated
-GET requests. It checks one-vehicle and two-vehicle Events filters, resolves
+GET requests. It checks the account-scoped Events request used by production, resolves
 configuration using the token owner, and attempts at most one reverse lookup.
 It never prints tokens, geocoding keys, headers, or full configuration payloads;
 it sends no email and writes no Odoo records. Set `NAVIREC_DIAG_VEHICLE_ID` in

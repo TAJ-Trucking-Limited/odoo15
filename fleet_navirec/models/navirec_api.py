@@ -150,14 +150,20 @@ class NavirecClient:
         time_lte=None,
         page_size=1000,
     ):
-        """Use exactly one scope: vehicle for one ID, vehicles for a batch.
+        """Return bounded vehicle events using the safest documented scope.
 
-        Do not combine vehicle scopes with account. Normalize and deduplicate
-        IDs before deciding which documented filter to use. Never widen an
-        explicitly empty/invalid vehicle selection to the whole account.
+        Navirec documents ``account`` as a supported filter for this endpoint.
+        When an account is configured, prefer one account-scoped request and let
+        the caller group/filter returned rows by their ``vehicle`` URL. This
+        avoids the live API's ``vehicle could not be handled`` response observed
+        with this integration token's vehicle filter.
+
+        ``vehicle_ids`` remains a fallback only when no account is available.
         """
         params = {"ordering": "time", "page_size": page_size}
-        if vehicle_ids is not None:
+        if account_id:
+            params["account"] = account_id
+        elif vehicle_ids is not None:
             if isinstance(vehicle_ids, str):
                 vehicle_ids = vehicle_ids.split(",")
             if not isinstance(vehicle_ids, (list, tuple, set)) or any(
@@ -168,8 +174,6 @@ class NavirecClient:
             if not ids or any("," in value for value in ids):
                 raise NavirecAPIError("Provide a non-empty list of individual vehicle IDs")
             params["vehicle" if len(ids) == 1 else "vehicles"] = ",".join(ids)
-        elif account_id:
-            params["account"] = account_id
         else:
             raise NavirecAPIError("Vehicle events require an account or vehicle filter")
         if time_gte:
