@@ -924,26 +924,18 @@ class FleetVehicle(models.Model):
             )
         except NavirecAPIError as exc:
             raise UserError(str(exc)) from exc
-        note = getattr(client, "geocode_error", None)
-        if note and not self.navirec_location_name:
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": _("Navirec"),
-                    "message": _(
-                        "Vehicle refreshed. Readable location unavailable: %s"
-                    ) % note,
-                    "type": "warning",
-                    "sticky": True,
-                },
-            }
+        message = _("Vehicle refreshed.")
+        if not self.navirec_location_name and self.navirec_has_position:
+            message = _(
+                "Vehicle refreshed. No readable Navirec location was available, "
+                "so coordinates are shown."
+            )
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": _("Navirec"),
-                "message": _("Vehicle refreshed."),
+                "message": message,
                 "type": "success",
             },
         }
@@ -968,10 +960,11 @@ class FleetVehicle(models.Model):
         template = (
             params.get_param("fleet_navirec.vehicle_url_template") or ""
         ).strip()
-        if template.startswith("https://") and "{uuid}" in template:
-            url = template.replace("{uuid}", quote(self.navirec_uuid, safe=""))
-        else:
-            url = "https://app.navirec.com/"
+        if not (template.startswith("https://") and "{uuid}" in template):
+            template = (
+                "https://app.navirec.com/map/vehicles/{uuid}/live/"
+            )
+        url = template.replace("{uuid}", quote(self.navirec_uuid, safe=""))
         return {
             "type": "ir.actions.act_url",
             "url": url,

@@ -69,10 +69,11 @@ public geocoding service.
 
 ### Navirec links
 
-`Open Navirec` always works at application level. A verified vehicle-specific
-route can be configured without a code release using **Vehicle Deep-Link
-Template** in Fleet settings. The value must be HTTPS and contain `{uuid}`.
-If no verified template is configured, the action opens `https://app.navirec.com/`.
+`Open Navirec` opens the matched vehicle directly at Navirec's verified live
+vehicle route: `https://app.navirec.com/map/vehicles/{uuid}/live/`. A different
+HTTPS vehicle-specific route can still be configured without a code release
+using **Vehicle Deep-Link Template** in Fleet settings; it must contain `{uuid}`.
+When the template is empty, that verified live vehicle route is used automatically.
 
 ### Integration monitoring
 
@@ -178,7 +179,12 @@ isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.
 
 
-## Readable-location request fixes (19.0.1.2.6-19.0.1.2.8)
+## Readable-location request fixes (19.0.1.2.6-19.0.1.2.9)
+
+- `19.0.1.2.9` uses Navirec's verified live vehicle deep-link by default and
+  treats reverse-geocoder failure as optional during a successful manual GPS
+  refresh. Coordinates remain visible when no Area/Trip readable name exists;
+  geocoding permission diagnostics remain available through Test Connection/logs.
 
 - `19.0.1.2.8` disables automatic Vehicle Events enrichment after live staging
   proved that TAJ's integration token receives HTTP 400 for all tested documented

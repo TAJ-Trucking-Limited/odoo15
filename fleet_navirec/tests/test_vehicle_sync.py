@@ -690,7 +690,7 @@ class TestVehicleSync(TransactionCase):
             "-8.9064783, 33.5219450",
         )
 
-    def test_manual_sync_warns_with_the_geocoder_error(self):
+    def test_manual_sync_succeeds_when_optional_geocoder_is_unavailable(self):
         params = self.env["ir.config_parameter"].sudo()
         params.set_param("fleet_navirec.use_area_names", "True")
         uuid = "54c0b29b-2535-4a47-9165-f7d83fb582b8"
@@ -708,9 +708,9 @@ class TestVehicleSync(TransactionCase):
         with patch.object(vehicle_type, "_navirec_client", return_value=client):
             action = self.vehicle.action_navirec_sync_now()
 
-        self.assertEqual(action["params"]["type"], "warning")
+        self.assertEqual(action["params"]["type"], "success")
         self.assertIn(
-            "rejected the integration token",
+            "coordinates are shown",
             action["params"]["message"],
         )
         self.assertTrue(self.vehicle.navirec_has_position)
@@ -750,13 +750,17 @@ class TestVehicleSync(TransactionCase):
             "https://app.navirec.com/vehicle/11111111-1111-4111-8111-111111111111",
         )
 
-    def test_open_navirec_falls_back_to_application_home(self):
+    def test_open_navirec_uses_verified_live_vehicle_route_by_default(self):
         self.vehicle.navirec_uuid = "11111111-1111-4111-8111-111111111111"
         self.env["ir.config_parameter"].sudo().set_param(
             "fleet_navirec.vehicle_url_template", ""
         )
         action = self.vehicle.action_open_in_navirec()
-        self.assertEqual(action["url"], "https://app.navirec.com/")
+        self.assertEqual(
+            action["url"],
+            "https://app.navirec.com/map/vehicles/"
+            "11111111-1111-4111-8111-111111111111/live/",
+        )
 
     def test_search_view_has_mapping_filters(self):
         view = self.env.ref(

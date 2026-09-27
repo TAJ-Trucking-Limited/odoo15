@@ -42,8 +42,8 @@ class ResConfigSettings(models.TransientModel):
         string="Vehicle Deep-Link Template",
         config_parameter="fleet_navirec.vehicle_url_template",
         help=(
-            "Optional verified Navirec vehicle URL containing {uuid}. "
-            "When empty, Open Navirec opens the Navirec application home page."
+            "Optional Navirec vehicle URL containing {uuid}. When empty, "
+            "Open Navirec uses the verified live vehicle route automatically."
         ),
     )
     navirec_last_state_sync_success = fields.Datetime(

@@ -34,7 +34,7 @@
                         <field name="navirec_use_area_names"/>
                     </setting>
                     <setting string="Vehicle deep links"
-                        help="Optional verified Navirec vehicle URL template. Use {uuid} where the vehicle UUID belongs.">
+                        help="Optional Navirec vehicle URL template. Use {uuid} where the vehicle UUID belongs. When empty, the verified live vehicle route is used automatically.">
                         <field name="navirec_vehicle_url_template"
                             placeholder="https://.../{uuid}"/>
                     </setting>
