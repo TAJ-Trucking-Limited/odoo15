@@ -24,7 +24,9 @@ and delivers client-specific Fleet Position reports on configurable schedules.
 - Five-minute state synchronization cron and per-vehicle Sync Navirec action.
 - Last GPS time, latitude/longitude, speed, ignition and Navirec odometer.
 - Availability flags distinguish a missing value from a real zero.
-- Moving / Idling / Stopped / Not Available movement state.
+- Moving / Idling / Stopped / Not Available movement state, driven by Navirec's
+  official `activity` value when available (`driving`, `idling`, `parking`,
+  `towing`, `offline`), with speed/ignition used only as a fallback.
 - Connected / Stale / Awaiting GPS Data / Not Mapped integration status.
 - Configurable stale-GPS threshold and visible stale warning.
 - Google Maps action for the latest valid coordinates.
@@ -179,7 +181,13 @@ isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.
 
 
-## Readable-location request fixes (19.0.1.2.6-19.0.1.2.9)
+## Phase 1 staging fixes (19.0.1.2.6-19.0.1.2.10)
+
+- `19.0.1.2.10` makes Navirec's official vehicle-state `activity` the primary
+  source for Movement. `driving`/`towing` map to Moving, `idling` to Idling,
+  `parking` to Stopped, and `offline` to Not Available. The previous speed +
+  ignition heuristic remains only as a compatibility fallback when activity is
+  missing or unknown.
 
 - `19.0.1.2.9` uses Navirec's verified live vehicle deep-link by default and
   treats reverse-geocoder failure as optional during a successful manual GPS

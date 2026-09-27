@@ -29,6 +29,9 @@ class FleetVehicle(models.Model):
     navirec_has_speed = fields.Boolean(readonly=True, copy=False)
     navirec_ignition = fields.Boolean(readonly=True)
     navirec_has_ignition = fields.Boolean(readonly=True, copy=False)
+    navirec_activity = fields.Char(
+        string="Navirec Activity", readonly=True, copy=False
+    )
     navirec_odometer = fields.Float(string="Navirec Odometer (km)", readonly=True)
     navirec_has_odometer = fields.Boolean(readonly=True, copy=False)
     navirec_last_state_time = fields.Datetime(readonly=True)
@@ -108,6 +111,7 @@ class FleetVehicle(models.Model):
         "navirec_last_speed",
         "navirec_has_ignition",
         "navirec_ignition",
+        "navirec_activity",
         "navirec_has_odometer",
         "navirec_odometer",
     )
@@ -137,7 +141,16 @@ class FleetVehicle(models.Model):
                 else _("Not available")
             )
 
-            if not vehicle.navirec_has_speed:
+            activity_movement = {
+                "driving": "moving",
+                "idling": "idling",
+                "parking": "stopped",
+                "towing": "moving",
+                "offline": "unknown",
+            }.get((vehicle.navirec_activity or "").strip().lower())
+            if activity_movement:
+                vehicle.navirec_movement_state = activity_movement
+            elif not vehicle.navirec_has_speed:
                 vehicle.navirec_movement_state = "unknown"
             elif vehicle.navirec_last_speed > 1.0:
                 vehicle.navirec_movement_state = "moving"
@@ -584,6 +597,7 @@ class FleetVehicle(models.Model):
             "navirec_has_speed": False,
             "navirec_ignition": False,
             "navirec_has_ignition": False,
+            "navirec_activity": False,
             "navirec_odometer": 0.0,
             "navirec_has_odometer": False,
             "navirec_last_state_time": False,
@@ -745,8 +759,13 @@ class FleetVehicle(models.Model):
             "navirec_location_name": location_name or False,
             "navirec_has_speed": False,
             "navirec_has_ignition": False,
+            "navirec_activity": False,
             "navirec_has_odometer": False,
         }
+
+        activity = state.get("activity")
+        if isinstance(activity, str) and activity.strip():
+            vals["navirec_activity"] = activity.strip().lower()
 
         parsed_time = self._parse_state_time(state.get("time"))
         if parsed_time:

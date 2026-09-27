@@ -218,6 +218,58 @@ class TestVehicleSync(TransactionCase):
             "0.0000000, 0.0000000",
         )
 
+    def test_navirec_activity_driving_overrides_zero_speed_idling_heuristic(self):
+        self.vehicle._write_navirec_state({
+            "time": "2026-09-18T10:00:00Z",
+            "speed": 0.0,
+            "ignition": True,
+            "activity": "driving",
+        })
+        self.vehicle._compute_navirec_display_values()
+
+        self.assertEqual(self.vehicle.navirec_activity, "driving")
+        self.assertEqual(self.vehicle.navirec_movement_state, "moving")
+
+    def test_navirec_activity_maps_official_movement_states(self):
+        cases = {
+            "driving": "moving",
+            "idling": "idling",
+            "parking": "stopped",
+            "towing": "moving",
+            "offline": "unknown",
+        }
+        for activity, expected in cases.items():
+            with self.subTest(activity=activity):
+                self.vehicle._write_navirec_state({
+                    "time": "2026-09-18T10:00:00Z",
+                    "speed": 55.0,
+                    "ignition": True,
+                    "activity": activity,
+                })
+                self.vehicle._compute_navirec_display_values()
+                self.assertEqual(
+                    self.vehicle.navirec_movement_state, expected
+                )
+
+    def test_unknown_or_missing_activity_falls_back_to_speed_and_ignition(self):
+        self.vehicle._write_navirec_state({
+            "time": "2026-09-18T10:00:00Z",
+            "speed": 0.0,
+            "ignition": True,
+            "activity": "future_activity",
+        })
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(self.vehicle.navirec_movement_state, "idling")
+
+        self.vehicle._write_navirec_state({
+            "time": "2026-09-18T10:01:00Z",
+            "speed": 12.0,
+            "ignition": False,
+        })
+        self.vehicle._compute_navirec_display_values()
+        self.assertFalse(self.vehicle.navirec_activity)
+        self.assertEqual(self.vehicle.navirec_movement_state, "moving")
+
     def test_missing_telemetry_is_not_rendered_as_zero(self):
         self.vehicle._write_navirec_state({
             "time": "2026-09-18T10:00:00Z",
