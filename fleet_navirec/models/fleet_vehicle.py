@@ -32,6 +32,12 @@ class FleetVehicle(models.Model):
     navirec_activity = fields.Char(
         string="Navirec Activity", readonly=True, copy=False
     )
+    navirec_error_state_threshold = fields.Char(
+        string="Navirec Error State Threshold", readonly=True, copy=False
+    )
+    navirec_switched_by_ignition = fields.Boolean(
+        string="Navirec Switched by Ignition", readonly=True, copy=False
+    )
     navirec_odometer = fields.Float(string="Navirec Odometer (km)", readonly=True)
     navirec_has_odometer = fields.Boolean(readonly=True, copy=False)
     navirec_last_state_time = fields.Datetime(readonly=True)
@@ -112,6 +118,9 @@ class FleetVehicle(models.Model):
         "navirec_has_ignition",
         "navirec_ignition",
         "navirec_activity",
+        "navirec_last_state_time",
+        "navirec_error_state_threshold",
+        "navirec_switched_by_ignition",
         "navirec_has_odometer",
         "navirec_odometer",
     )
@@ -141,25 +150,61 @@ class FleetVehicle(models.Model):
                 else _("Not available")
             )
 
-            activity_movement = {
-                "driving": "moving",
-                "idling": "idling",
-                "parking": "stopped",
-                "towing": "moving",
-                "offline": "unknown",
-            }.get((vehicle.navirec_activity or "").strip().lower())
-            if activity_movement:
-                vehicle.navirec_movement_state = activity_movement
-            elif not vehicle.navirec_has_speed:
-                vehicle.navirec_movement_state = "unknown"
-            elif vehicle.navirec_last_speed > 1.0:
-                vehicle.navirec_movement_state = "moving"
-            elif vehicle.navirec_has_ignition and vehicle.navirec_ignition:
-                vehicle.navirec_movement_state = "idling"
-            elif vehicle.navirec_has_ignition:
-                vehicle.navirec_movement_state = "stopped"
+            vehicle.navirec_movement_state = (
+                vehicle._navirec_web_movement_state()
+            )
+
+    @staticmethod
+    def _navirec_error_threshold_seconds(value):
+        """Parse Navirec's D HH:MM:SS/HH:MM:SS duration like the web app."""
+        if not value:
+            return 900
+        try:
+            text = str(value).strip()
+            if " " in text:
+                day_text, clock = text.split(" ", 1)
+                days = int(day_text)
             else:
-                vehicle.navirec_movement_state = "unknown"
+                days = 0
+                clock = text
+            parts = clock.split(":")
+            hours = int(parts[0]) if len(parts) > 0 and parts[0] else 0
+            minutes = int(parts[1]) if len(parts) > 1 and parts[1] else 0
+            seconds = int(parts[2]) if len(parts) > 2 and parts[2] else 0
+            total = days * 86400 + hours * 3600 + minutes * 60 + seconds
+            return max(total, 0)
+        except (TypeError, ValueError):
+            return 900
+
+    def _navirec_web_movement_state(self):
+        """Mirror Navirec web app's current getVehicleStatus decision tree."""
+        self.ensure_one()
+        state_time = self.navirec_last_state_time
+        threshold = self._navirec_error_threshold_seconds(
+            self.navirec_error_state_threshold
+        )
+        if not state_time or (
+            fields.Datetime.now() - state_time
+        ).total_seconds() > threshold:
+            return "stopped" if self.navirec_switched_by_ignition else "unknown"
+
+        activity_movement = {
+            "driving": "moving",
+            "idling": "idling",
+            "parking": "stopped",
+            "towing": "moving",
+            "offline": "unknown",
+        }.get((self.navirec_activity or "").strip().lower())
+        if activity_movement:
+            return activity_movement
+
+        # Navirec web app uses ignition when present; speed is only the fallback
+        # when ignition itself is null/undefined. Its speed cutoff is 5 km/h.
+        if self.navirec_has_ignition:
+            return "moving" if self.navirec_ignition else "stopped"
+        if self.navirec_has_speed and self.navirec_last_speed >= 5.0:
+            return "moving"
+        return "stopped"
 
     @api.model
     def _navirec_client(self):
@@ -598,9 +643,28 @@ class FleetVehicle(models.Model):
             "navirec_ignition": False,
             "navirec_has_ignition": False,
             "navirec_activity": False,
+            "navirec_error_state_threshold": False,
+            "navirec_switched_by_ignition": False,
             "navirec_odometer": 0.0,
             "navirec_has_odometer": False,
             "navirec_last_state_time": False,
+        }
+
+    @staticmethod
+    def _navirec_vehicle_status_config_values(item):
+        if not isinstance(item, dict):
+            return {
+                "navirec_error_state_threshold": False,
+                "navirec_switched_by_ignition": False,
+            }
+        threshold = item.get("error_state_threshold")
+        return {
+            "navirec_error_state_threshold": (
+                str(threshold).strip() if threshold else False
+            ),
+            "navirec_switched_by_ignition": bool(
+                item.get("switched_by_ignition")
+            ),
         }
 
     @api.model
@@ -702,9 +766,12 @@ class FleetVehicle(models.Model):
             vehicle = vehicles
             new_uuid = item.get("id") if item else False
             if vehicle.navirec_uuid != new_uuid:
-                vehicle.write(
-                    self._navirec_reset_tracking_values(new_uuid)
-                )
+                vals = self._navirec_reset_tracking_values(new_uuid)
+                if new_uuid:
+                    vals.update(self._navirec_vehicle_status_config_values(item))
+                vehicle.write(vals)
+            elif new_uuid:
+                vehicle.write(self._navirec_vehicle_status_config_values(item))
             if new_uuid:
                 matched_ids.add(new_uuid)
 

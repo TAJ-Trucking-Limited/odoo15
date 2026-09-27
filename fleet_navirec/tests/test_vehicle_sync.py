@@ -45,6 +45,8 @@ class TestVehicleSync(TransactionCase):
             {
                 "id": "11111111-1111-4111-8111-111111111111",
                 "registration": "t000 aaa",
+                "error_state_threshold": "00:10:00",
+                "switched_by_ignition": True,
             }
         ]
         before = self.env["fleet.vehicle"].search_count([])
@@ -56,6 +58,10 @@ class TestVehicleSync(TransactionCase):
             "11111111-1111-4111-8111-111111111111",
         )
         self.assertEqual(self.env["fleet.vehicle"].search_count([]), before)
+        self.assertEqual(
+            self.vehicle.navirec_error_state_threshold, "00:10:00"
+        )
+        self.assertTrue(self.vehicle.navirec_switched_by_ignition)
 
     def test_mapping_audit_reports_matches_duplicates_and_unmatched(self):
         duplicate_local = self.env["fleet.vehicle"].create({
@@ -218,9 +224,10 @@ class TestVehicleSync(TransactionCase):
             "0.0000000, 0.0000000",
         )
 
-    def test_navirec_activity_driving_overrides_zero_speed_idling_heuristic(self):
+    def test_navirec_activity_driving_overrides_zero_speed_fallback(self):
+        now_iso = fields.Datetime.now().isoformat() + "Z"
         self.vehicle._write_navirec_state({
-            "time": "2026-09-18T10:00:00Z",
+            "time": now_iso,
             "speed": 0.0,
             "ignition": True,
             "activity": "driving",
@@ -231,6 +238,7 @@ class TestVehicleSync(TransactionCase):
         self.assertEqual(self.vehicle.navirec_movement_state, "moving")
 
     def test_navirec_activity_maps_official_movement_states(self):
+        now_iso = fields.Datetime.now().isoformat() + "Z"
         cases = {
             "driving": "moving",
             "idling": "idling",
@@ -241,7 +249,7 @@ class TestVehicleSync(TransactionCase):
         for activity, expected in cases.items():
             with self.subTest(activity=activity):
                 self.vehicle._write_navirec_state({
-                    "time": "2026-09-18T10:00:00Z",
+                    "time": now_iso,
                     "speed": 55.0,
                     "ignition": True,
                     "activity": activity,
@@ -251,24 +259,65 @@ class TestVehicleSync(TransactionCase):
                     self.vehicle.navirec_movement_state, expected
                 )
 
-    def test_unknown_or_missing_activity_falls_back_to_speed_and_ignition(self):
+    def test_missing_activity_matches_navirec_web_ignition_fallback(self):
+        now_iso = fields.Datetime.now().isoformat() + "Z"
         self.vehicle._write_navirec_state({
-            "time": "2026-09-18T10:00:00Z",
+            "time": now_iso,
             "speed": 0.0,
             "ignition": True,
-            "activity": "future_activity",
         })
         self.vehicle._compute_navirec_display_values()
-        self.assertEqual(self.vehicle.navirec_movement_state, "idling")
+        self.assertEqual(self.vehicle.navirec_movement_state, "moving")
 
         self.vehicle._write_navirec_state({
-            "time": "2026-09-18T10:01:00Z",
+            "time": now_iso,
             "speed": 12.0,
             "ignition": False,
         })
         self.vehicle._compute_navirec_display_values()
-        self.assertFalse(self.vehicle.navirec_activity)
+        self.assertEqual(self.vehicle.navirec_movement_state, "stopped")
+
+    def test_missing_ignition_matches_navirec_web_five_kmh_speed_fallback(self):
+        now_iso = fields.Datetime.now().isoformat() + "Z"
+        self.vehicle._write_navirec_state({
+            "time": now_iso,
+            "speed": 4.9,
+        })
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(self.vehicle.navirec_movement_state, "stopped")
+
+        self.vehicle._write_navirec_state({
+            "time": now_iso,
+            "speed": 5.0,
+        })
+        self.vehicle._compute_navirec_display_values()
         self.assertEqual(self.vehicle.navirec_movement_state, "moving")
+
+    def test_navirec_web_error_state_threshold_precedes_activity(self):
+        self.vehicle.write({
+            "navirec_last_state_time": fields.Datetime.now() - timedelta(minutes=16),
+            "navirec_activity": "driving",
+            "navirec_error_state_threshold": "00:15:00",
+            "navirec_switched_by_ignition": False,
+            "navirec_has_speed": True,
+            "navirec_last_speed": 50.0,
+            "navirec_has_ignition": True,
+            "navirec_ignition": True,
+        })
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(self.vehicle.navirec_movement_state, "unknown")
+
+        self.vehicle.navirec_switched_by_ignition = True
+        self.vehicle._compute_navirec_display_values()
+        self.assertEqual(self.vehicle.navirec_movement_state, "stopped")
+
+    def test_navirec_error_threshold_parser_matches_web_duration_format(self):
+        parser = self.vehicle._navirec_error_threshold_seconds
+        self.assertEqual(parser("00:15:00"), 900)
+        self.assertEqual(parser("00:00:00"), 0)
+        self.assertEqual(parser("1 01:02:03"), 90123)
+        self.assertEqual(parser(False), 900)
+        self.assertEqual(parser("invalid"), 900)
 
     def test_missing_telemetry_is_not_rendered_as_zero(self):
         self.vehicle._write_navirec_state({
