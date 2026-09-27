@@ -77,6 +77,28 @@ class TestNavirecAPI(TransactionCase):
         )
         self.assertIsNone(request.call_args_list[1].kwargs["params"])
 
+    def test_get_vehicle_returns_status_configuration(self):
+        response = self._response({
+            "id": "11111111-1111-4111-8111-111111111111",
+            "registration": "T000AAA",
+            "error_state_threshold": "02:00:00",
+            "switched_by_ignition": True,
+        })
+        with patch.object(
+            navirec_api.requests, "request", return_value=response
+        ) as request:
+            vehicle = NavirecClient(token="x").get_vehicle(
+                "11111111-1111-4111-8111-111111111111"
+            )
+
+        self.assertEqual(vehicle["error_state_threshold"], "02:00:00")
+        self.assertTrue(vehicle["switched_by_ignition"])
+        self.assertTrue(
+            request.call_args.args[1].endswith(
+                "/vehicles/11111111-1111-4111-8111-111111111111/"
+            )
+        )
+
     def test_invalid_json_is_wrapped(self):
         response = self._response(invalid_json=True)
         with patch.object(

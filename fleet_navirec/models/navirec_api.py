@@ -118,6 +118,14 @@ class NavirecClient:
             params = None
         return vehicles
 
+    def get_vehicle(self, vehicle_id):
+        """Return one Navirec vehicle including status-display configuration."""
+        response = self._request("GET", f"vehicles/{vehicle_id}/")
+        data = response.json()
+        if not isinstance(data, dict):
+            raise NavirecAPIError("Unexpected vehicle payload")
+        return data
+
     def get_areas(self, account_id=None):
         """Return active Navirec areas/POIs available to the integration user."""
         areas = []

@@ -28,6 +28,7 @@ class TestVehicleSync(TransactionCase):
         cls.vehicle = cls.env["fleet.vehicle"].create({
             "model_id": cls.model.id,
             "license_plate": "T000-AAA",
+            "navirec_status_config_loaded": True,
         })
 
     def _fixture(self, name):
@@ -105,6 +106,34 @@ class TestVehicleSync(TransactionCase):
 
         self.assertEqual(matched, 0)
         self.assertFalse(self.vehicle.navirec_uuid)
+
+    def test_status_config_self_heals_for_pre_upgrade_mapped_vehicle(self):
+        uuid = "11111111-1111-4111-8111-111111111111"
+        self.vehicle.write({
+            "navirec_uuid": uuid,
+            "navirec_status_config_loaded": False,
+            "navirec_error_state_threshold": False,
+            "navirec_switched_by_ignition": False,
+        })
+        client = Mock()
+        client.get_vehicles.return_value = [{
+            "id": uuid,
+            "registration": "T000-AAA",
+            "error_state_threshold": "02:00:00",
+            "switched_by_ignition": True,
+        }]
+
+        self.vehicle._navirec_ensure_status_configs(client, self.vehicle)
+
+        self.assertTrue(self.vehicle.navirec_status_config_loaded)
+        self.assertEqual(
+            self.vehicle.navirec_error_state_threshold, "02:00:00"
+        )
+        self.assertTrue(self.vehicle.navirec_switched_by_ignition)
+        client.get_vehicles.assert_called_once_with()
+
+        self.vehicle._navirec_ensure_status_configs(client, self.vehicle)
+        client.get_vehicles.assert_called_once_with()
 
     def test_state_sync_writes_fields_and_allows_zero_coordinates(self):
         self.vehicle.navirec_uuid = (
@@ -318,6 +347,45 @@ class TestVehicleSync(TransactionCase):
         self.assertEqual(parser("1 01:02:03"), 90123)
         self.assertEqual(parser(False), 900)
         self.assertEqual(parser("invalid"), 900)
+
+    def test_manual_sync_hydrates_status_config_before_rendering_movement(self):
+        uuid = "11111111-1111-4111-8111-111111111111"
+        self.vehicle.write({
+            "navirec_uuid": uuid,
+            "navirec_status_config_loaded": False,
+        })
+        client = Mock()
+        client.get_vehicle.return_value = {
+            "id": uuid,
+            "registration": "T000-AAA",
+            "error_state_threshold": "02:00:00",
+            "switched_by_ignition": False,
+        }
+        client.get_last_vehicle_states.return_value = [{
+            "vehicle": f"https://api.navirec.com/vehicles/{uuid}/",
+            "time": fields.Datetime.now().isoformat() + "Z",
+            "speed": 0,
+            "ignition": True,
+            "location": {"coordinates": [39.2, -6.8]},
+        }]
+        vehicle_type = type(self.vehicle)
+        with (
+            patch.object(vehicle_type, "_navirec_client", return_value=client),
+            patch.object(
+                vehicle_type,
+                "_navirec_location_names_for_states",
+                return_value={},
+            ),
+        ):
+            action = self.vehicle.action_navirec_sync_now()
+
+        self.assertEqual(action["params"]["type"], "success")
+        client.get_vehicle.assert_called_once_with(uuid)
+        self.assertTrue(self.vehicle.navirec_status_config_loaded)
+        self.assertEqual(
+            self.vehicle.navirec_error_state_threshold, "02:00:00"
+        )
+        self.assertEqual(self.vehicle.navirec_movement_state, "moving")
 
     def test_missing_telemetry_is_not_rendered_as_zero(self):
         self.vehicle._write_navirec_state({

@@ -38,6 +38,9 @@ class FleetVehicle(models.Model):
     navirec_switched_by_ignition = fields.Boolean(
         string="Navirec Switched by Ignition", readonly=True, copy=False
     )
+    navirec_status_config_loaded = fields.Boolean(
+        string="Navirec Status Config Loaded", readonly=True, copy=False
+    )
     navirec_odometer = fields.Float(string="Navirec Odometer (km)", readonly=True)
     navirec_has_odometer = fields.Boolean(readonly=True, copy=False)
     navirec_last_state_time = fields.Datetime(readonly=True)
@@ -121,6 +124,7 @@ class FleetVehicle(models.Model):
         "navirec_last_state_time",
         "navirec_error_state_threshold",
         "navirec_switched_by_ignition",
+        "navirec_status_config_loaded",
         "navirec_has_odometer",
         "navirec_odometer",
     )
@@ -645,6 +649,7 @@ class FleetVehicle(models.Model):
             "navirec_activity": False,
             "navirec_error_state_threshold": False,
             "navirec_switched_by_ignition": False,
+            "navirec_status_config_loaded": False,
             "navirec_odometer": 0.0,
             "navirec_has_odometer": False,
             "navirec_last_state_time": False,
@@ -656,6 +661,7 @@ class FleetVehicle(models.Model):
             return {
                 "navirec_error_state_threshold": False,
                 "navirec_switched_by_ignition": False,
+                "navirec_status_config_loaded": False,
             }
         threshold = item.get("error_state_threshold")
         return {
@@ -665,7 +671,33 @@ class FleetVehicle(models.Model):
             "navirec_switched_by_ignition": bool(
                 item.get("switched_by_ignition")
             ),
+            "navirec_status_config_loaded": True,
         }
+
+    @api.model
+    def _navirec_ensure_status_configs(self, client, vehicles):
+        """Hydrate status config once for mapped records created before this field."""
+        pending = vehicles.filtered(
+            lambda vehicle: not vehicle.navirec_status_config_loaded
+        )
+        if not pending:
+            return
+        try:
+            remote_vehicles = client.get_vehicles()
+        except NavirecAPIError as exc:
+            _logger.warning(
+                "Navirec status-config hydration deferred: %s", exc
+            )
+            return
+        remote_by_uuid = {
+            item.get("id"): item
+            for item in remote_vehicles
+            if isinstance(item, dict) and item.get("id")
+        }
+        for vehicle in pending:
+            item = remote_by_uuid.get(vehicle.navirec_uuid)
+            if item:
+                vehicle.write(self._navirec_vehicle_status_config_values(item))
 
     @api.model
     def _navirec_build_mapping_audit(self, client):
@@ -792,9 +824,11 @@ class FleetVehicle(models.Model):
         params = self.env["ir.config_parameter"].sudo()
         account_id = params.get_param("fleet_navirec.account_id") or None
         states = client.get_last_vehicle_states(account_id=account_id)
+        mapped_vehicles = self.search([("navirec_uuid", "!=", False)])
+        self._navirec_ensure_status_configs(client, mapped_vehicles)
         vehicles = {
             vehicle.navirec_uuid: vehicle
-            for vehicle in self.search([("navirec_uuid", "!=", False)])
+            for vehicle in mapped_vehicles
         }
         location_names = self._navirec_location_names_for_states(
             client,
@@ -987,6 +1021,19 @@ class FleetVehicle(models.Model):
         if not self.navirec_uuid:
             raise UserError(_("This vehicle is not matched to Navirec yet."))
         try:
+            if not self.navirec_status_config_loaded:
+                try:
+                    vehicle_data = client.get_vehicle(self.navirec_uuid)
+                except NavirecAPIError as exc:
+                    _logger.warning(
+                        "Navirec vehicle status config unavailable for %s: %s",
+                        self.display_name,
+                        exc,
+                    )
+                else:
+                    self.write(
+                        self._navirec_vehicle_status_config_values(vehicle_data)
+                    )
             states = client.get_last_vehicle_states(
                 vehicle_id=self.navirec_uuid
             )

@@ -182,7 +182,14 @@ isolation/escaping/configuration, timezone scheduling, delivery success/failure
 and retry behavior.
 
 
-## Phase 1 staging fixes (19.0.1.2.6-19.0.1.2.11)
+## Phase 1 staging fixes (19.0.1.2.6-19.0.1.2.12)
+
+- `19.0.1.2.12` makes Navirec status configuration self-healing for vehicles
+  that were already mapped before `error_state_threshold` and
+  `switched_by_ignition` started being cached. Manual vehicle refresh loads the
+  matching `/vehicles/{uuid}/` record first when needed; bulk auto-sync performs
+  a one-time account-wide hydration for any mapped records still missing that
+  configuration, then avoids repeating the extra request.
 
 - `19.0.1.2.11` mirrors Navirec web `getVehicleStatus`: vehicle-specific
   `error_state_threshold`/`switched_by_ignition` are cached during matching;
