@@ -149,14 +149,20 @@
                     </tr>
                 </t>
                 <t t-else="">
-                    <tr t-if="o.tax_totals" class="o_total">
-                        <td class="col-6">
-                            <strong>Total</strong>
-                        </td>
-                        <td class="text-end col-6">
-                            <strong t-field="o.amount_total"/>
-                        </td>
-                    </tr>
+                    <t t-if="display_taxes and o.tax_totals" t-call="account.document_tax_totals">
+                        <t t-set="tax_totals" t-value="o.tax_totals"/>
+                        <t t-set="currency" t-value="o.currency_id"/>
+                    </t>
+                    <t t-else="">
+                        <tr t-if="o.tax_totals" class="o_total">
+                            <td class="col-6">
+                                <strong>Total</strong>
+                            </td>
+                            <td class="text-end col-6">
+                                <strong t-field="o.amount_total"/>
+                            </td>
+                        </tr>
+                    </t>
                 </t>
                 <tr t-if="o.tax_totals" class="border-black o_total">
                     <td class="col-6">
