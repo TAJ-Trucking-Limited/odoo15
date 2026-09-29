@@ -149,9 +149,31 @@
                     </tr>
                 </t>
                 <t t-else="">
-                    <t t-if="display_taxes and o.tax_totals" t-call="account.document_tax_totals">
-                        <t t-set="tax_totals" t-value="o.tax_totals"/>
-                        <t t-set="currency" t-value="o.currency_id"/>
+                    <t t-if="display_taxes">
+                        <tr class="o_subtotal">
+                            <td class="col-6">
+                                <span>Total before Tax</span>
+                            </td>
+                            <td class="text-end col-6">
+                                <span t-out="o.amount_untaxed" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                            </td>
+                        </tr>
+                        <tr class="o_taxes">
+                            <td class="col-6">
+                                <span>Total Tax Amount</span>
+                            </td>
+                            <td class="text-end col-6 o_price_total">
+                                <span class="text-nowrap" t-out="o.amount_tax" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                            </td>
+                        </tr>
+                        <tr class="o_total">
+                            <td class="col-6">
+                                <strong>Total Amount</strong>
+                            </td>
+                            <td class="text-end col-6">
+                                <strong t-out="o.amount_total" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                            </td>
+                        </tr>
                     </t>
                     <t t-else="">
                         <tr t-if="o.tax_totals" class="o_total">
@@ -179,7 +201,7 @@
             <xpath expr="//td[@name='td_taxes_grouped']" position="replace"/>
 
             <xpath expr="//t[@t-if=&quot;o.tax_totals and o.tax_totals.get('display_in_company_currency')&quot;]" position="attributes">
-                <attribute name="t-if">o.is_vat_percentage_invoice and o.tax_totals and o.tax_totals.get('display_in_company_currency')</attribute>
+                <attribute name="t-if">o.tax_totals and o.tax_totals.get('display_in_company_currency')</attribute>
             </xpath>
 
             <xpath expr="//div[@name='address_not_same_as_shipping']/t[@t-set='address']" position="replace">
