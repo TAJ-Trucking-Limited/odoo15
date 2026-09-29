@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <!--
+        Put the guarded company-currency equivalent action in Odoo's native
+        bank-reconciliation overflow menu. This avoids squeezing a long action
+        into the fixed-width amount column used by the Odoo 19 grid layout.
+    -->
+    <t t-name="taj_account_reconcile.BankRecButtonListDropdown"
+       t-inherit="account_accountant.BankRecButtonListDropdown"
+       t-inherit-mode="extension">
+        <xpath expr="//BankRecFileUploader" position="before">
+            <DropdownItem t-if="canEditCurrencyAmount"
+                          class="'btn btn-link taj-edit-company-equivalent'"
+                          onSelected.bind="actionEditCurrencyAmount">
+                Edit Company Equivalent
+            </DropdownItem>
+        </xpath>
+    </t>
+
+    <!--
+        Reconciliation line: label the native exact-allocation action. The
+        native toggleEditLine() handler is kept untouched.
+    -->
+    <t t-name="taj_account_reconcile.BankRecLineToReconcile"
+       t-inherit="account_accountant.BankRecLineToReconcile"
+       t-inherit-mode="extension">
+        <xpath expr="//button[@t-if='lineData.has_invalid_analytics']" position="attributes">
+            <attribute name="class">btn btn-sm btn-outline-secondary px-2 py-0 text-nowrap taj-set-amount</attribute>
+            <attribute name="data-tooltip">Set the exact amount applied to the invoice</attribute>
+        </xpath>
+        <xpath expr="//button[@t-if='lineData.has_invalid_analytics']" position="inside">
+            <span class="ms-1">Set Amount</span>
+        </xpath>
+        <xpath expr="//button[@t-if='!lineData.has_invalid_analytics']" position="attributes">
+            <attribute name="class">btn btn-sm btn-outline-secondary px-2 py-0 text-nowrap taj-set-amount</attribute>
+            <attribute name="data-tooltip">Set the exact amount applied to the invoice</attribute>
+        </xpath>
+        <xpath expr="//button[@t-if='!lineData.has_invalid_analytics']" position="inside">
+            <span class="ms-1">Set Amount</span>
+        </xpath>
+    </t>
+
+</templates>
