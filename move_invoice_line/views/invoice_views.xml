@@ -26,6 +26,11 @@
                 <t t-set="custom_layout_address" t-value="True"/>
             </xpath>
 
+            <!-- Avoid spilling an empty trailing margin onto a second PDF page. -->
+            <xpath expr="//div[hasclass('page')]" position="attributes">
+                <attribute name="class" remove="mb-4" separator=" "/>
+            </xpath>
+
             <xpath expr="//div[hasclass('page')]" position="before">
                 <style>
                     .article &gt; div.pt-5,
