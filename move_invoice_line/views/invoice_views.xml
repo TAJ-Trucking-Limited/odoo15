@@ -33,6 +33,10 @@
 
             <xpath expr="//div[hasclass('page')]" position="before">
                 <style>
+                    /* A trailing margin below the currency tax box can create an empty PDF page. */
+                    .invoice_main .totals_taxes_company_currency {
+                        margin-bottom: 0 !important;
+                    }
                     .article &gt; div.pt-5,
                     div.address,
                     div.address div[name="address"] {
