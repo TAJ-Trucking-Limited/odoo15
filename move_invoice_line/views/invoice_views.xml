@@ -1,8 +1,5 @@
 <?xml version="1.0"?>
 <odoo>
-    <!-- Paper format for TAJ Invoices:
-         Reduced margin_top and header_spacing to 30mm so the header band
-         closely wraps the logo and company address, eliminating the large gap. -->
     <record id="paperformat_invoice" model="report.paperformat">
         <field name="name">TAJ Invoice</field>
         <field name="format">A4</field>
@@ -29,44 +26,95 @@
                 <t t-set="custom_layout_address" t-value="True"/>
             </xpath>
 
-            <!-- Compact top spacing so the customer address sits close beneath the header (old tight layout) -->
+            <!-- Avoid spilling an empty trailing margin onto a second PDF page. -->
+            <xpath expr="//div[hasclass('page')]" position="attributes">
+                <attribute name="class" remove="mb-4" separator=" "/>
+            </xpath>
+
             <xpath expr="//div[hasclass('page')]" position="before">
                 <style>
-                    .article > div.pt-5 {
-                        padding-top: 0 !important;
+                    /* A trailing margin below the currency tax box can create an empty PDF page. */
+                    .invoice_main .totals_taxes_company_currency {
+                        margin-bottom: 0 !important;
                     }
-                    div.address {
+                    .article &gt; div.pt-5,
+                    div.address,
+                    div.address div[name="address"] {
                         margin-top: 0 !important;
                         padding-top: 0 !important;
                     }
                     div.address div[name="address"] {
                         margin-left: 0 !important;
-                        padding-top: 0 !important;
                     }
-                    div[name="company_address"] ul[name="company_address_list"] {
-                        line-height: 1.3 !important;
-                        margin-bottom: 0 !important;
+                    div.address {
+                        margin-top: 15mm !important;
                     }
-                    div[name="company_address"] ul[name="company_address_list"] li {
-                        margin-bottom: 0 !important;
-                        line-height: 1.3 !important;
+                    /* The margin above collapses into .article, so raising it no
+                       longer moves the customer block. Pad the inner column
+                       instead: padding never collapses. */
+                    div.address div[name="address"] {
+                        padding-top: 4mm !important;
                     }
+                    div[name="company_address"] ul[name="company_address_list"],
+                    div[name="company_address"] ul[name="company_address_list"] li,
                     div[name="address_not_same_as_shipping"],
                     div[name="address_same_as_shipping"],
-                    div[name="no_shipping"] {
-                        margin-top: 0 !important;
-                        padding-top: 0 !important;
-                        line-height: 1.3 !important;
-                    }
+                    div[name="no_shipping"],
                     div[name="address_not_same_as_shipping"] address,
                     div[name="address_same_as_shipping"] address,
                     div[name="no_shipping"] address {
-                        margin-bottom: 0 !important;
                         line-height: 1.3 !important;
+                        margin-bottom: 0 !important;
                     }
-                    .article > div.row:first-child {
+                    .article &gt; div.row:first-child {
                         margin-top: 0 !important;
                         padding-top: 0 !important;
+                    }
+                    .taj-bank-details {
+                        margin-top: 34mm !important;
+                    }
+                    .taj-bank-details &gt; div {
+                        margin-bottom: 0.15rem;
+                    }
+                    table[name="invoice_line_table"] {
+                        table-layout: fixed;
+                        width: 100%;
+                    }
+                    table[name="invoice_line_table"] th {
+                        vertical-align: top !important;
+                        white-space: nowrap;
+                        text-align: left !important;
+                        padding: 0.35rem 0.25rem;
+                    }
+                    table[name="invoice_line_table"] th:nth-child(1),
+                    table[name="invoice_line_table"] td:nth-child(1) { width: 25%; }
+                    table[name="invoice_line_table"] th:nth-child(2),
+                    table[name="invoice_line_table"] td:nth-child(2) { width: 10%; }
+                    table[name="invoice_line_table"] th:nth-child(3),
+                    table[name="invoice_line_table"] td:nth-child(3) { width: 16%; }
+                    table[name="invoice_line_table"] th:nth-child(4),
+                    table[name="invoice_line_table"] td:nth-child(4) { width: 15%; }
+                    table[name="invoice_line_table"] th:nth-child(5),
+                    table[name="invoice_line_table"] td:nth-child(5) { width: 11%; }
+                    table[name="invoice_line_table"] th:nth-child(6),
+                    table[name="invoice_line_table"] td:nth-child(6) { width: 11%; }
+                    table[name="invoice_line_table"] th:nth-child(7),
+                    table[name="invoice_line_table"] td:nth-child(7) { width: 12%; }
+                    table[name="invoice_line_table"] td {
+                        vertical-align: top;
+                        padding: 0.35rem 0.25rem;
+                        overflow-wrap: anywhere;
+                        text-align: left !important;
+                    }
+                    table[name="invoice_line_table"] th:nth-child(5),
+                    table[name="invoice_line_table"] th:nth-child(6),
+                    table[name="invoice_line_table"] th:nth-child(7),
+                    table[name="invoice_line_table"] td:nth-child(5),
+                    table[name="invoice_line_table"] td:nth-child(6),
+                    table[name="invoice_line_table"] td:nth-child(7),
+                    table[name="invoice_line_table"] .text-end {
+                        text-align: left !important;
+                        white-space: nowrap;
                     }
                 </style>
             </xpath>
@@ -85,35 +133,39 @@
             <xpath expr="//div[@id='total']//t[@t-call='account.document_tax_totals']" position="replace">
                 <t t-if="o.is_vat_percentage_invoice">
                     <tr class="o_subtotal">
-                        <td>
+                        <td class="col-6">
                             <span>Total before Tax</span>
                         </td>
-                        <td class="text-end">
+                        <td class="text-end col-6">
                             <span t-out="o.amount_untaxed" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
                         </td>
                     </tr>
                     <tr class="o_taxes">
-                        <td>
+                        <td class="col-6">
                             <span t-out="'Total Tax Amount (' + ('%g' % o.vat_percentage) + '%)'"/>
                         </td>
-                        <td class="text-end o_price_total">
+                        <td class="text-end col-6 o_price_total">
                             <span class="text-nowrap" t-out="o.amount_tax" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
                         </td>
                     </tr>
                     <tr class="o_total">
-                        <td>
+                        <td class="col-6">
                             <strong>Total Amount</strong>
                         </td>
-                        <td class="text-end">
+                        <td class="text-end col-6">
                             <strong t-out="o.amount_total" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
                         </td>
                     </tr>
                 </t>
                 <t t-else="">
-                    <t t-if="o.tax_totals" t-call="account.document_tax_totals">
-                        <t t-set="tax_totals" t-value="o.tax_totals"/>
-                        <t t-set="currency" t-value="o.currency_id"/>
-                    </t>
+                    <tr t-if="o.tax_totals" class="o_total">
+                        <td class="col-6">
+                            <strong>Total</strong>
+                        </td>
+                        <td class="text-end col-6">
+                            <strong t-field="o.amount_total"/>
+                        </td>
+                    </tr>
                 </t>
                 <tr t-if="o.tax_totals" class="border-black o_total">
                     <td class="col-6">
@@ -123,6 +175,14 @@
                         <span t-field="o.amount_total_signed"/>
                     </td>
                 </tr>
+            </xpath>
+
+            <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[@name='th_taxes']" position="replace"/>
+            <xpath expr="//td[@name='td_taxes']" position="replace"/>
+            <xpath expr="//td[@name='td_taxes_grouped']" position="replace"/>
+
+            <xpath expr="//t[@t-if=&quot;o.tax_totals and o.tax_totals.get('display_in_company_currency')&quot;]" position="attributes">
+                <attribute name="t-if">o.is_vat_percentage_invoice and o.tax_totals and o.tax_totals.get('display_in_company_currency')</attribute>
             </xpath>
 
             <xpath expr="//div[@name='address_not_same_as_shipping']/t[@t-set='address']" position="replace">
@@ -176,7 +236,7 @@
 
             <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[1]" position="after">
                 <th>Truck</th>
-                <th>Container Number</th>
+                <th>Container<br/>Number</th>
                 <th>Consignee</th>
             </xpath>
 
@@ -193,11 +253,11 @@
             </xpath>
 
             <xpath expr="//table[@name='invoice_line_table']/thead/tr/th" position="attributes">
-                <attribute name="style">vertical-align: top; text-align: center !important;</attribute>
+                <attribute name="style">vertical-align: top; text-align: left !important; white-space: nowrap;</attribute>
             </xpath>
 
             <xpath expr="//span[@id='payment_terms_note_id']" position="after">
-                <div class="mt-2">
+                <div class="mt-2 taj-bank-details">
                     <div>Account Name : TAJ TRUCKING LIMITED</div>
                     <div>Account No. USD : 05233990011</div>
                     <div>Swift Transfer : EUAFTZTZ</div>
