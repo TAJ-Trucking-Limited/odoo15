@@ -375,6 +375,17 @@ class FleetNavirecReportSubscription(models.Model):
             "</table>"
         )
 
+    def action_select_all_vehicles(self):
+        self.ensure_one()
+        vehicles = self.env["fleet.vehicle"].search([("active", "=", True)])
+        self.vehicle_ids = [(6, 0, vehicles.ids)]
+        return True
+
+    def action_clear_vehicles(self):
+        self.ensure_one()
+        self.vehicle_ids = [(5, 0, 0)]
+        return True
+
     def action_preview_report(self):
         self.ensure_one()
         preview = self.env["fleet.navirec.report.preview"].create({

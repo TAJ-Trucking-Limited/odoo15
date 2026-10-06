@@ -69,6 +69,16 @@
 
                     <notebook>
                         <page string="Tracked Vehicles" name="tracked_vehicles">
+                            <div class="mb-2">
+                                <button name="action_select_all_vehicles"
+                                    type="object"
+                                    string="Select All Vehicles"
+                                    class="btn-secondary me-2"/>
+                                <button name="action_clear_vehicles"
+                                    type="object"
+                                    string="Clear Selection"
+                                    class="btn-secondary"/>
+                            </div>
                             <field name="vehicle_ids"
                                 widget="many2many_tags"
                                 options="{'no_create': True}"/>
