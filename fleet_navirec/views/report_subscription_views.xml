@@ -133,6 +133,10 @@
                         nolabel="1"/>
                 </sheet>
                 <footer>
+                    <button name="action_download_xlsx"
+                        type="object"
+                        string="Download XLSX"
+                        class="btn-secondary"/>
                     <button name="action_send_now"
                         type="object"
                         string="Send Now"

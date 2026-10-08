@@ -101,6 +101,15 @@ When the template is empty, that verified live vehicle route is used automatical
 - Missing telemetry renders as Not available; real zero values remain valid.
 - HTML escaping is applied to report values.
 - HTML report preview and manual Send Now.
+- Every email carries both the HTML body and an XLSX attachment
+  (`Fleet_Position_<Client>_<timestamp>.xlsx`) generated from the same
+  report rows and enabled columns. All spreadsheet cells are written as
+  text so values beginning with `=` can never become formulas.
+- The attachment is linked to its subscription (`res_model`/`res_id`).
+  An XLSX failure sends no email: manual Send Now records the error with
+  a notification, scheduled delivery records the error and retries in
+  30 minutes.
+- Download XLSX from the preview wizard or the subscription Print menu.
 - Scheduled report cron runs every five minutes.
 - Scheduled reporting triggers a Navirec state refresh before rendering.
 - A Navirec refresh failure does not prevent sending last-known/stale data.

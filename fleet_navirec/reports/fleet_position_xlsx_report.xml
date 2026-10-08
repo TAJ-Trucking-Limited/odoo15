@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="report_fleet_position_xlsx" model="ir.actions.report">
+        <field name="name">Fleet Position Report (XLSX)</field>
+        <field name="model">fleet.navirec.report.subscription</field>
+        <field name="report_type">xlsx</field>
+        <field name="report_name">fleet_navirec.fleet_position_xlsx</field>
+        <field name="report_file">fleet_navirec.fleet_position_xlsx</field>
+        <field name="binding_model_id"
+            ref="model_fleet_navirec_report_subscription"/>
+        <field name="binding_type">report</field>
+    </record>
+</odoo>

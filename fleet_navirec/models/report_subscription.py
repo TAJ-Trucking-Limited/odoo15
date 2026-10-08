@@ -1,4 +1,6 @@
+import base64
 import logging
+import re
 from datetime import datetime, time, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -83,13 +85,9 @@ class FleetNavirecReportSubscription(models.Model):
             hour = int(hour_text)
             minute = int(minute_text)
         except (AttributeError, TypeError, ValueError):
-            raise ValidationError(
-                _("Send times must use the HH:MM format.")
-            )
+            raise ValidationError(_("Send times must use the HH:MM format."))
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            raise ValidationError(
-                _("Send times must use a valid 24-hour HH:MM value.")
-            )
+            raise ValidationError(_("Send times must use a valid 24-hour HH:MM value."))
         return hour, minute
 
     def _timezone_info(self):
@@ -98,8 +96,7 @@ class FleetNavirecReportSubscription(models.Model):
             return ZoneInfo(self.timezone or "UTC")
         except ZoneInfoNotFoundError as exc:
             raise ValidationError(
-                _("Unknown IANA timezone: %(timezone)s")
-                % {"timezone": self.timezone}
+                _("Unknown IANA timezone: %(timezone)s") % {"timezone": self.timezone}
             ) from exc
 
     @api.constrains(
@@ -124,10 +121,7 @@ class FleetNavirecReportSubscription(models.Model):
                 subscription.send_time_2,
                 subscription.send_time_3,
             ]
-            parsed = [
-                subscription._parse_send_time(value)
-                for value in times
-            ]
+            parsed = [subscription._parse_send_time(value) for value in times]
             if len(set(parsed)) != 3:
                 raise ValidationError(
                     _("The three daily send times must be different.")
@@ -148,25 +142,16 @@ class FleetNavirecReportSubscription(models.Model):
                 )
             if not subscription.field_last_gps:
                 raise ValidationError(
-                    _(
-                        "Last GPS is a mandatory safety column for the "
-                        "tracking report."
-                    )
+                    _("Last GPS is a mandatory safety column for the tracking report.")
                 )
-            if not (
-                subscription.field_vehicle
-                or subscription.field_license_plate
-            ):
+            if not (subscription.field_vehicle or subscription.field_license_plate):
                 raise ValidationError(
                     _(
                         "Enable Vehicle or License Plate so every report row "
                         "can be identified."
                     )
                 )
-            if not (
-                subscription.field_location
-                or subscription.field_coordinates
-            ):
+            if not (subscription.field_location or subscription.field_coordinates):
                 raise ValidationError(
                     _(
                         "Enable Current Position or Coordinates for the fleet "
@@ -210,18 +195,15 @@ class FleetNavirecReportSubscription(models.Model):
                 )
                 if candidate_local <= local_reference:
                     continue
-                return (
-                    candidate_local.astimezone(timezone.utc)
-                    .replace(tzinfo=None)
-                )
+                return candidate_local.astimezone(timezone.utc).replace(tzinfo=None)
         return False
 
     def _refresh_next_send_at(self, reference_utc=None):
         for subscription in self:
             next_send = subscription._get_next_send_at(reference_utc)
-            subscription.with_context(
-                fleet_navirec_skip_schedule_refresh=True
-            ).write({"next_send_at": next_send})
+            subscription.with_context(fleet_navirec_skip_schedule_refresh=True).write(
+                {"next_send_at": next_send}
+            )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -231,12 +213,9 @@ class FleetNavirecReportSubscription(models.Model):
 
     def write(self, vals):
         result = super().write(vals)
-        if (
-            not self.env.context.get(
-                "fleet_navirec_skip_schedule_refresh"
-            )
-            and self._schedule_fields.intersection(vals)
-        ):
+        if not self.env.context.get(
+            "fleet_navirec_skip_schedule_refresh"
+        ) and self._schedule_fields.intersection(vals):
             self._refresh_next_send_at()
         return result
 
@@ -250,9 +229,7 @@ class FleetNavirecReportSubscription(models.Model):
             if utc_value.tzinfo
             else utc_value.replace(tzinfo=timezone.utc)
         )
-        return utc_value.astimezone(
-            self._timezone_info()
-        ).strftime("%Y-%m-%d %H:%M")
+        return utc_value.astimezone(self._timezone_info()).strftime("%Y-%m-%d %H:%M")
 
     def _prepare_report_rows(self):
         self.ensure_one()
@@ -263,46 +240,44 @@ class FleetNavirecReportSubscription(models.Model):
                 record.display_name or "",
             )
         ):
-            rows.append({
-                "vehicle": vehicle.display_name or "",
-                "license_plate": vehicle.license_plate or "",
-                "status": dict(
-                    vehicle._fields[
-                        "navirec_integration_status"
-                    ].selection
-                ).get(
-                    vehicle.navirec_integration_status,
-                    vehicle.navirec_integration_status or "",
-                ),
-                "location": vehicle.navirec_position_display,
-                "coordinates": (
-                    (
-                        f"{vehicle.navirec_last_lat:.7f}, "
-                        f"{vehicle.navirec_last_lon:.7f}"
-                    )
-                    if vehicle.navirec_has_position
-                    else _("Not available")
-                ),
-                "last_gps": self._display_gps_datetime(
-                    vehicle.navirec_last_state_time
-                ),
-                "speed": vehicle.navirec_speed_display,
-                "ignition": (
-                    _("%(ignition)s / %(movement)s")
-                    % {
-                        "ignition": vehicle.navirec_ignition_display,
-                        "movement": dict(
-                            vehicle._fields[
-                                "navirec_movement_state"
-                            ].selection
-                        ).get(
-                            vehicle.navirec_movement_state,
-                            vehicle.navirec_movement_state or "",
-                        ),
-                    }
-                ),
-                "odometer": vehicle.navirec_odometer_display,
-            })
+            rows.append(
+                {
+                    "vehicle": vehicle.display_name or "",
+                    "license_plate": vehicle.license_plate or "",
+                    "status": dict(
+                        vehicle._fields["navirec_integration_status"].selection
+                    ).get(
+                        vehicle.navirec_integration_status,
+                        vehicle.navirec_integration_status or "",
+                    ),
+                    "location": vehicle.navirec_position_display,
+                    "coordinates": (
+                        (
+                            f"{vehicle.navirec_last_lat:.7f}, "
+                            f"{vehicle.navirec_last_lon:.7f}"
+                        )
+                        if vehicle.navirec_has_position
+                        else _("Not available")
+                    ),
+                    "last_gps": self._display_gps_datetime(
+                        vehicle.navirec_last_state_time
+                    ),
+                    "speed": vehicle.navirec_speed_display,
+                    "ignition": (
+                        _("%(ignition)s / %(movement)s")
+                        % {
+                            "ignition": vehicle.navirec_ignition_display,
+                            "movement": dict(
+                                vehicle._fields["navirec_movement_state"].selection
+                            ).get(
+                                vehicle.navirec_movement_state,
+                                vehicle.navirec_movement_state or "",
+                            ),
+                        }
+                    ),
+                    "odometer": vehicle.navirec_odometer_display,
+                }
+            )
         return rows
 
     def _report_columns(self):
@@ -327,31 +302,21 @@ class FleetNavirecReportSubscription(models.Model):
             ("field_odometer", "odometer", _("Odometer")),
         ]
         return [
-            (key, label)
-            for field_name, key, label in candidates
-            if self[field_name]
+            (key, label) for field_name, key, label in candidates if self[field_name]
         ]
 
     def _render_report_html(self):
         self.ensure_one()
         columns = self._report_columns()
         if not columns:
-            raise UserError(
-                _("Select at least one report field.")
-            )
+            raise UserError(_("Select at least one report field."))
 
-        generated_at = self._display_gps_datetime(
-            fields.Datetime.now()
-        )
-        header = "".join(
-            f"<th>{escape(str(label))}</th>"
-            for _key, label in columns
-        )
+        generated_at = self._display_gps_datetime(fields.Datetime.now())
+        header = "".join(f"<th>{escape(str(label))}</th>" for _key, label in columns)
         body_rows = []
         for row in self._prepare_report_rows():
             cells = "".join(
-                f"<td>{escape(str(row.get(key) or ''))}</td>"
-                for key, _label in columns
+                f"<td>{escape(str(row.get(key) or ''))}</td>" for key, _label in columns
             )
             body_rows.append(f"<tr>{cells}</tr>")
 
@@ -360,7 +325,7 @@ class FleetNavirecReportSubscription(models.Model):
         else:
             body = (
                 f'<tr><td colspan="{len(columns)}">'
-                f'{escape(str(_("No tracked vehicles configured.")))}'
+                f"{escape(str(_('No tracked vehicles configured.')))}"
                 "</td></tr>"
             )
 
@@ -388,10 +353,12 @@ class FleetNavirecReportSubscription(models.Model):
 
     def action_preview_report(self):
         self.ensure_one()
-        preview = self.env["fleet.navirec.report.preview"].create({
-            "subscription_id": self.id,
-            "body_html": self._render_report_html(),
-        })
+        preview = self.env["fleet.navirec.report.preview"].create(
+            {
+                "subscription_id": self.id,
+                "body_html": self._render_report_html(),
+            }
+        )
         return {
             "type": "ir.actions.act_window",
             "name": _("Fleet Position Report Preview"),
@@ -411,45 +378,87 @@ class FleetNavirecReportSubscription(models.Model):
             )
         return sender
 
+    def _fleet_position_xlsx_filename(self):
+        self.ensure_one()
+        raw = self.partner_id.display_name or "client"
+        safe = re.sub(r"[^A-Za-z0-9 _.-]", "", raw).strip()
+        safe = re.sub(r"\s+", "_", safe) or "client"
+        utc_now = fields.Datetime.now()
+        if utc_now.tzinfo is None:
+            utc_now = utc_now.replace(tzinfo=timezone.utc)
+        stamp = utc_now.astimezone(self._timezone_info()).strftime("%Y%m%d_%H%M")
+        return f"Fleet_Position_{safe}_{stamp}.xlsx"
+
+    def _render_tracking_xlsx(self):
+        self.ensure_one()
+        report = self.env.ref("fleet_navirec.report_fleet_position_xlsx")
+        content, _extension = self.env["ir.actions.report"]._render_xlsx(
+            report, [self.id], {}
+        )
+        return content
+
     def _send_tracking_email(self):
         self.ensure_one()
         if not self.vehicle_ids:
-            raise UserError(
-                _("Add at least one tracked vehicle before sending.")
-            )
+            raise UserError(_("Add at least one tracked vehicle before sending."))
         if not self.email_to:
             raise UserError(_("Configure at least one recipient."))
 
-        mail = self.env["mail.mail"].sudo().create({
-            "email_from": self._mail_sender(),
-            "email_to": self.email_to,
-            "email_cc": self.email_cc or False,
-            "subject": _(
-                "Fleet Position Report - %(client)s"
-            ) % {"client": self.partner_id.display_name},
-            "body_html": self._render_report_html(),
-        })
+        # Render first: an XLSX failure raises here, so no email is sent
+        # and the caller records the error (manual: notification only,
+        # scheduled: error plus 30-minute retry).
+        xlsx_content = self._render_tracking_xlsx()
+        attachment = (
+            self.env["ir.attachment"]
+            .sudo()
+            .create(
+                {
+                    "name": self._fleet_position_xlsx_filename(),
+                    "type": "binary",
+                    "datas": base64.b64encode(xlsx_content),
+                    "mimetype": (
+                        "application/vnd.openxmlformats-officedocument"
+                        ".spreadsheetml.sheet"
+                    ),
+                    "res_model": self._name,
+                    "res_id": self.id,
+                }
+            )
+        )
+        mail = (
+            self.env["mail.mail"]
+            .sudo()
+            .create(
+                {
+                    "email_from": self._mail_sender(),
+                    "email_to": self.email_to,
+                    "email_cc": self.email_cc or False,
+                    "subject": _("Fleet Position Report - %(client)s")
+                    % {"client": self.partner_id.display_name},
+                    "body_html": self._render_report_html(),
+                    "attachment_ids": [(4, attachment.id)],
+                }
+            )
+        )
         mail.send(raise_exception=True)
         mail.invalidate_recordset(["state"])
         if mail.state != "sent":
             raise UserError(
-                _(
-                    "Odoo did not confirm email delivery. "
-                    "Mail state: %(state)s"
-                ) % {"state": mail.state or _("unknown")}
+                _("Odoo did not confirm email delivery. Mail state: %(state)s")
+                % {"state": mail.state or _("unknown")}
             )
         return mail
 
     def action_send_now(self):
         self.ensure_one()
         attempt_at = fields.Datetime.now()
-        self.with_context(
-            fleet_navirec_skip_schedule_refresh=True
-        ).write({
-            "last_attempt_at": attempt_at,
-            "last_error": False,
-            "last_error_at": False,
-        })
+        self.with_context(fleet_navirec_skip_schedule_refresh=True).write(
+            {
+                "last_attempt_at": attempt_at,
+                "last_error": False,
+                "last_error_at": False,
+            }
+        )
         try:
             self._send_tracking_email()
         except Exception as exc:
@@ -457,36 +466,33 @@ class FleetNavirecReportSubscription(models.Model):
                 "Manual Navirec report delivery failed for subscription %s",
                 self.id,
             )
-            self.with_context(
-                fleet_navirec_skip_schedule_refresh=True
-            ).write({
-                "last_error": str(exc),
-                "last_error_at": fields.Datetime.now(),
-            })
+            self.with_context(fleet_navirec_skip_schedule_refresh=True).write(
+                {
+                    "last_error": str(exc),
+                    "last_error_at": fields.Datetime.now(),
+                }
+            )
             return {
                 "type": "ir.actions.client",
                 "tag": "display_notification",
                 "params": {
                     "title": _("Navirec"),
-                    "message": _(
-                        "Tracking report was not sent: %(error)s"
-                    ) % {"error": str(exc)},
+                    "message": _("Tracking report was not sent: %(error)s")
+                    % {"error": str(exc)},
                     "type": "danger",
                     "sticky": True,
                 },
             }
 
         sent_at = fields.Datetime.now()
-        self.with_context(
-            fleet_navirec_skip_schedule_refresh=True
-        ).write({
-            "last_sent_at": sent_at,
-            "last_error": False,
-            "last_error_at": False,
-        })
-        self._refresh_next_send_at(
-            sent_at + timedelta(seconds=1)
+        self.with_context(fleet_navirec_skip_schedule_refresh=True).write(
+            {
+                "last_sent_at": sent_at,
+                "last_error": False,
+                "last_error_at": False,
+            }
         )
+        self._refresh_next_send_at(sent_at + timedelta(seconds=1))
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -500,11 +506,13 @@ class FleetNavirecReportSubscription(models.Model):
     @api.model
     def _cron_send_due_reports(self):
         now = fields.Datetime.now()
-        due = self.search([
-            ("active", "=", True),
-            ("next_send_at", "!=", False),
-            ("next_send_at", "<=", now),
-        ])
+        due = self.search(
+            [
+                ("active", "=", True),
+                ("next_send_at", "!=", False),
+                ("next_send_at", "<=", now),
+            ]
+        )
         if not due:
             return
 
@@ -512,9 +520,9 @@ class FleetNavirecReportSubscription(models.Model):
 
         for subscription in due:
             attempt_at = fields.Datetime.now()
-            subscription.with_context(
-                fleet_navirec_skip_schedule_refresh=True
-            ).write({"last_attempt_at": attempt_at})
+            subscription.with_context(fleet_navirec_skip_schedule_refresh=True).write(
+                {"last_attempt_at": attempt_at}
+            )
             try:
                 subscription._send_tracking_email()
             except Exception as exc:
@@ -525,24 +533,24 @@ class FleetNavirecReportSubscription(models.Model):
                 retry_at = fields.Datetime.now() + timedelta(minutes=30)
                 subscription.with_context(
                     fleet_navirec_skip_schedule_refresh=True
-                ).write({
-                    "last_error": str(exc),
-                    "last_error_at": fields.Datetime.now(),
-                    "next_send_at": retry_at,
-                })
+                ).write(
+                    {
+                        "last_error": str(exc),
+                        "last_error_at": fields.Datetime.now(),
+                        "next_send_at": retry_at,
+                    }
+                )
                 continue
 
             sent_at = fields.Datetime.now()
-            subscription.with_context(
-                fleet_navirec_skip_schedule_refresh=True
-            ).write({
-                "last_sent_at": sent_at,
-                "last_error": False,
-                "last_error_at": False,
-            })
-            subscription._refresh_next_send_at(
-                sent_at + timedelta(seconds=1)
+            subscription.with_context(fleet_navirec_skip_schedule_refresh=True).write(
+                {
+                    "last_sent_at": sent_at,
+                    "last_error": False,
+                    "last_error_at": False,
+                }
             )
+            subscription._refresh_next_send_at(sent_at + timedelta(seconds=1))
 
 
 class FleetNavirecReportPreview(models.TransientModel):
@@ -560,3 +568,8 @@ class FleetNavirecReportPreview(models.TransientModel):
     def action_send_now(self):
         self.ensure_one()
         return self.subscription_id.action_send_now()
+
+    def action_download_xlsx(self):
+        self.ensure_one()
+        report = self.env.ref("fleet_navirec.report_fleet_position_xlsx")
+        return report.report_action(self.subscription_id)
