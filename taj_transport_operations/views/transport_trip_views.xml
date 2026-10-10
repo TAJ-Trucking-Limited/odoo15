@@ -9,6 +9,9 @@
                 <field name="sale_order_id"/>
                 <field name="sale_line_id" optional="hide"/>
                 <field name="partner_id"/>
+                <field name="transporter_id" optional="show"/>
+                <field name="cargo_type" optional="show"/>
+                <field name="transport_reference" optional="hide"/>
                 <field name="initial_vehicle_id" optional="show"/>
                 <field name="container_num" optional="show"/>
                 <field name="state" widget="badge"/>
@@ -37,7 +40,7 @@
                         <h1><field name="name" readonly="1"/></h1>
                     </div>
                     <group>
-                        <group string="Source Sales Order">
+                        <group string="Sales Source">
                             <field name="sale_line_id" required="1" readonly="id"
                                    domain="[('order_id.state', 'in', ['sale', 'done']), ('display_type', '=', 'product')]"
                                    options="{'no_create': True}"/>
@@ -46,26 +49,61 @@
                             <field name="company_id" readonly="1"
                                    groups="base.group_multi_company"/>
                         </group>
-                        <group string="Original Freight Details">
+                        <group string="Truck at Creation">
                             <field name="initial_vehicle_id" readonly="1"/>
                             <field name="container_num" readonly="1"/>
                             <field name="srn" readonly="1"/>
-                            <field name="weight" readonly="1"/>
-                            <field name="size" readonly="1"/>
-                            <field name="consignee" readonly="1"/>
                         </group>
                     </group>
                     <notebook>
-                        <page string="Sales Reference" name="sales_reference">
+                        <page string="Commercial" name="commercial_details">
                             <group>
-                                <field name="sale_description" readonly="1"/>
-                                <field name="price_unit" readonly="1"/>
-                                <field name="currency_id" readonly="1"/>
+                                <group string="Sales Commercial Data (Read Only)">
+                                    <field name="customer_reference" readonly="1"/>
+                                    <field name="source_document" readonly="1"/>
+                                    <field name="price_unit" readonly="1"/>
+                                    <field name="currency_id" readonly="1"/>
+                                    <field name="payment_term_id" readonly="1"/>
+                                </group>
+                                <group string="Operational Commercial Data">
+                                    <field name="transporter_id"
+                                           options="{'no_quick_create': True}"/>
+                                    <field name="transport_reference"
+                                           placeholder="Carrier or booking reference"/>
+                                </group>
                             </group>
                             <p class="text-muted">
-                                These fields are read from the sales order.
-                                Operational assignments and status transitions
-                                will be added in later Phase 2 batches.
+                                Sales amounts, customer references and payment terms
+                                remain managed on the Sales Order. Editing the
+                                operational details here never changes an invoice.
+                            </p>
+                        </page>
+                        <page string="Cargo" name="cargo_details">
+                            <group>
+                                <group string="Sales Cargo Data (Read Only)">
+                                    <field name="container_num" readonly="1"/>
+                                    <field name="file_name" readonly="1"/>
+                                    <field name="srn" readonly="1"/>
+                                    <field name="consignee" readonly="1"/>
+                                    <field name="weight" readonly="1"/>
+                                    <field name="size" readonly="1"/>
+                                    <field name="cargo_quantity" readonly="1"/>
+                                    <field name="cargo_uom_id" readonly="1"/>
+                                    <field name="sale_description" readonly="1"/>
+                                </group>
+                                <group string="Operational Cargo Data">
+                                    <field name="cargo_type"
+                                           placeholder="e.g. General cargo"/>
+                                    <field name="cargo_description"
+                                           placeholder="Actual goods to transport"/>
+                                    <field name="special_handling_instructions"
+                                           placeholder="Loading, storage and handling instructions"/>
+                                </group>
+                            </group>
+                            <p class="text-muted">
+                                Cargo type, operational description and special
+                                handling instructions are dispatcher-managed.
+                                Missing Sales cargo fields do not block a Draft trip.
                             </p>
                         </page>
                     </notebook>
@@ -83,10 +121,14 @@
                 <field name="name"/>
                 <field name="sale_order_id"/>
                 <field name="partner_id"/>
+                <field name="transporter_id"/>
+                <field name="transport_reference"/>
+                <field name="cargo_type"/>
                 <field name="initial_vehicle_id"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
                 <group>
                     <filter name="by_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
+                    <filter name="by_transporter" string="Transporter" context="{'group_by': 'transporter_id'}"/>
                     <filter name="by_sales_order" string="Sales Order" context="{'group_by': 'sale_order_id'}"/>
                     <filter name="by_company" string="Company" context="{'group_by': 'company_id'}"/>
                 </group>

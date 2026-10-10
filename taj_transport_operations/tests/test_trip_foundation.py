@@ -222,7 +222,130 @@ class TestTransportTripFoundation(TransactionCase):
         root = etree.fromstring(view.get_combined_arch())
         self.assertEqual(root.tag, "search")
         self.assertFalse(root.xpath("//group[@expand or @string]"))
-        self.assertEqual(len(root.xpath("//group/filter")), 3)
+        self.assertEqual(len(root.xpath("//group/filter")), 4)
+        self.assertEqual(
+            len(root.xpath("//filter[@name='by_transporter']")), 1
+        )
+
+    def test_batch_two_commercial_source_fields_follow_sales(self):
+        self.order.write({
+            "client_order_ref": "PO-EXT-2026",
+            "origin": "CUSTOMER-QUOTE-01",
+        })
+        self.line_1.write({"file_name": "FILE-TRANSPORT-01"})
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        self.assertEqual(trip.customer_reference, "PO-EXT-2026")
+        self.assertEqual(trip.source_document, "CUSTOMER-QUOTE-01")
+        self.assertEqual(trip.partner_id, self.customer)
+        self.assertEqual(trip.price_unit, self.line_1.price_unit)
+        self.assertEqual(trip.currency_id, self.order.currency_id)
+        self.assertEqual(trip.payment_term_id, self.order.payment_term_id)
+        self.assertEqual(trip.cargo_quantity, self.line_1.product_uom_qty)
+        self.assertEqual(trip.cargo_uom_id, self.line_1.product_uom_id)
+        self.assertEqual(trip.file_name, "FILE-TRANSPORT-01")
+
+        self.order.write({"client_order_ref": "UPDATED-PO"})
+        self.line_1.write({"file_name": "UPDATED-FILE"})
+        self.assertEqual(trip.customer_reference, "UPDATED-PO")
+        self.assertEqual(trip.file_name, "UPDATED-FILE")
+
+        for name in (
+            "customer_reference", "source_document", "payment_term_id",
+            "cargo_quantity", "cargo_uom_id", "file_name",
+        ):
+            field = trip._fields[name]
+            self.assertTrue(field.related, name)
+            self.assertTrue(field.readonly, name)
+
+    def test_batch_two_operational_fields_do_not_change_sales_or_invoices(self):
+        carrier = self.env["res.partner"].create({
+            "name": "Transport Test Carrier",
+        })
+        before = self.line_1._prepare_invoice_line()
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+            "transporter_id": carrier.id,
+            "transport_reference": "BOOK-100",
+            "cargo_type": "General cargo",
+            "cargo_description": "Palletized goods",
+            "special_handling_instructions": "Keep dry",
+        })
+        self.assertEqual(trip.transporter_id, carrier)
+        self.assertEqual(trip.transport_reference, "BOOK-100")
+        self.assertEqual(trip.cargo_type, "General cargo")
+        self.assertEqual(trip.cargo_description, "Palletized goods")
+        self.assertEqual(trip.special_handling_instructions, "Keep dry")
+
+        trip.write({
+            "transport_reference": "BOOK-101",
+            "cargo_type": "Fragile cargo",
+            "cargo_description": "Fragile palletized goods",
+            "special_handling_instructions": "Do not stack",
+        })
+        self.assertEqual(trip.transport_reference, "BOOK-101")
+        self.assertEqual(trip.cargo_type, "Fragile cargo")
+        self.assertEqual(trip.cargo_description, "Fragile palletized goods")
+        self.assertEqual(trip.special_handling_instructions, "Do not stack")
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertEqual(trip.state, "draft")
+        after = self.line_1._prepare_invoice_line()
+        for name in before:
+            self.assertEqual(after[name], before[name], name)
+
+        for name in (
+            "transporter_id", "transport_reference", "cargo_type",
+            "cargo_description", "special_handling_instructions",
+        ):
+            self.assertTrue(trip._fields[name].tracking, name)
+
+    def test_batch_two_blank_operational_fields_remain_optional(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_no_truck.id,
+        })
+        self.assertFalse(trip.transporter_id)
+        self.assertFalse(trip.transport_reference)
+        self.assertFalse(trip.cargo_type)
+        self.assertFalse(trip.cargo_description)
+        self.assertFalse(trip.special_handling_instructions)
+        trip.write({"cargo_type": "Bulk"})
+        self.assertEqual(trip.cargo_type, "Bulk")
+        self.assertFalse(trip.initial_vehicle_id)
+        self.assertEqual(trip.sale_line_id.product_uom_qty, 3)
+
+    def test_batch_two_form_separates_read_only_sales_and_operations(self):
+        from lxml import etree
+
+        view = self.env.ref(
+            "taj_transport_operations.view_transport_trip_form"
+        )
+        root = etree.fromstring(view.get_combined_arch())
+        for name in ("commercial_details", "cargo_details"):
+            self.assertEqual(
+                len(root.xpath(f"//page[@name='{name}']")), 1,
+            )
+        for name in (
+            "customer_reference", "source_document", "payment_term_id",
+            "cargo_quantity", "cargo_uom_id", "file_name",
+            "sale_description", "price_unit", "currency_id",
+        ):
+            self.assertEqual(
+                len(root.xpath(f"//field[@name='{name}'][@readonly='1']")),
+                1,
+                name,
+            )
+        for name in (
+            "transporter_id", "transport_reference", "cargo_type",
+            "cargo_description", "special_handling_instructions",
+        ):
+            self.assertEqual(
+                len(root.xpath(f"//field[@name='{name}']")), 1, name,
+            )
+            self.assertFalse(
+                root.xpath(f"//field[@name='{name}'][@readonly='1']"),
+                name,
+            )
 
     def test_sales_order_buttons_and_combined_view(self):
         with self.assertRaises(UserError):

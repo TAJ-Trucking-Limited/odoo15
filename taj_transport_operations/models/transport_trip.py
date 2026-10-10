@@ -66,6 +66,59 @@ class TajTransportTrip(models.Model):
         readonly=True,
     )
 
+    # Commercial source-of-truth stays on Sales. These non-stored related
+    # values always reflect Sales and cannot be edited through a Trip.
+    customer_reference = fields.Char(
+        string="Customer Reference",
+        related="sale_order_id.client_order_ref", readonly=True,
+    )
+    source_document = fields.Char(
+        string="Source Document",
+        related="sale_order_id.origin", readonly=True,
+    )
+    payment_term_id = fields.Many2one(
+        "account.payment.term", string="Sales Payment Terms",
+        related="sale_order_id.payment_term_id", readonly=True,
+    )
+    cargo_quantity = fields.Float(
+        string="Sales Line Quantity",
+        related="sale_line_id.product_uom_qty", readonly=True,
+        help="Quantity recorded on the sales line, not the number of trips.",
+    )
+    cargo_uom_id = fields.Many2one(
+        "uom.uom", string="Sales Quantity Unit",
+        related="sale_line_id.product_uom_id", readonly=True,
+    )
+    file_name = fields.Char(
+        string="Sales File Name",
+        related="sale_line_id.file_name", readonly=True,
+    )
+
+    # Dispatcher-owned details. Never write these back to Sales or Accounting.
+    # Tracked fields record changes, authors and timestamps in the Chatter.
+    transporter_id = fields.Many2one(
+        "res.partner", string="Transporter", tracking=True,
+        check_company=True, copy=False,
+        help="Company or contact responsible for executing this transport.",
+    )
+    transport_reference = fields.Char(
+        string="Transport / Booking Reference", tracking=True, copy=False,
+        help="Optional dispatcher or carrier reference for this trip.",
+    )
+    cargo_type = fields.Char(
+        string="Cargo Type", tracking=True, copy=False,
+        help="Operational description of the cargo category.",
+    )
+    cargo_description = fields.Text(
+        string="Operational Cargo Description", tracking=True, copy=False,
+        help="What is actually being transported. Kept separate from "
+             "the read-only Sales Line Description.",
+    )
+    special_handling_instructions = fields.Text(
+        string="Special Handling Instructions", tracking=True, copy=False,
+        help="Optional loading, storage, security or handling instructions.",
+    )
+
     @api.model
     def _validate_sale_line(self, sale_line):
         if not sale_line.exists():
