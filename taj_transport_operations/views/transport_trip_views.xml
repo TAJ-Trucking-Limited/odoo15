@@ -85,7 +85,7 @@
                 <field name="partner_id"/>
                 <field name="initial_vehicle_id"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                <group expand="0" string="Group By">
+                <group>
                     <filter name="by_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
                     <filter name="by_sales_order" string="Sales Order" context="{'group_by': 'sale_order_id'}"/>
                     <filter name="by_company" string="Company" context="{'group_by': 'company_id'}"/>

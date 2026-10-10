@@ -212,6 +212,18 @@ class TestTransportTripFoundation(TransactionCase):
         ):
             self.assertEqual(after[key], before[key])
 
+    def test_search_view_uses_odoo_19_group_syntax(self):
+        # Odoo 19 search-group nodes reject legacy expand/string attributes.
+        from lxml import etree
+
+        view = self.env.ref(
+            "taj_transport_operations.view_transport_trip_search"
+        )
+        root = etree.fromstring(view.get_combined_arch())
+        self.assertEqual(root.tag, "search")
+        self.assertFalse(root.xpath("//group[@expand or @string]"))
+        self.assertEqual(len(root.xpath("//group/filter")), 3)
+
     def test_sales_order_buttons_and_combined_view(self):
         with self.assertRaises(UserError):
             draft = self.env["sale.order"].create({
