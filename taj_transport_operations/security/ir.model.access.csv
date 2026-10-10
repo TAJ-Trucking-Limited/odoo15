@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_taj_transport_trip_user,taj.transport.trip.user,model_taj_transport_trip,taj_transport_operations.group_transport_user,1,1,1,0
+access_taj_transport_trip_wizard_user,taj.transport.trip.create.wizard.user,model_taj_transport_trip_create_wizard,taj_transport_operations.group_transport_user,1,1,1,0

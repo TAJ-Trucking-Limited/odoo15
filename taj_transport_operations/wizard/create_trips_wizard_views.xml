@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_create_transport_trips_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.trip.create.wizard.form</field>
+        <field name="model">taj.transport.trip.create.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Create Transport Trips">
+                <group>
+                    <field name="sale_order_id" readonly="1"/>
+                    <field name="line_ids" widget="many2many_tags"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                </group>
+                <p class="text-muted">
+                    Only select actual transport/freight lines. Truck-assigned
+                    lines without trips are suggested by default. You can
+                    also select a transport line without a truck.
+                    Existing trips will be reused; no duplicate trips created.
+                </p>
+                <footer>
+                    <button name="action_create_trips" type="object"
+                            string="Create / Open Trips" class="btn-primary"/>
+                    <button special="cancel" string="Cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

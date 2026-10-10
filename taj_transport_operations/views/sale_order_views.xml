@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_order_form_transport" model="ir.ui.view">
+        <field name="name">sale.order.form.transport.operations</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form/header" position="inside">
+                <button name="action_prepare_transport_trips" type="object"
+                        string="Create Trips" class="btn-secondary"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="state not in ['sale', 'done']"/>
+            </xpath>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_transport_trips" type="object"
+                        class="oe_stat_button" icon="fa-truck"
+                        groups="taj_transport_operations.group_transport_user">
+                    <field name="transport_trip_count" widget="statinfo"
+                           string="Trips"/>
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list" position="inside">
+                <button name="action_open_or_create_transport_trip"
+                        type="object" string="Trip" icon="fa-truck"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="parent.state not in ['sale', 'done'] or display_type != 'product'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

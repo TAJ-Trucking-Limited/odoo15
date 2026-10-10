@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_trip_list" model="ir.ui.view">
+        <field name="name">taj.transport.trip.list</field>
+        <field name="model">taj.transport.trip</field>
+        <field name="arch" type="xml">
+            <list string="Transport Trips" delete="0">
+                <field name="name"/>
+                <field name="sale_order_id"/>
+                <field name="sale_line_id" optional="hide"/>
+                <field name="partner_id"/>
+                <field name="initial_vehicle_id" optional="show"/>
+                <field name="container_num" optional="show"/>
+                <field name="state" widget="badge"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_transport_trip_form" model="ir.ui.view">
+        <field name="name">taj.transport.trip.form</field>
+        <field name="model">taj.transport.trip</field>
+        <field name="arch" type="xml">
+            <form string="Transport Trip" delete="0">
+                <header>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button type="object" name="action_open_sale_order"
+                                class="oe_stat_button" icon="fa-file-text-o"
+                                invisible="not sale_order_id">
+                            <span>Sales Order</span>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Source Sales Order">
+                            <field name="sale_line_id" required="1" readonly="id"
+                                   domain="[('order_id.state', 'in', ['sale', 'done']), ('display_type', '=', 'product')]"
+                                   options="{'no_create': True}"/>
+                            <field name="sale_order_id" readonly="1"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="company_id" readonly="1"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Original Freight Details">
+                            <field name="initial_vehicle_id" readonly="1"/>
+                            <field name="container_num" readonly="1"/>
+                            <field name="srn" readonly="1"/>
+                            <field name="weight" readonly="1"/>
+                            <field name="size" readonly="1"/>
+                            <field name="consignee" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Sales Reference" name="sales_reference">
+                            <group>
+                                <field name="sale_description" readonly="1"/>
+                                <field name="price_unit" readonly="1"/>
+                                <field name="currency_id" readonly="1"/>
+                            </group>
+                            <p class="text-muted">
+                                These fields are read from the sales order.
+                                Operational assignments and status transitions
+                                will be added in later Phase 2 batches.
+                            </p>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_transport_trip_search" model="ir.ui.view">
+        <field name="name">taj.transport.trip.search</field>
+        <field name="model">taj.transport.trip</field>
+        <field name="arch" type="xml">
+            <search string="Transport Trips">
+                <field name="name"/>
+                <field name="sale_order_id"/>
+                <field name="partner_id"/>
+                <field name="initial_vehicle_id"/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="by_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
+                    <filter name="by_sales_order" string="Sales Order" context="{'group_by': 'sale_order_id'}"/>
+                    <filter name="by_company" string="Company" context="{'group_by': 'company_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_transport_trip" model="ir.actions.act_window">
+        <field name="name">Transport Trips</field>
+        <field name="res_model">taj.transport.trip</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No transport trips yet.</p>
+            <p>Open a confirmed Sales Order to select lines and create trips.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_transport_operations" name="Transport Operations"
+              groups="taj_transport_operations.group_transport_user" sequence="50"/>
+    <menuitem id="menu_transport_trips" name="Trips" parent="menu_transport_operations"
+              action="action_transport_trip" sequence="10"
+              groups="taj_transport_operations.group_transport_user"/>
+</odoo>

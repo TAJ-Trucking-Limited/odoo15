@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="seq_transport_trip" model="ir.sequence">
+        <field name="name">TAJ Transport Trip</field>
+        <field name="code">taj.transport.trip</field>
+        <field name="prefix">TRIP/%(year)s/</field>
+        <field name="padding">5</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>
