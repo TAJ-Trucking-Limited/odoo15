@@ -76,16 +76,22 @@ def migrate_legacy_trailers(env):
         if not vehicle:
             if not model:
                 model = env["fleet.vehicle.model"].search([
+                    ("name", "=", "Legacy Trailer - Unknown Model"),
                     ("category_id", "=", categories["trailer"].id),
-                ], limit=1)
+                    ("brand_id.name", "=", "Legacy Trailer - Unknown Manufacturer"),
+                ], limit=2)
+                if len(model) > 1:
+                    raise ValueError("Ambiguous legacy trailer placeholder model")
                 if not model:
                     brand = env["fleet.vehicle.model.brand"].search([
-                        ("name", "=", "Legacy Trailer"),
-                    ], limit=1) or env["fleet.vehicle.model.brand"].create({
-                        "name": "Legacy Trailer",
-                    })
+                        ("name", "=", "Legacy Trailer - Unknown Manufacturer"),
+                    ], limit=2)
+                    if len(brand) > 1:
+                        raise ValueError("Ambiguous legacy trailer placeholder manufacturer")
+                    brand = brand or env["fleet.vehicle.model.brand"].create({
+                        "name": "Legacy Trailer - Unknown Manufacturer"})
                     model = env["fleet.vehicle.model"].create({
-                        "name": "Legacy Trailer (manufacturer unspecified)",
+                        "name": "Legacy Trailer - Unknown Model",
                         "brand_id": brand.id, "category_id": categories["trailer"].id,
                     })
             vehicle = fleet.with_company(row["company_id"]).create({

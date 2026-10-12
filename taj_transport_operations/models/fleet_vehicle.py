@@ -31,6 +31,15 @@ class FleetVehicle(models.Model):
         return [("category_id", "=", category.id), ("active", "=", True)]
 
     def write(self, vals):
+        if "company_id" in vals:
+            self.check_access("write")
+            changing = self.filtered(lambda v: v.company_id.id != vals["company_id"])
+            if changing and self.env["taj.transport.assignment"].sudo().search_count([
+                "|", ("vehicle_id", "in", changing.ids), ("trailer_id", "in", changing.ids),
+            ]):
+                raise ValidationError(_(
+                    "The company cannot change for a truck or trailer with trip assignment history."
+                ))
         result = super().write(vals)
         if {"category_id", "model_id"}.intersection(vals):
             assignments = self.env["taj.transport.assignment"].sudo()

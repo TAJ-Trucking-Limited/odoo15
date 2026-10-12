@@ -98,6 +98,10 @@ class TestNavirecReportSubscription(TransactionCase):
         subscription.action_select_all_vehicles()
         self.assertIn(self.vehicle_a, subscription.vehicle_ids)
         self.assertNotIn(trailer, subscription.vehicle_ids)
+        trailer.navirec_tracking_required = True
+        subscription.action_select_all_vehicles()
+        self.assertIn(trailer, subscription.vehicle_ids)
+        trailer.navirec_tracking_required = False
         trailer.navirec_uuid = "trailer-device"
         subscription.action_select_all_vehicles()
         self.assertIn(trailer, subscription.vehicle_ids)

@@ -21,6 +21,11 @@ class FleetVehicle(models.Model):
     _inherit = "fleet.vehicle"
 
     navirec_uuid = fields.Char(index=True, copy=False, readonly=True)
+    navirec_tracking_required = fields.Boolean(
+        string="Navirec Tracking Required", default=False, copy=False, tracking=True,
+        help="Enable for a trailer equipped with a Navirec device, then run vehicle "
+             "matching in Fleet settings. Trucks are always matching candidates.",
+    )
     navirec_last_lat = fields.Float(digits=(10, 7), readonly=True)
     navirec_last_lon = fields.Float(digits=(10, 7), readonly=True)
     navirec_has_position = fields.Boolean(readonly=True, copy=False)
@@ -110,16 +115,17 @@ class FleetVehicle(models.Model):
 
     @api.model
     def _navirec_tracking_domain(self):
-        # Keep existing truck mappings and explicitly device-equipped trailers.
-        return ["|", ("category_id", "not in", self._navirec_trailer_categories().ids),
-                ("navirec_uuid", "!=", False)]
+        # Explicit opt-in lets new device-equipped trailers enter plate matching.
+        return ["|", "|", ("category_id", "not in", self._navirec_trailer_categories().ids),
+                ("navirec_uuid", "!=", False), ("navirec_tracking_required", "=", True)]
 
     @api.depends("navirec_uuid", "navirec_last_state_time", "navirec_is_stale",
-                 "category_id", "category_id.name")
+                 "category_id", "category_id.name", "navirec_tracking_required")
     def _compute_navirec_integration_status(self):
         trailers = self._navirec_trailer_categories()
         for vehicle in self:
-            if not vehicle.navirec_uuid and vehicle.category_id in trailers:
+            if (not vehicle.navirec_uuid and not vehicle.navirec_tracking_required
+                    and vehicle.category_id in trailers):
                 vehicle.navirec_integration_status = "not_applicable"
             elif not vehicle.navirec_uuid:
                 vehicle.navirec_integration_status = "not_mapped"

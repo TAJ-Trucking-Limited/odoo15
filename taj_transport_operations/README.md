@@ -108,7 +108,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.4.0` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.1`).
+`19.0.1.4.1` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
 Run Odoo tests on a **staging/development database**, not production, using
 the test tag:
@@ -172,6 +172,9 @@ including API calls that bypass the wizard domains. Drivers stay independent
 Contacts assignments; Fleet default drivers, Sales trucks and invoice preparation
 are unchanged. Fleet vehicle deletion is restricted by assignment references.
 Changing an assigned vehicle's model/category cannot change its resource type.
+Company changes (including clearing the company) are blocked for both trucks and
+trailers with open or closed assignment history. Unassigned vehicles can still
+move company; writing the existing company remains valid.
 
 Initialization adopts an existing case-insensitive **Truck** or **Trailer** category
 without renaming it, and creates it only when absent. Multiple matching categories
@@ -191,8 +194,9 @@ No new `vehicle_type` value or separate driver master is introduced.
 The `19.0.1.4.0` **pre-migration** translates legacy trailer IDs before Odoo changes
 the assignment and transient-wizard foreign keys. It matches normalized plates in
 the same company, including inactive records, and reuses only Trailer-category
-Fleet records. Otherwise it creates a Fleet trailer using a Trailer-category model
-(or an explicitly unspecified legacy manufacturer/model). The legacy identifier
+Fleet records. Otherwise it creates a Fleet trailer using the dedicated
+**Legacy Trailer - Unknown Model** and **Legacy Trailer - Unknown Manufacturer**
+placeholder, never the first available real trailer model. The legacy identifier
 and notes are preserved in Fleet description; new records preserve active status.
 Existing Fleet records retain their state, driver, telemetry and plate. Ambiguous
 plates, incompatible categories/companies or missing legacy references abort the
@@ -209,18 +213,27 @@ transport ACL and blocked create/write/delete methods. It is not a trailer maste
 and no operational field references it. Retire the archive only in a later upgrade
 once its mapping and historical references have been verified on staging.
 
-Navirec excludes trailers without devices from automatic plate matching, mapping
-audit candidates and **Select All Vehicles** for client reports. They show
-**No Tracking Device Required**, rather than Not Mapped. Existing explicitly
-mapped trailers continue syncing and can be selected for reports. Existing report
+Navirec excludes trailers without a mapping or an explicit tracking request from
+automatic plate matching, mapping audit candidates and **Select All Vehicles**
+for client reports. They show **No Tracking Device Required**. For a new
+device-equipped trailer, a Fleet editor opens the standard **Fleet** vehicle form,
+goes to **Navirec / Telematics**, enables **Navirec Tracking Required** and saves.
+A Fleet administrator then runs vehicle matching in Fleet settings (or waits for
+the existing matching job). Matching sets the read-only UUID after a unique plate
+match; duplicate local or remote plates remain rejected. An opted-in, unmatched
+trailer shows **Not Mapped**, and is included in report selection. Existing mapped
+trailers remain candidates even with the checkbox off. No Fleet edit permissions
+are granted to Dispatchers or Transport Managers by this change. Existing report
 subscriptions and truck device mappings are not rewritten.
 
 ### Manual staging upgrade and acceptance
 
 1. Wait for Odoo.sh `19_upgrade` to build the pushed commit successfully. Use the
    development/staging build, never production. Keep a restorable database backup.
-2. In Apps, manually upgrade **TAJ Transport Operations** to `19.0.1.4.0` and
-   **TAJ Navirec Fleet Integration** to `19.0.1.3.1`. Do not uninstall/reinstall.
+2. In Apps, manually upgrade **TAJ Navirec Fleet Integration** to `19.0.1.3.2`
+   first, then **TAJ Transport Operations** to `19.0.1.4.1`. This creates the new
+   Navirec tracking-request column before legacy Fleet records are migrated.
+   Do not uninstall/reinstall.
    The legacy migration runs as part of the Transport module upgrade transaction.
    If it stops on ambiguous data, review the reported legacy record and correct
    Fleet classification/matching; do not delete history to make it pass.
@@ -235,11 +248,27 @@ subscriptions and truck device mappings are not rewritten.
    mismatches, same driver/co-driver, empty and duplicate assignments must fail.
 6. Verify Dispatcher read-only Fleet access and cross-company restrictions with
    two users/companies. A Fleet-authorized user can maintain permitted trailers.
-7. Check Navirec matching/audit and a report preview. Unmapped trailers should not
-   be automatic candidates; existing truck mappings and telemetry should persist.
+7. Try changing the company of an assigned truck and trailer, including a vehicle
+   with closed history: changes must fail without altering Fleet or history.
+8. Check Navirec matching/audit and a report preview. Unmapped trailers without
+   an opt-in should be excluded. Enable Navirec Tracking Required for a trailer
+   with a unique remote device plate, run matching and verify its UUID/status.
+   Duplicate plate matches must fail; truck mappings and telemetry should persist.
 
 Regression tests cover these assignment rules, a nonempty migration with colliding
 legacy/Fleet IDs, archived trailers, reuse, history preservation and idempotence,
 and Navirec automatic candidate/report selection. They were added for Odoo runtime
 execution; local validation is limited to Python/XML/manifest/ACL/view checks.
 Runtime tests and actual staging upgrade/UAT have **not** been executed in this session.
+
+
+### Review fixes in 19.0.1.4.1
+
+The corrected placeholder model applies when the legacy migration first runs.
+If staging already completed the `19.0.1.4.0` migration, the mapping is not rerun
+and existing Fleet models are not silently replaced. Inspect migrated trailers
+against their source archive; a Fleet administrator can correct a previously
+inferred model while keeping the Trailer category and assignment IDs intact.
+Regression coverage adds assigned-company protection (open/closed, truck/trailer,
+bulk/no-op and unassigned transfers), opt-in trailer matching with duplicate-plate
+rejection, report selection, and unknown-model migration instead of real-model guessing.

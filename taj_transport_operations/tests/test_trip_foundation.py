@@ -473,6 +473,48 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(self.truck.driver_id, self.customer)
         self.assertEqual(trip.current_driver_id, driver)
 
+    def test_assigned_truck_and_trailer_cannot_change_company(self):
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id, "license_plate": "COMPANY-GUARD",
+        })
+        assignment = self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id, "vehicle_id": self.truck.id, "trailer_id": trailer.id,
+        })
+        other_company = self.env["res.company"].create({"name": "Fleet Transfer Company"})
+        resources = self.truck | trailer
+        for resource in (self.truck, trailer, resources):
+            for company_id in (other_company.id, False):
+                with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                    resource.sudo().write({"company_id": company_id})
+        resources.write({"company_id": trip.company_id.id})  # A no-op stays valid.
+        self.assertEqual(assignment.company_id, trip.company_id)
+        self.assertEqual(self.truck.company_id, trip.company_id)
+        self.assertEqual(trailer.company_id, trip.company_id)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+
+    def test_closed_assignment_also_prevents_company_transfer(self):
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        assignment = self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id, "vehicle_id": self.truck.id,
+            "effective_from": "2026-10-01 08:00:00",
+        })
+        # Historical period fixture: production has no closing workflow yet.
+        assignment.flush_recordset()
+        self.env.cr.execute("UPDATE taj_transport_assignment SET effective_to = %s WHERE id = %s",
+                            ("2026-10-01 12:00:00", assignment.id))
+        assignment.invalidate_recordset(["effective_to"])
+        other_company = self.env["res.company"].create({"name": "Historical Transfer Company"})
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.sudo().write({"company_id": other_company.id})
+        self.assertEqual(assignment.vehicle_id, self.truck)
+        self.assertEqual(self.truck.company_id, trip.company_id)
+
+    def test_unassigned_vehicle_can_change_company(self):
+        other_company = self.env["res.company"].create({"name": "Unassigned Transfer Company"})
+        self.truck_two.sudo().write({"company_id": other_company.id})
+        self.assertEqual(self.truck_two.company_id, other_company)
+
     def test_dispatcher_cannot_edit_fleet_or_select_other_company(self):
         from odoo.tests.common import new_test_user
 

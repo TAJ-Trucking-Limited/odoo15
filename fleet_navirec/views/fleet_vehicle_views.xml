@@ -48,6 +48,9 @@
                     </div>
                     <group>
                         <group string="Integration">
+                            <field name="navirec_tracking_required"
+                                groups="fleet.fleet_group_user"
+                                help="For a trailer with a Navirec device, enable this and run vehicle matching in Fleet settings."/>
                             <field name="navirec_integration_status"
                                 widget="badge"
                                 decoration-success="navirec_integration_status == 'connected'"
