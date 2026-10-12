@@ -13,6 +13,8 @@
                 <field name="cargo_type" optional="show"/>
                 <field name="transport_reference" optional="hide"/>
                 <field name="initial_vehicle_id" optional="show"/>
+                <field name="current_vehicle_id" optional="show"/>
+                <field name="current_driver_id" optional="hide"/>
                 <field name="container_num" optional="show"/>
                 <field name="origin_location" optional="show"/>
                 <field name="destination_location" optional="show"/>
@@ -130,6 +132,43 @@
                                 templates, milestones and GPS automation are out of
                                 scope for this batch.
                             </p>
+                        </page>
+                        <page string="Resources" name="trip_resources">
+                            <field name="current_assignment_id" invisible="1"/>
+                            <group>
+                                <group string="Current Assignment">
+                                    <field name="current_vehicle_id" readonly="1"/>
+                                    <field name="current_trailer_id" readonly="1"/>
+                                    <field name="current_driver_id" readonly="1"/>
+                                    <field name="current_co_driver_id" readonly="1"/>
+                                </group>
+                                <group string="Initial Assignment">
+                                    <button string="Assign Initial Resources"
+                                            name="action_open_initial_assignment_wizard"
+                                            type="object" class="btn-primary"
+                                            invisible="current_assignment_id or state != 'draft'"/>
+                                </group>
+                            </group>
+                            <p class="text-muted">
+                                The original Sales truck remains a snapshot.
+                                Assign the operational truck and crew here.
+                                Drivers are Contacts, following the Odoo Fleet model.
+                            </p>
+                            <separator string="Assignment History"/>
+                            <field name="assignment_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="effective_from"/>
+                                    <field name="effective_to"/>
+                                    <field name="vehicle_id"/>
+                                    <field name="trailer_id"/>
+                                    <field name="driver_id"/>
+                                    <field name="co_driver_id"/>
+                                    <field name="effective_location" optional="hide"/>
+                                    <field name="reason"/>
+                                    <field name="assigned_by_id"/>
+                                    <field name="notes" optional="hide"/>
+                                </list>
+                            </field>
                         </page>
                     </notebook>
                 </sheet>

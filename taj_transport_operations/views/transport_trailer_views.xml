@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_trailer_list" model="ir.ui.view">
+        <field name="name">taj.transport.trailer.list</field>
+        <field name="model">taj.transport.trailer</field>
+        <field name="arch" type="xml">
+            <list string="Transport Trailers">
+                <field name="name"/>
+                <field name="registration_number"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_transport_trailer_form" model="ir.ui.view">
+        <field name="name">taj.transport.trailer.form</field>
+        <field name="model">taj.transport.trailer</field>
+        <field name="arch" type="xml">
+            <form string="Transport Trailer">
+                <sheet>
+                    <group>
+                        <group string="Trailer">
+                            <field name="name"/>
+                            <field name="registration_number"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Administration">
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="notes"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="view_transport_trailer_search" model="ir.ui.view">
+        <field name="name">taj.transport.trailer.search</field>
+        <field name="model">taj.transport.trailer</field>
+        <field name="arch" type="xml">
+            <search string="Transport Trailers">
+                <field name="name"/>
+                <field name="registration_number"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_transport_trailer" model="ir.actions.act_window">
+        <field name="name">Transport Trailers</field>
+        <field name="res_model">taj.transport.trailer</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="menu_transport_trailers" name="Trailers"
+              parent="taj_transport_operations.menu_transport_operations"
+              action="action_transport_trailer" sequence="20"
+              groups="taj_transport_operations.group_transport_user"/>
+</odoo>

@@ -1,6 +1,6 @@
 {
     "name": "TAJ Transport Operations",
-    "version": "19.0.1.2.0",
+    "version": "19.0.1.3.0",
     "summary": "Transport trip records linked one-to-one to sales order lines",
     "category": "Operations/Transport",
     "author": "TAJ Trucking",
@@ -11,6 +11,8 @@
         "security/ir.model.access.csv",
         "data/ir_sequence.xml",
         "views/transport_trip_views.xml",
+        "views/transport_trailer_views.xml",
+        "wizard/initial_resource_assignment_wizard_views.xml",
         "views/sale_order_views.xml",
         "wizard/create_trips_wizard_views.xml",
     ],

@@ -2,7 +2,7 @@
 from psycopg2 import IntegrityError
 
 from odoo import Command
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -226,6 +226,211 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(
             len(root.xpath("//filter[@name='by_transporter']")), 1
         )
+
+    def test_batch_four_initial_assignment_preserves_sales_truck_and_invoice(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        self.assertFalse(trip.current_assignment_id)
+        self.assertFalse(trip.current_vehicle_id)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+
+        carrier_driver = self.env["res.partner"].create({
+            "name": "Batch Four Driver",
+        })
+        co_driver = self.env["res.partner"].create({
+            "name": "Batch Four Co-driver",
+        })
+        trailer = self.env["taj.transport.trailer"].create({
+            "name": "TEST-TRAILER-001",
+            "registration_number": "TRL-001",
+        })
+        before_invoice_line = self.line_1._prepare_invoice_line()
+        open_action = trip.action_open_initial_assignment_wizard()
+        self.assertEqual(
+            open_action["res_model"],
+            "taj.transport.initial.assignment.wizard",
+        )
+        self.assertEqual(
+            open_action["context"]["default_vehicle_id"], self.truck.id,
+        )
+        wizard = self.env[
+            "taj.transport.initial.assignment.wizard"
+        ].with_context(**open_action["context"]).create({
+            "trip_id": trip.id,
+            "trailer_id": trailer.id,
+            "driver_id": carrier_driver.id,
+            "co_driver_id": co_driver.id,
+            "effective_location": "Dar es Salaam depot",
+        })
+        self.assertEqual(wizard.vehicle_id, self.truck)
+        result = wizard.action_assign_initial_resources()
+        self.assertEqual(result["res_id"], trip.id)
+        self.assertEqual(len(trip.assignment_ids), 1)
+
+        assignment = trip.current_assignment_id
+        self.assertTrue(assignment)
+        self.assertEqual(assignment.trip_id, trip)
+        self.assertEqual(assignment.company_id, trip.company_id)
+        self.assertEqual(assignment.vehicle_id, self.truck)
+        self.assertEqual(assignment.driver_id, carrier_driver)
+        self.assertEqual(assignment.co_driver_id, co_driver)
+        self.assertEqual(assignment.trailer_id, trailer)
+        self.assertEqual(assignment.assigned_by_id, self.env.user)
+        self.assertFalse(assignment.effective_to)
+        self.assertTrue(assignment.effective_from)
+        self.assertEqual(
+            assignment.effective_location, "Dar es Salaam depot",
+        )
+        self.assertEqual(trip.current_vehicle_id, self.truck)
+        self.assertEqual(trip.current_driver_id, carrier_driver)
+        self.assertEqual(trip.current_co_driver_id, co_driver)
+        self.assertEqual(trip.current_trailer_id, trailer)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertEqual(self.line_1.vehicle_id, self.truck)
+        self.assertEqual(self.line_1._prepare_invoice_line(), before_invoice_line)
+
+        with self.assertRaises(UserError):
+            trip.action_open_initial_assignment_wizard()
+        with self.assertRaises((UserError, IntegrityError)):
+            with self.env.cr.savepoint():
+                self.env["taj.transport.assignment"].create({
+                    "trip_id": trip.id,
+                    "vehicle_id": self.truck_two.id,
+                }).flush_recordset()
+
+    def test_batch_four_driver_only_assignment_for_unassigned_draft_trip(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_no_truck.id,
+        })
+        driver = self.env["res.partner"].create({
+            "name": "Driver without truck yet",
+        })
+        self.assertFalse(trip.initial_vehicle_id)
+        wizard = self.env["taj.transport.initial.assignment.wizard"].create({
+            "trip_id": trip.id,
+            "driver_id": driver.id,
+        })
+        wizard.action_assign_initial_resources()
+        self.assertEqual(trip.current_driver_id, driver)
+        self.assertFalse(trip.current_vehicle_id)
+        self.assertFalse(trip.initial_vehicle_id)
+        self.assertEqual(trip.state, "draft")
+        self.assertEqual(len(trip.assignment_ids), 1)
+
+    def test_batch_four_rejects_same_driver_and_codriver(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        driver = self.env["res.partner"].create({
+            "name": "A single driver contact",
+        })
+        with self.assertRaises((ValidationError, IntegrityError)):
+            with self.env.cr.savepoint():
+                self.env["taj.transport.assignment"].create({
+                    "trip_id": trip.id,
+                    "vehicle_id": self.truck.id,
+                    "driver_id": driver.id,
+                    "co_driver_id": driver.id,
+                }).flush_recordset()
+
+    def test_batch_four_rejects_empty_assignment_and_protects_history(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        with self.assertRaises((ValidationError, IntegrityError)):
+            with self.env.cr.savepoint():
+                self.env["taj.transport.assignment"].create({
+                    "trip_id": trip.id,
+                }).flush_recordset()
+
+        assignment = self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id,
+            "vehicle_id": self.truck.id,
+        })
+        with self.assertRaises(UserError):
+            assignment.write({"driver_id": self.customer.id})
+        with self.assertRaises(UserError):
+            assignment.write({"effective_to": "2026-10-13 12:00:00"})
+        with self.assertRaises(UserError):
+            assignment.unlink()
+        self.assertEqual(len(trip.assignment_ids), 1)
+        self.assertFalse(assignment.effective_to)
+
+    def test_batch_four_rejects_inconsistent_company(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        other_company = self.env["res.company"].create({
+            "name": "Other Transport Test Company",
+        })
+        other_trailer = self.env["taj.transport.trailer"].sudo().create({
+            "name": "OTHER-TRAILER-001",
+            "company_id": other_company.id,
+        })
+        with self.assertRaises((ValidationError, UserError, AccessError)):
+            with self.env.cr.savepoint():
+                self.env["taj.transport.assignment"].create({
+                    "trip_id": trip.id,
+                    "trailer_id": other_trailer.id,
+                })
+
+    def test_batch_four_resource_views_and_permissions(self):
+        from lxml import etree
+
+        form = self.env.ref(
+            "taj_transport_operations.view_transport_trip_form"
+        )
+        root = etree.fromstring(form.get_combined_arch())
+        self.assertEqual(
+            len(root.xpath("//page[@name='trip_resources']")), 1,
+        )
+        self.assertEqual(
+            len(root.xpath("//button[@name='action_open_initial_assignment_wizard']")),
+            1,
+        )
+        for name in (
+            "current_vehicle_id", "current_trailer_id",
+            "current_driver_id", "current_co_driver_id",
+        ):
+            self.assertEqual(
+                len(root.xpath(
+                    f"//page[@name='trip_resources']//field[@name='{name}'][@readonly='1']"
+                )), 1, name,
+            )
+        history = root.xpath(
+            "//page[@name='trip_resources']//field[@name='assignment_ids']/list"
+        )
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0].get("edit"), "0")
+        self.assertEqual(history[0].get("delete"), "0")
+        self.assertTrue(self.env.ref(
+            "taj_transport_operations.menu_transport_trailers"
+        ))
+        self.assertTrue(self.env.ref(
+            "taj_transport_operations.rule_transport_assignment_companies"
+        ))
+        trailer_dispatcher = self.env.ref(
+            "taj_transport_operations.access_taj_transport_trailer_user"
+        )
+        trailer_manager = self.env.ref(
+            "taj_transport_operations.access_taj_transport_trailer_manager"
+        )
+        assignment_dispatcher = self.env.ref(
+            "taj_transport_operations.access_taj_transport_assignment_user"
+        )
+        fleet_dispatcher = self.env.ref(
+            "taj_transport_operations.access_taj_transport_fleet_vehicle_read"
+        )
+        self.assertTrue(trailer_dispatcher.perm_read)
+        self.assertFalse(trailer_dispatcher.perm_write)
+        self.assertFalse(trailer_dispatcher.perm_create)
+        self.assertTrue(trailer_manager.perm_create)
+        self.assertTrue(trailer_manager.perm_write)
+        self.assertFalse(assignment_dispatcher.perm_write)
+        self.assertFalse(assignment_dispatcher.perm_unlink)
+        self.assertTrue(fleet_dispatcher.perm_read)
+        self.assertFalse(fleet_dispatcher.perm_write)
 
     def test_batch_three_route_timing_optional_and_independent_of_sales(self):
         before = self.line_1._prepare_invoice_line()

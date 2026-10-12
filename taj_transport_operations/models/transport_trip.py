@@ -166,6 +166,65 @@ class TajTransportTrip(models.Model):
                     "Actual arrival cannot be earlier than actual departure."
                 ))
 
+    # Keep the original Sales truck snapshot untouched. The operational
+    # assignment is independently time-based for future replacements.
+    assignment_ids = fields.One2many(
+        "taj.transport.assignment", "trip_id",
+        string="Assignment History", readonly=True,
+    )
+    current_assignment_id = fields.Many2one(
+        "taj.transport.assignment", string="Current Assignment",
+        compute="_compute_current_assignment", store=True,
+        readonly=True, index=True,
+    )
+    current_vehicle_id = fields.Many2one(
+        "fleet.vehicle", string="Current Truck",
+        related="current_assignment_id.vehicle_id", readonly=True,
+    )
+    current_trailer_id = fields.Many2one(
+        "taj.transport.trailer", string="Current Trailer",
+        related="current_assignment_id.trailer_id", readonly=True,
+    )
+    current_driver_id = fields.Many2one(
+        "res.partner", string="Current Driver",
+        related="current_assignment_id.driver_id", readonly=True,
+    )
+    current_co_driver_id = fields.Many2one(
+        "res.partner", string="Current Co-driver",
+        related="current_assignment_id.co_driver_id", readonly=True,
+    )
+
+    @api.depends("assignment_ids", "assignment_ids.effective_to")
+    def _compute_current_assignment(self):
+        for trip in self:
+            current = trip.assignment_ids.filtered(
+                lambda row: not row.effective_to
+            )
+            trip.current_assignment_id = current[:1]
+
+    def action_open_initial_assignment_wizard(self):
+        self.ensure_one()
+        if self.state != "draft":
+            raise UserError(_(
+                "Initial resources can only be assigned on Draft trips."
+            ))
+        if self.current_assignment_id:
+            raise UserError(_(
+                "An active assignment already exists. Use the upcoming "
+                "replacement workflow instead of overwriting history."
+            ))
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Assign Initial Resources"),
+            "res_model": "taj.transport.initial.assignment.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_trip_id": self.id,
+                "default_vehicle_id": self.initial_vehicle_id.id or False,
+            },
+        }
+
     @api.model
     def _validate_sale_line(self, sale_line):
         if not sale_line.exists():

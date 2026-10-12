@@ -63,12 +63,44 @@ departure. Fields remain optional while trips are Draft. These are manual
 operational timestamps, not automatic Navirec or GPS events; route templates
 and milestones remain later phases. Sales and invoices are never changed.
 
+## Phase 2 / Batch 4 (Part 1): Initial Resource Assignments
+
+Each trip now has a **Resources** tab and a button to **Assign Initial
+Resources**, available only while the Draft trip has no active assignment.
+
+- Resources use Odoo Fleet vehicles, Odoo Fleet-compatible driver/co-driver
+  Contacts (`res.partner`) and a dedicated, company-scoped **Trailers**
+  master list in Transport Operations. We do not create a second driver
+  master or modify the driver's default assignment on the Fleet vehicle.
+- Existing Draft trips stay unassigned until the dispatcher explicitly
+  records an initial assignment; the initial Sales truck is *suggested* in
+  the wizard, but never silently assigned to a trip.
+- The wizard records the selected truck/trailer/driver/co-driver (at least
+  one), the **effective time and location**, reason, notes, user and
+  company. The current assignment is derived from active history.
+- Assignment rows are currently **immutable and not deletable**, even for
+  managers. A partial unique PostgreSQL index guarantees at most one open
+  assignment per trip. It will allow completed historical periods after
+  the future replacement workflow is built.
+- Dispatchers can view/create an assignment, and can read trailer master
+  data. **Transport Managers** can maintain the trailer master list.
+  Both can view assigned vehicles with *read-only* Fleet access; we do not
+  grant automatic Fleet edit permissions.
+- Validations reject the same partner as primary driver and co-driver,
+  an empty assignment, an incorrect company and a second active row.
+- These operations do not change the original sales truck or invoice
+  amounts, and they do not create a trip state transition.
+- Odoo records assignment creation timestamps and usernames in the
+  immutable assignment record. Resource changes are **not** editable yet:
+  Tuesday's replacement workflow will close the previous period and
+  create a new row, preserving the audit trail.
+
 ## Scope intentionally deferred
 
-Trailer and driver/co-driver assignments, resource replacement history,
-operational status transitions, incidents, route templates and milestones,
-Navirec monitoring inside trips and financial analytics are **not**
-implemented in Batch 3.
+Resource **replacement** history workflow, overlapping assignments checks
+across different trips, operational status transitions, incidents, route
+templates and milestones, Navirec monitoring inside trips and financial
+analytics are **not** implemented in Batch 4 Part 1.
 
 ## Installation and testing
 
@@ -76,7 +108,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.2.0`.
+`19.0.1.3.0`.
 
 Run Odoo tests on a **staging/development database**, not production, using
 the test tag:
@@ -89,7 +121,9 @@ odoo-bin -d "$PGDATABASE" --stop-after-init -u taj_transport_operations \
 The test suite covers one-to-one uniqueness, source/truck snapshots, no-truck
 lines, non-unit quantities, draft rejection, idempotent actions, wizard selection,
 related Sales commercial/cargo fields, independent editable operational fields,
-tracking configuration, form tabs and invoicing invariance.
+tracking configuration, route/timing chronology, initial resources, form
+tabs, assignment uniqueness and immutability, company separation and
+invoicing invariance.
 
 For a manual smoke test, open an existing Draft trip; the new Commercial and
 Cargo tabs should show its existing Sales data while its optional dispatcher
@@ -97,6 +131,20 @@ fields remain blank. Set a transporter, booking reference, cargo type and
 special handling instructions; save and reopen. The values should persist and
 the Chatter should show field-change tracking. Confirm the originating Sales
 Order, sales line and existing invoice remain unchanged.
+
+For a **new** Batch 3/4 smoke test, open the existing Draft trip and enter
+Origin, Destination, planned dates and actual dates in **Route & Timing**.
+Saving an arrival before its departure should fail. Open **Resources**,
+choose **Assign Initial Resources**, verify the original Sales truck is
+suggested, and select a driver/contact or trailer. Save and reopen:
+the Current Assignment and one historical row should be visible, including
+its effective time and recording user. The button should disappear once
+assigned. Create trailer masters in **Transport Operations > Trailers**
+with a Transport Manager role; Dispatchers are read-only for this master.
+
+Do **not** manually edit assignment history, change the Sales truck
+to test reassignment, or attempt an operational status transition in
+this batch.
 
 ## Sales line eligibility
 
@@ -107,8 +155,9 @@ product classifier may be introduced after real product-category review.
 
 ## Production safety
 
-Batch 1 introduced the trip table. Batch 2 adds optional columns and updates
-existing views; it does not modify or create any existing sales, purchase or
-invoice records and does not backfill historical trips. Any installation,
+Batch 1 introduced the trip table. Batches 2/3 add optional trip columns.
+Batch 4 adds optional assignment and trailer tables and related UI; the
+upgrade does not change or create any existing Sales, Purchase or invoice
+records, does not assign historical trips, and does not backfill data. Any installation,
 upgrade or future data migration should be approved and tested on development
 or staging before production.
