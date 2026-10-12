@@ -227,6 +227,88 @@ class TestTransportTripFoundation(TransactionCase):
             len(root.xpath("//filter[@name='by_transporter']")), 1
         )
 
+    def test_batch_three_route_timing_optional_and_independent_of_sales(self):
+        before = self.line_1._prepare_invoice_line()
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        self.assertFalse(trip.origin_location)
+        self.assertFalse(trip.destination_location)
+        self.assertFalse(trip.planned_departure_at)
+        self.assertFalse(trip.actual_arrival_at)
+
+        trip.write({
+            "origin_location": "Dar es Salaam",
+            "destination_location": "Lusaka",
+            "planned_departure_at": "2026-10-13 08:00:00",
+            "planned_arrival_at": "2026-10-14 18:00:00",
+            "actual_departure_at": "2026-10-13 08:20:00",
+            "actual_arrival_at": "2026-10-14 19:00:00",
+            "route_notes": "Confirm unloading appointment",
+        })
+        self.assertEqual(trip.origin_location, "Dar es Salaam")
+        self.assertEqual(trip.destination_location, "Lusaka")
+        self.assertEqual(trip.route_notes, "Confirm unloading appointment")
+        self.assertEqual(
+            trip.planned_arrival_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-10-14 18:00:00",
+        )
+        self.assertEqual(
+            trip.actual_arrival_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-10-14 19:00:00",
+        )
+        self.assertEqual(trip.state, "draft")
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertEqual(
+            self.line_1._prepare_invoice_line(), before,
+        )
+        for name in (
+            "origin_location", "destination_location",
+            "planned_departure_at", "planned_arrival_at",
+            "actual_departure_at", "actual_arrival_at", "route_notes",
+        ):
+            self.assertTrue(trip._fields[name].tracking, name)
+
+    def test_batch_three_rejects_reversed_planned_times(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                trip.write({
+                    "planned_departure_at": "2026-10-14 09:00:00",
+                    "planned_arrival_at": "2026-10-13 11:00:00",
+                })
+
+    def test_batch_three_rejects_reversed_actual_times(self):
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                self.env["taj.transport.trip"].create({
+                    "sale_line_id": self.line_1.id,
+                    "actual_departure_at": "2026-10-14 09:00:00",
+                    "actual_arrival_at": "2026-10-13 11:00:00",
+                })
+
+    def test_batch_three_form_has_route_tab(self):
+        from lxml import etree
+
+        view = self.env.ref(
+            "taj_transport_operations.view_transport_trip_form"
+        )
+        root = etree.fromstring(view.get_combined_arch())
+        self.assertEqual(
+            len(root.xpath("//page[@name='route_timing']")), 1,
+        )
+        for name in (
+            "origin_location", "destination_location",
+            "planned_departure_at", "planned_arrival_at",
+            "actual_departure_at", "actual_arrival_at", "route_notes",
+        ):
+            self.assertEqual(
+                len(root.xpath(f"//page[@name='route_timing']//field[@name='{name}']")),
+                1, name,
+            )
+
     def test_batch_two_commercial_source_fields_follow_sales(self):
         self.order.write({
             "client_order_ref": "PO-EXT-2026",

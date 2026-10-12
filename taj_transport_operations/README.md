@@ -54,12 +54,21 @@ All new fields are nullable, so existing Draft trips from Batch 1 continue to
 work. No backfill, auto-creation, or pricing recalculation is performed.
 `Sales Line Quantity` is informative and is **not** a count of trips.
 
+## Phase 2 / Batch 3: Route & Timing
+
+The **Route & Timing** tab adds editable, tracked origin/destination text,
+route instructions, and planned/actual departure/arrival timestamps.
+It validates that an arrival timestamp is not earlier than its corresponding
+departure. Fields remain optional while trips are Draft. These are manual
+operational timestamps, not automatic Navirec or GPS events; route templates
+and milestones remain later phases. Sales and invoices are never changed.
+
 ## Scope intentionally deferred
 
-Route planning and journey timings, trailer and driver/co-driver assignments,
-resource assignment history, operational status transitions, incidents,
-milestones, Navirec monitoring inside trips and financial analytics are
-**not** implemented in Batch 2.
+Trailer and driver/co-driver assignments, resource replacement history,
+operational status transitions, incidents, route templates and milestones,
+Navirec monitoring inside trips and financial analytics are **not**
+implemented in Batch 3.
 
 ## Installation and testing
 
@@ -67,7 +76,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.1.0`.
+`19.0.1.2.0`.
 
 Run Odoo tests on a **staging/development database**, not production, using
 the test tag:

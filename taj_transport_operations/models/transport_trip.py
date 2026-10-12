@@ -119,6 +119,53 @@ class TajTransportTrip(models.Model):
         help="Optional loading, storage, security or handling instructions.",
     )
 
+    # Dispatcher-entered route and timing: no route template or GPS automation
+    # is introduced here (those are separate future phases).
+    origin_location = fields.Char(
+        string="Origin", tracking=True, copy=False,
+        help="Free-text starting location for this trip.",
+    )
+    destination_location = fields.Char(
+        string="Destination", tracking=True, copy=False,
+        help="Free-text delivery destination for this trip.",
+    )
+    planned_departure_at = fields.Datetime(
+        string="Planned Departure", tracking=True, copy=False,
+    )
+    planned_arrival_at = fields.Datetime(
+        string="Planned Arrival", tracking=True, copy=False,
+    )
+    actual_departure_at = fields.Datetime(
+        string="Actual Departure", tracking=True, copy=False,
+    )
+    actual_arrival_at = fields.Datetime(
+        string="Actual Arrival", tracking=True, copy=False,
+    )
+    route_notes = fields.Text(
+        string="Route Instructions", tracking=True, copy=False,
+    )
+
+    @api.constrains(
+        "planned_departure_at", "planned_arrival_at",
+        "actual_departure_at", "actual_arrival_at",
+    )
+    def _check_route_timing(self):
+        for trip in self:
+            if (
+                trip.planned_departure_at and trip.planned_arrival_at
+                and trip.planned_arrival_at < trip.planned_departure_at
+            ):
+                raise ValidationError(_(
+                    "Planned arrival cannot be earlier than planned departure."
+                ))
+            if (
+                trip.actual_departure_at and trip.actual_arrival_at
+                and trip.actual_arrival_at < trip.actual_departure_at
+            ):
+                raise ValidationError(_(
+                    "Actual arrival cannot be earlier than actual departure."
+                ))
+
     @api.model
     def _validate_sale_line(self, sale_line):
         if not sale_line.exists():

@@ -14,6 +14,10 @@
                 <field name="transport_reference" optional="hide"/>
                 <field name="initial_vehicle_id" optional="show"/>
                 <field name="container_num" optional="show"/>
+                <field name="origin_location" optional="show"/>
+                <field name="destination_location" optional="show"/>
+                <field name="planned_departure_at" optional="hide"/>
+                <field name="planned_arrival_at" optional="hide"/>
                 <field name="state" widget="badge"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
             </list>
@@ -106,6 +110,27 @@
                                 Missing Sales cargo fields do not block a Draft trip.
                             </p>
                         </page>
+                        <page string="Route &amp; Timing" name="route_timing">
+                            <group>
+                                <group string="Route">
+                                    <field name="origin_location" placeholder="Loading / departure location"/>
+                                    <field name="destination_location" placeholder="Unloading / delivery location"/>
+                                    <field name="route_notes" placeholder="Route and dispatch instructions"/>
+                                </group>
+                                <group string="Schedule">
+                                    <field name="planned_departure_at"/>
+                                    <field name="planned_arrival_at"/>
+                                    <field name="actual_departure_at"/>
+                                    <field name="actual_arrival_at"/>
+                                </group>
+                            </group>
+                            <p class="text-muted">
+                                Enter route details and planned times during planning.
+                                Actual times are entered manually for now. Route
+                                templates, milestones and GPS automation are out of
+                                scope for this batch.
+                            </p>
+                        </page>
                     </notebook>
                 </sheet>
                 <chatter/>
@@ -124,6 +149,8 @@
                 <field name="transporter_id"/>
                 <field name="transport_reference"/>
                 <field name="cargo_type"/>
+                <field name="origin_location"/>
+                <field name="destination_location"/>
                 <field name="initial_vehicle_id"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
                 <group>
