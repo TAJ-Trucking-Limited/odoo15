@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <function model="fleet.vehicle.model.category" name="_ensure_transport_categories"/>
+</odoo>

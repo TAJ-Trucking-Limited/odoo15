@@ -84,6 +84,24 @@ class TestNavirecReportSubscription(TransactionCase):
             datetime(2026, 9, 26, 5, 0, 0),
         )
 
+    def test_select_all_excludes_trailers_without_devices(self):
+        category = self.env.ref("taj_transport_operations.fleet_category_trailer",
+                                raise_if_not_found=False)
+        category = category or self.env["fleet.vehicle.model.category"].search([
+            ("name", "=ilike", "Trailer"),
+        ], limit=1) or self.env["fleet.vehicle.model.category"].create({"name": "Trailer"})
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.model.id, "category_id": category.id,
+            "license_plate": "REPORT-TRAILER",
+        })
+        subscription = self._create_subscription()
+        subscription.action_select_all_vehicles()
+        self.assertIn(self.vehicle_a, subscription.vehicle_ids)
+        self.assertNotIn(trailer, subscription.vehicle_ids)
+        trailer.navirec_uuid = "trailer-device"
+        subscription.action_select_all_vehicles()
+        self.assertIn(trailer, subscription.vehicle_ids)
+
     def test_active_subscription_requires_vehicle(self):
         subscription = self._create_subscription(vehicle_ids=[Command.clear()])
 

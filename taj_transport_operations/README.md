@@ -69,8 +69,8 @@ Each trip now has a **Resources** tab and a button to **Assign Initial
 Resources**, available only while the Draft trip has no active assignment.
 
 - Resources use Odoo Fleet vehicles, Odoo Fleet-compatible driver/co-driver
-  Contacts (`res.partner`) and a dedicated, company-scoped **Trailers**
-  master list in Transport Operations. We do not create a second driver
+  Contacts (`res.partner`), with both trucks and trailers stored in Fleet.
+  Stable Truck and Trailer category XML IDs distinguish resource types. We do not create a second driver
   master or modify the driver's default assignment on the Fleet vehicle.
 - Existing Draft trips stay unassigned until the dispatcher explicitly
   records an initial assignment; the initial Sales truck is *suggested* in
@@ -82,10 +82,10 @@ Resources**, available only while the Draft trip has no active assignment.
   managers. A partial unique PostgreSQL index guarantees at most one open
   assignment per trip. It will allow completed historical periods after
   the future replacement workflow is built.
-- Dispatchers can view/create an assignment, and can read trailer master
-  data. **Transport Managers** can maintain the trailer master list.
-  Both can view assigned vehicles with *read-only* Fleet access; we do not
-  grant automatic Fleet edit permissions.
+- Dispatchers and Transport Managers can create assignments and read Fleet
+  trucks/trailers in allowed companies. Creating/editing Fleet trailers requires
+  an existing Fleet Officer/Administrator role. Transport roles do not grant
+  Fleet edit permissions; existing Fleet company rules remain in force.
 - Validations reject the same partner as primary driver and co-driver,
   an empty assignment, an incorrect company and a second active row.
 - These operations do not change the original sales truck or invoice
@@ -108,7 +108,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.3.0`.
+`19.0.1.4.0` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.1`).
 
 Run Odoo tests on a **staging/development database**, not production, using
 the test tag:
@@ -139,8 +139,9 @@ choose **Assign Initial Resources**, verify the original Sales truck is
 suggested, and select a driver/contact or trailer. Save and reopen:
 the Current Assignment and one historical row should be visible, including
 its effective time and recording user. The button should disappear once
-assigned. Create trailer masters in **Transport Operations > Trailers**
-with a Transport Manager role; Dispatchers are read-only for this master.
+assigned. Create trailers in **Fleet** or **Transport Operations > Trailers** with an
+existing Fleet role. Choose a model and vehicle category of **Trailer**;
+Dispatchers and Transport Managers without Fleet rights have read-only access.
 
 Do **not** manually edit assignment history, change the Sales truck
 to test reassignment, or attempt an operational status transition in
@@ -161,3 +162,84 @@ upgrade does not change or create any existing Sales, Purchase or invoice
 records, does not assign historical trips, and does not backfill data. Any installation,
 upgrade or future data migration should be approved and tested on development
 or staging before production.
+
+
+## Fleet trailer refactor and upgrade migration
+
+Truck and trailer selectors require active Fleet records with their respective
+module-linked categories. The server checks category, visibility and company,
+including API calls that bypass the wizard domains. Drivers stay independent
+Contacts assignments; Fleet default drivers, Sales trucks and invoice preparation
+are unchanged. Fleet vehicle deletion is restricted by assignment references.
+Changing an assigned vehicle's model/category cannot change its resource type.
+
+Initialization adopts an existing case-insensitive **Truck** or **Trailer** category
+without renaming it, and creates it only when absent. Multiple matching categories
+stop initialization for review. XML IDs `fleet_category_truck` and
+`fleet_category_trailer` remain stable even when category names change.
+Categorize both Fleet models and vehicle records. Standard Odoo copies a nonempty
+model category when a vehicle's model changes; editing a model's category alone
+is not a bulk recategorization of its existing vehicles. Existing trucks are never
+recategorized automatically. Unclassified original Sales trucks remain historical
+snapshots, but cannot become new truck assignments until a Fleet administrator
+sets the vehicle's Truck category.
+
+The Trailer menu uses a Fleet form with plate, model, company, status and notes.
+The standard Fleet form also hides engine/seating/hitch details for trailers.
+No new `vehicle_type` value or separate driver master is introduced.
+
+The `19.0.1.4.0` **pre-migration** translates legacy trailer IDs before Odoo changes
+the assignment and transient-wizard foreign keys. It matches normalized plates in
+the same company, including inactive records, and reuses only Trailer-category
+Fleet records. Otherwise it creates a Fleet trailer using a Trailer-category model
+(or an explicitly unspecified legacy manufacturer/model). The legacy identifier
+and notes are preserved in Fleet description; new records preserve active status.
+Existing Fleet records retain their state, driver, telemetry and plate. Ambiguous
+plates, incompatible categories/companies or missing legacy references abort the
+upgrade transaction instead of guessing. Empty legacy databases are supported.
+
+A durable `fleet_vehicle_id` mapping remains on every old trailer row. A completion
+marker makes a repeated migration a no-op. Historical rows retain their trip,
+truck, drivers, author, dates, reason and notes; only the trailer foreign key is
+translated to the equivalent Fleet entity. No production migration has been run.
+
+Because the actual staging database has not been inspected, the old model/table
+is deliberately retained as a **locked migration archive**, with no menu, no
+transport ACL and blocked create/write/delete methods. It is not a trailer master
+and no operational field references it. Retire the archive only in a later upgrade
+once its mapping and historical references have been verified on staging.
+
+Navirec excludes trailers without devices from automatic plate matching, mapping
+audit candidates and **Select All Vehicles** for client reports. They show
+**No Tracking Device Required**, rather than Not Mapped. Existing explicitly
+mapped trailers continue syncing and can be selected for reports. Existing report
+subscriptions and truck device mappings are not rewritten.
+
+### Manual staging upgrade and acceptance
+
+1. Wait for Odoo.sh `19_upgrade` to build the pushed commit successfully. Use the
+   development/staging build, never production. Keep a restorable database backup.
+2. In Apps, manually upgrade **TAJ Transport Operations** to `19.0.1.4.0` and
+   **TAJ Navirec Fleet Integration** to `19.0.1.3.1`. Do not uninstall/reinstall.
+   The legacy migration runs as part of the Transport module upgrade transaction.
+   If it stops on ambiguous data, review the reported legacy record and correct
+   Fleet classification/matching; do not delete history to make it pass.
+3. In Fleet, verify Truck/Trailer categories and model/vehicle classification.
+   Check that legacy trailers have the correct plate, company, description and
+   active status, and that existing assignment trailer references point to them.
+4. Open an unassigned Draft trip (for example `TRIP/2026/00001` if still unassigned).
+   In Resources, open Assign Initial Resources. Check the proposed Sales truck,
+   select a Fleet trailer, driver and optional co-driver, save and reopen.
+5. Verify current resources, one active history row, its effective time and author,
+   and unchanged Sales truck snapshot, Sales line and invoice values. Category
+   mismatches, same driver/co-driver, empty and duplicate assignments must fail.
+6. Verify Dispatcher read-only Fleet access and cross-company restrictions with
+   two users/companies. A Fleet-authorized user can maintain permitted trailers.
+7. Check Navirec matching/audit and a report preview. Unmapped trailers should not
+   be automatic candidates; existing truck mappings and telemetry should persist.
+
+Regression tests cover these assignment rules, a nonempty migration with colliding
+legacy/Fleet IDs, archived trailers, reuse, history preservation and idempotence,
+and Navirec automatic candidate/report selection. They were added for Odoo runtime
+execution; local validation is limited to Python/XML/manifest/ACL/view checks.
+Runtime tests and actual staging upgrade/UAT have **not** been executed in this session.

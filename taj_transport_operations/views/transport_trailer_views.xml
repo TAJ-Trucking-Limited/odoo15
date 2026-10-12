@@ -1,52 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="view_transport_trailer_list" model="ir.ui.view">
-        <field name="name">taj.transport.trailer.list</field>
-        <field name="model">taj.transport.trailer</field>
+        <field name="name">fleet.vehicle.transport.trailer.list</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="priority">100</field>
         <field name="arch" type="xml">
             <list string="Transport Trailers">
-                <field name="name"/>
-                <field name="registration_number"/>
+                <field name="model_id"/>
+                <field name="license_plate"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="active" optional="hide"/>
             </list>
         </field>
     </record>
     <record id="view_transport_trailer_form" model="ir.ui.view">
-        <field name="name">taj.transport.trailer.form</field>
-        <field name="model">taj.transport.trailer</field>
+        <field name="name">fleet.vehicle.transport.trailer.form</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="priority">100</field>
         <field name="arch" type="xml">
             <form string="Transport Trailer">
                 <sheet>
                     <group>
                         <group string="Trailer">
-                            <field name="name"/>
-                            <field name="registration_number"/>
+                            <field name="category_id" readonly="1"/>
+                            <field name="model_id" domain="[('category_id', '=', category_id)]"/>
+                            <field name="license_plate"/>
+                            <field name="vin_sn"/>
                             <field name="active"/>
                         </group>
                         <group string="Administration">
                             <field name="company_id" groups="base.group_multi_company"/>
-                            <field name="notes"/>
+                            <field name="state_id"/>
+                            <field name="location"/>
+                            <field name="description"/>
                         </group>
                     </group>
                 </sheet>
+                <chatter/>
             </form>
         </field>
     </record>
     <record id="view_transport_trailer_search" model="ir.ui.view">
-        <field name="name">taj.transport.trailer.search</field>
-        <field name="model">taj.transport.trailer</field>
+        <field name="name">fleet.vehicle.transport.trailer.search</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="priority">100</field>
         <field name="arch" type="xml">
             <search string="Transport Trailers">
-                <field name="name"/>
-                <field name="registration_number"/>
+                <field name="model_id"/>
+                <field name="license_plate"/>
             </search>
         </field>
     </record>
     <record id="action_transport_trailer" model="ir.actions.act_window">
         <field name="name">Transport Trailers</field>
-        <field name="res_model">taj.transport.trailer</field>
+        <field name="res_model">fleet.vehicle</field>
         <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_transport_trailer_list"/>
+        <field name="search_view_id" ref="view_transport_trailer_search"/>
+        <field name="domain" eval="[('category_id', '=', ref('fleet_category_trailer'))]"/>
+        <field name="context" eval="{'default_category_id': ref('fleet_category_trailer')}"/>
+    </record>
+    <record id="action_transport_trailer_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_transport_trailer_list"/>
+        <field name="act_window_id" ref="action_transport_trailer"/>
+    </record>
+    <record id="action_transport_trailer_form" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_transport_trailer_form"/>
+        <field name="act_window_id" ref="action_transport_trailer"/>
+    </record>
+    <record id="view_fleet_vehicle_form_transport" model="ir.ui.view">
+        <field name="name">fleet.vehicle.form.transport</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="inherit_id" ref="fleet.fleet_vehicle_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <field name="is_transport_trailer" invisible="1"/>
+            </xpath>
+            <xpath expr="//group[field[@name='fuel_type']]" position="attributes">
+                <attribute name="invisible">vehicle_type != 'car' or is_transport_trailer</attribute>
+            </xpath>
+            <xpath expr="//field[@name='seats']" position="attributes">
+                <attribute name="invisible">vehicle_type != 'car' or is_transport_trailer</attribute>
+            </xpath>
+            <xpath expr="//field[@name='doors']" position="attributes">
+                <attribute name="invisible">vehicle_type != 'car' or is_transport_trailer</attribute>
+            </xpath>
+            <xpath expr="//field[@name='trailer_hook']" position="attributes">
+                <attribute name="invisible">vehicle_type != 'car' or is_transport_trailer</attribute>
+            </xpath>
+            <xpath expr="//field[@name='horsepower_tax']" position="attributes">
+                <attribute name="invisible">is_transport_trailer</attribute>
+            </xpath>
+        </field>
     </record>
     <menuitem id="menu_transport_trailers" name="Trailers"
               parent="taj_transport_operations.menu_transport_operations"

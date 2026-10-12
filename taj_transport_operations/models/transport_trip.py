@@ -182,7 +182,7 @@ class TajTransportTrip(models.Model):
         related="current_assignment_id.vehicle_id", readonly=True,
     )
     current_trailer_id = fields.Many2one(
-        "taj.transport.trailer", string="Current Trailer",
+        "fleet.vehicle", string="Current Trailer",
         related="current_assignment_id.trailer_id", readonly=True,
     )
     current_driver_id = fields.Many2one(

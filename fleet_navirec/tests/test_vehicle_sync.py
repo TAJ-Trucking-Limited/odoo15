@@ -64,6 +64,30 @@ class TestVehicleSync(TransactionCase):
         )
         self.assertTrue(self.vehicle.navirec_switched_by_ignition)
 
+    def test_unmapped_trailers_are_not_automatic_tracking_candidates(self):
+        category = self.env.ref("taj_transport_operations.fleet_category_trailer",
+                                raise_if_not_found=False)
+        category = category or self.env["fleet.vehicle.model.category"].search([
+            ("name", "=ilike", "Trailer"),
+        ], limit=1) or self.env["fleet.vehicle.model.category"].create({"name": "Trailer"})
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.model.id, "category_id": category.id,
+            "license_plate": "NAV-TRAILER-001",
+        })
+        client = Mock()
+        client.get_vehicles.return_value = [
+            {"id": "truck-device", "registration": self.vehicle.license_plate},
+            {"id": "trailer-device", "registration": trailer.license_plate},
+        ]
+        audit = self.vehicle._navirec_build_mapping_audit(client)
+        self.assertNotIn(trailer.license_plate, audit["odoo_only"])
+        self.assertEqual(self.vehicle._navirec_match_vehicles(client), 1)
+        self.assertFalse(trailer.navirec_uuid)
+        self.assertEqual(trailer.navirec_integration_status, "not_applicable")
+        trailer.navirec_uuid = "trailer-device"
+        self.assertEqual(self.vehicle._navirec_match_vehicles(client), 2)
+        self.assertEqual(trailer.navirec_uuid, "trailer-device")
+
     def test_mapping_audit_reports_matches_duplicates_and_unmatched(self):
         duplicate_local = self.env["fleet.vehicle"].create({
             "model_id": self.model.id,

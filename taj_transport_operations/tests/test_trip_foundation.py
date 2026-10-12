@@ -25,6 +25,16 @@ class TestTransportTripFoundation(TransactionCase):
         cls.model = cls.env["fleet.vehicle.model"].create({
             "name": "Transport Test Truck",
             "brand_id": cls.brand.id,
+            "category_id": cls.env.ref(
+                "taj_transport_operations.fleet_category_truck"
+            ).id,
+        })
+        cls.trailer_model = cls.env["fleet.vehicle.model"].create({
+            "name": "Transport Test Trailer",
+            "brand_id": cls.brand.id,
+            "category_id": cls.env.ref(
+                "taj_transport_operations.fleet_category_trailer"
+            ).id,
         })
         cls.truck = cls.env["fleet.vehicle"].create({
             "model_id": cls.model.id,
@@ -241,9 +251,9 @@ class TestTransportTripFoundation(TransactionCase):
         co_driver = self.env["res.partner"].create({
             "name": "Batch Four Co-driver",
         })
-        trailer = self.env["taj.transport.trailer"].create({
-            "name": "TEST-TRAILER-001",
-            "registration_number": "TRL-001",
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "TRL-001",
         })
         before_invoice_line = self.line_1._prepare_invoice_line()
         open_action = trip.action_open_initial_assignment_wizard()
@@ -364,8 +374,9 @@ class TestTransportTripFoundation(TransactionCase):
         other_company = self.env["res.company"].create({
             "name": "Other Transport Test Company",
         })
-        other_trailer = self.env["taj.transport.trailer"].sudo().create({
-            "name": "OTHER-TRAILER-001",
+        other_trailer = self.env["fleet.vehicle"].sudo().create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "OTHER-TRAILER-001",
             "company_id": other_company.id,
         })
         with self.assertRaises((ValidationError, UserError, AccessError)):
@@ -410,27 +421,77 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertTrue(self.env.ref(
             "taj_transport_operations.rule_transport_assignment_companies"
         ))
-        trailer_dispatcher = self.env.ref(
-            "taj_transport_operations.access_taj_transport_trailer_user"
-        )
-        trailer_manager = self.env.ref(
-            "taj_transport_operations.access_taj_transport_trailer_manager"
-        )
         assignment_dispatcher = self.env.ref(
             "taj_transport_operations.access_taj_transport_assignment_user"
         )
         fleet_dispatcher = self.env.ref(
             "taj_transport_operations.access_taj_transport_fleet_vehicle_read"
         )
-        self.assertTrue(trailer_dispatcher.perm_read)
-        self.assertFalse(trailer_dispatcher.perm_write)
-        self.assertFalse(trailer_dispatcher.perm_create)
-        self.assertTrue(trailer_manager.perm_create)
-        self.assertTrue(trailer_manager.perm_write)
         self.assertFalse(assignment_dispatcher.perm_write)
         self.assertFalse(assignment_dispatcher.perm_unlink)
         self.assertTrue(fleet_dispatcher.perm_read)
         self.assertFalse(fleet_dispatcher.perm_write)
+        self.assertEqual(self.env.ref(
+            "taj_transport_operations.action_transport_trailer"
+        ).res_model, "fleet.vehicle")
+
+    def test_assignment_rejects_wrong_fleet_categories(self):
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id, "license_plate": "TRL-CATEGORY",
+        })
+        for values in ({"trailer_id": self.truck.id}, {"vehicle_id": trailer.id}):
+            with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                self.env["taj.transport.assignment"].create(dict(values, trip_id=trip.id))
+        self.assertFalse(trip.assignment_ids)
+
+    def test_assignment_rejects_archived_resources(self):
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        self.truck.active = False
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.env["taj.transport.assignment"].create({
+                "trip_id": trip.id, "vehicle_id": self.truck.id,
+            })
+
+    def test_model_change_cannot_reclassify_assigned_truck(self):
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        assignment = self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id, "vehicle_id": self.truck.id,
+        })
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.model_id = self.trailer_model
+        self.assertEqual(assignment.vehicle_id, self.truck)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+
+    def test_assignment_does_not_change_fleet_default_driver(self):
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        self.truck.driver_id = self.customer
+        driver = self.env["res.partner"].create({"name": "Independent trip driver"})
+        self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id, "vehicle_id": self.truck.id, "driver_id": driver.id,
+        })
+        self.assertEqual(self.truck.driver_id, self.customer)
+        self.assertEqual(trip.current_driver_id, driver)
+
+    def test_dispatcher_cannot_edit_fleet_or_select_other_company(self):
+        from odoo.tests.common import new_test_user
+
+        user = new_test_user(self.env, login="transport_fleet_dispatcher",
+            groups="taj_transport_operations.group_transport_user,sales_team.group_sale_salesman_all_leads")
+        user.company_ids = self.env.company
+        user.company_id = self.env.company
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        self.assertEqual(self.truck.with_user(user).license_plate, "PH2-TEST-01")
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.truck.with_user(user).write({"license_plate": "UNAUTHORIZED"})
+        other_company = self.env["res.company"].create({"name": "Restricted Fleet Company"})
+        other_trailer = self.env["fleet.vehicle"].sudo().create({
+            "model_id": self.trailer_model.id, "company_id": other_company.id,
+        })
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.env["taj.transport.assignment"].with_user(user).create({
+                "trip_id": trip.id, "trailer_id": other_trailer.id,
+            })
 
     def test_batch_three_route_timing_optional_and_independent_of_sales(self):
         before = self.line_1._prepare_invoice_line()

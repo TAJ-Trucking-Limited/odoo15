@@ -48,6 +48,7 @@ class FleetVehicle(models.Model):
     navirec_integration_status = fields.Selection(
         [
             ("not_mapped", "Not Mapped"),
+            ("not_applicable", "No Tracking Device Required"),
             ("awaiting_data", "Awaiting GPS Data"),
             ("connected", "Connected"),
             ("stale", "Stale"),
@@ -99,10 +100,28 @@ class FleetVehicle(models.Model):
                 > stale_hours * 3600
             )
 
-    @api.depends("navirec_uuid", "navirec_last_state_time", "navirec_is_stale")
+    @api.model
+    def _navirec_trailer_categories(self):
+        category = self.env.ref("taj_transport_operations.fleet_category_trailer",
+                                raise_if_not_found=False)
+        return category or self.env["fleet.vehicle.model.category"].search([
+            ("name", "=ilike", "Trailer"),
+        ])
+
+    @api.model
+    def _navirec_tracking_domain(self):
+        # Keep existing truck mappings and explicitly device-equipped trailers.
+        return ["|", ("category_id", "not in", self._navirec_trailer_categories().ids),
+                ("navirec_uuid", "!=", False)]
+
+    @api.depends("navirec_uuid", "navirec_last_state_time", "navirec_is_stale",
+                 "category_id", "category_id.name")
     def _compute_navirec_integration_status(self):
+        trailers = self._navirec_trailer_categories()
         for vehicle in self:
-            if not vehicle.navirec_uuid:
+            if not vehicle.navirec_uuid and vehicle.category_id in trailers:
+                vehicle.navirec_integration_status = "not_applicable"
+            elif not vehicle.navirec_uuid:
                 vehicle.navirec_integration_status = "not_mapped"
             elif not vehicle.navirec_last_state_time:
                 vehicle.navirec_integration_status = "awaiting_data"
@@ -709,7 +728,7 @@ class FleetVehicle(models.Model):
                 remote_by_plate.setdefault(plate, []).append(item)
 
         local_by_plate = {}
-        for vehicle in self.search([]):
+        for vehicle in self.search(self._navirec_tracking_domain()):
             plate = self._normalize_plate(vehicle.license_plate)
             if plate:
                 local_by_plate.setdefault(plate, self.browse())
@@ -773,7 +792,7 @@ class FleetVehicle(models.Model):
             )
 
         local_by_plate = {}
-        for vehicle in self.search([]):
+        for vehicle in self.search(self._navirec_tracking_domain()):
             plate = self._normalize_plate(vehicle.license_plate)
             if not plate:
                 if vehicle.navirec_uuid:

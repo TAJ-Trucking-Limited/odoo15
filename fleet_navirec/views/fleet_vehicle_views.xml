@@ -42,6 +42,10 @@
                         been received yet.
                     </div>
 
+                    <div class="alert alert-info" role="status"
+                        invisible="navirec_integration_status != 'not_applicable'">
+                        No tracking device is configured for this trailer.
+                    </div>
                     <group>
                         <group string="Integration">
                             <field name="navirec_integration_status"
@@ -58,7 +62,7 @@
                         </group>
 
                         <group string="Current Position"
-                            invisible="navirec_integration_status == 'not_mapped'">
+                            invisible="navirec_integration_status in ('not_mapped', 'not_applicable')">
                             <field name="navirec_position_display"
                                 readonly="1"/>
                             <field name="navirec_location_name"
@@ -74,7 +78,7 @@
                         </group>
                     </group>
 
-                    <group invisible="navirec_integration_status == 'not_mapped'">
+                    <group invisible="navirec_integration_status in ('not_mapped', 'not_applicable')">
                         <group string="Movement">
                             <field name="navirec_movement_state"
                                 widget="badge"

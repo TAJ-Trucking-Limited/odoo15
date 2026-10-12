@@ -342,7 +342,8 @@ class FleetNavirecReportSubscription(models.Model):
 
     def action_select_all_vehicles(self):
         self.ensure_one()
-        vehicles = self.env["fleet.vehicle"].search([("active", "=", True)])
+        fleet = self.env["fleet.vehicle"]
+        vehicles = fleet.search([("active", "=", True)] + fleet._navirec_tracking_domain())
         self.vehicle_ids = [(6, 0, vehicles.ids)]
         return True
 

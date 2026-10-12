@@ -13,10 +13,17 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
     )
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck",
+        domain=lambda self: "[('category_id', '=', %s), ('active', '=', True), '|', "
+                            "('company_id', '=', False), ('company_id', '=', company_id)]" %
+                            self.env.ref("taj_transport_operations.fleet_category_truck").id,
     )
     trailer_id = fields.Many2one(
-        "taj.transport.trailer", string="Trailer",
+        "fleet.vehicle", string="Trailer",
+        domain=lambda self: "[('category_id', '=', %s), ('active', '=', True), '|', "
+                            "('company_id', '=', False), ('company_id', '=', company_id)]" %
+                            self.env.ref("taj_transport_operations.fleet_category_trailer").id,
     )
+    company_id = fields.Many2one("res.company", related="trip_id.company_id", readonly=True)
     driver_id = fields.Many2one(
         "res.partner", string="Driver",
     )

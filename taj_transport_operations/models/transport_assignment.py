@@ -34,10 +34,13 @@ class TajTransportAssignment(models.Model):
     )
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck", check_company=True, copy=False,
+        ondelete="restrict",
+        domain=lambda self: self.env["fleet.vehicle"]._transport_resource_domain("truck"),
     )
     trailer_id = fields.Many2one(
-        "taj.transport.trailer", string="Trailer",
+        "fleet.vehicle", string="Trailer", ondelete="restrict",
         check_company=True, copy=False,
+        domain=lambda self: self.env["fleet.vehicle"]._transport_resource_domain("trailer"),
     )
     driver_id = fields.Many2one(
         "res.partner", string="Driver",
@@ -85,6 +88,12 @@ class TajTransportAssignment(models.Model):
     )
     def _check_initial_assignment(self):
         for assignment in self:
+            for kind, vehicle in (("truck", assignment.vehicle_id),
+                                  ("trailer", assignment.trailer_id)):
+                if vehicle:
+                    category = self.env.ref("taj_transport_operations.fleet_category_" + kind)
+                    if not vehicle.active or vehicle.category_id != category:
+                        raise ValidationError(_("Select an active Fleet vehicle in the correct resource category."))
             if not any((
                 assignment.vehicle_id, assignment.trailer_id,
                 assignment.driver_id, assignment.co_driver_id,
@@ -117,6 +126,16 @@ class TajTransportAssignment(models.Model):
             ).exists()
             if not trip:
                 raise ValidationError(_("Select an existing trip."))
+            trip.check_access("read")
+            for field, model in (("vehicle_id", "fleet.vehicle"),
+                                 ("trailer_id", "fleet.vehicle"),
+                                 ("driver_id", "res.partner"),
+                                 ("co_driver_id", "res.partner")):
+                if vals.get(field):
+                    resource = self.env[model].browse(vals[field]).exists()
+                    if not resource:
+                        raise ValidationError(_("Select an existing resource."))
+                    resource.check_access("read")
             if trip.state != "draft":
                 raise UserError(_(
                     "Initial resources can only be assigned to a Draft trip."
