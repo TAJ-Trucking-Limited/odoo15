@@ -225,6 +225,33 @@ class TajTransportTrip(models.Model):
             },
         }
 
+    def action_open_replace_assignment_wizard(self):
+        self.ensure_one()
+        self.check_access("write")
+        if self.state != "draft":
+            raise UserError(_("Resources can only be replaced on Draft trips."))
+        current = self.current_assignment_id
+        if not current:
+            raise UserError(_(
+                "Assign initial resources before making a replacement."
+            ))
+        current.check_access("read")
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Replace Trip Resources"),
+            "res_model": "taj.transport.replace.assignment.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_trip_id": self.id,
+                "default_expected_assignment_id": current.id,
+                "default_vehicle_id": current.vehicle_id.id or False,
+                "default_trailer_id": current.trailer_id.id or False,
+                "default_driver_id": current.driver_id.id or False,
+                "default_co_driver_id": current.co_driver_id.id or False,
+            },
+        }
+
     @api.model
     def _validate_sale_line(self, sale_line):
         if not sale_line.exists():

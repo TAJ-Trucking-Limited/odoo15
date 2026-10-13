@@ -142,11 +142,15 @@
                                     <field name="current_driver_id" readonly="1"/>
                                     <field name="current_co_driver_id" readonly="1"/>
                                 </group>
-                                <group string="Initial Assignment">
+                                <group string="Resource Actions">
                                     <button string="Assign Initial Resources"
                                             name="action_open_initial_assignment_wizard"
                                             type="object" class="btn-primary"
                                             invisible="current_assignment_id or state != 'draft'"/>
+                                    <button string="Replace Resources"
+                                            name="action_open_replace_assignment_wizard"
+                                            type="object" class="btn-primary"
+                                            invisible="not current_assignment_id or state != 'draft'"/>
                                 </group>
                             </group>
                             <p class="text-muted">

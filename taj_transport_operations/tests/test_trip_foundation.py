@@ -1,7 +1,9 @@
 """Acceptance tests for Phase 2, batch 1. Run with Odoo's --test-tags."""
+from datetime import timedelta
+
 from psycopg2 import IntegrityError
 
-from odoo import Command
+from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
@@ -534,6 +536,367 @@ class TestTransportTripFoundation(TransactionCase):
             self.env["taj.transport.assignment"].with_user(user).create({
                 "trip_id": trip.id, "trailer_id": other_trailer.id,
             })
+
+    def _replacement_fixture(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "REPLACEMENT-TRAILER",
+        })
+        driver = self.env["res.partner"].create({
+            "name": "Original replacement-test driver",
+        })
+        started = fields.Datetime.now() - timedelta(hours=6)
+        original = self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id,
+            "vehicle_id": self.truck.id,
+            "trailer_id": trailer.id,
+            "driver_id": driver.id,
+            "effective_from": started,
+            "effective_location": "Origin Depot",
+        })
+        return trip, original, trailer, driver
+
+    def _replacement_wizard(self, trip, effective_from, **overrides):
+        action = trip.action_open_replace_assignment_wizard()
+        vals = {
+            "trip_id": trip.id,
+            "expected_assignment_id": action["context"]["default_expected_assignment_id"],
+            "effective_from": effective_from,
+            "reason": "Truck replacement",
+        }
+        vals.update(overrides)
+        return self.env[
+            "taj.transport.replace.assignment.wizard"
+        ].with_context(**action["context"]).create(vals)
+
+    def test_replace_resources_preserves_history_sales_and_unchanged_crew(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        before_invoice = self.line_1._prepare_invoice_line()
+        replacement_at = original.effective_from + timedelta(hours=2)
+        wizard = self._replacement_wizard(
+            trip, replacement_at,
+            vehicle_id=self.truck_two.id,
+            effective_location="Nakonde",
+            reason="Truck breakdown",
+            notes="Replacement truck sent by dispatcher",
+        )
+        self.assertEqual(wizard.trailer_id, trailer)
+        self.assertEqual(wizard.driver_id, driver)
+        result = wizard.action_replace_resources()
+        self.assertEqual(result["res_id"], trip.id)
+        original.invalidate_recordset()
+        trip.invalidate_recordset()
+        current = trip.current_assignment_id
+        self.assertTrue(current)
+        self.assertNotEqual(current, original)
+        self.assertEqual(len(trip.assignment_ids), 2)
+        self.assertEqual(original.effective_to, replacement_at)
+        self.assertEqual(original.vehicle_id, self.truck)
+        self.assertEqual(original.driver_id, driver)
+        self.assertEqual(current.effective_from, replacement_at)
+        self.assertFalse(current.effective_to)
+        self.assertEqual(current.vehicle_id, self.truck_two)
+        self.assertEqual(current.trailer_id, trailer)
+        self.assertEqual(current.driver_id, driver)
+        self.assertFalse(current.co_driver_id)
+        self.assertEqual(current.assigned_by_id, self.env.user)
+        self.assertEqual(current.effective_location, "Nakonde")
+        self.assertEqual(current.reason, "Truck breakdown")
+        self.assertEqual(current.notes, "Replacement truck sent by dispatcher")
+        self.assertEqual(self.line_1._prepare_invoice_line(), before_invoice)
+        self.assertEqual(self.line_1.vehicle_id, self.truck)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertEqual(trip.state, "draft")
+        self.assertIn(
+            "Truck breakdown", " ".join(trip.message_ids.mapped("body")),
+        )
+
+    def test_two_sequential_replacements_keep_contiguous_history(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        at_one = original.effective_from + timedelta(hours=1)
+        at_two = original.effective_from + timedelta(hours=3)
+        first = self._replacement_wizard(
+            trip, at_one, driver_id=self.customer.id,
+        )
+        first.action_replace_resources()
+        middle = trip.current_assignment_id
+        self.assertEqual(middle.driver_id, self.customer)
+        self.assertEqual(middle.vehicle_id, self.truck)
+        self._replacement_wizard(
+            trip, at_two, vehicle_id=self.truck_two.id,
+        ).action_replace_resources()
+        original.invalidate_recordset()
+        middle.invalidate_recordset()
+        trip.invalidate_recordset()
+        current = trip.current_assignment_id
+        self.assertEqual(len(trip.assignment_ids), 3)
+        self.assertEqual(original.effective_to, at_one)
+        self.assertEqual(middle.effective_from, at_one)
+        self.assertEqual(middle.effective_to, at_two)
+        self.assertEqual(current.effective_from, at_two)
+        self.assertFalse(current.effective_to)
+        self.assertEqual(current.vehicle_id, self.truck_two)
+        self.assertEqual(current.driver_id, self.customer)
+        self.assertEqual(current.trailer_id, trailer)
+        self.assertEqual(original.driver_id, driver)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+
+    def test_replacement_can_swap_trailer_and_clear_codriver(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        trailer_before = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "PREVIOUS-TRAILER",
+        })
+        trailer_after = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "NEW-TRAILER",
+        })
+        driver = self.env["res.partner"].create({"name": "Primary"})
+        co_driver = self.env["res.partner"].create({"name": "Previous co-driver"})
+        old = self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id, "vehicle_id": self.truck.id,
+            "trailer_id": trailer_before.id, "driver_id": driver.id,
+            "co_driver_id": co_driver.id,
+            "effective_from": fields.Datetime.now() - timedelta(hours=3),
+        })
+        at = old.effective_from + timedelta(hours=1)
+        self._replacement_wizard(
+            trip, at, trailer_id=trailer_after.id, co_driver_id=False,
+        ).action_replace_resources()
+        self.assertEqual(trip.current_vehicle_id, self.truck)
+        self.assertEqual(trip.current_driver_id, driver)
+        self.assertEqual(trip.current_trailer_id, trailer_after)
+        self.assertFalse(trip.current_co_driver_id)
+        self.assertEqual(old.trailer_id, trailer_before)
+        self.assertEqual(old.co_driver_id, co_driver)
+        self.assertEqual(old.effective_to, at)
+
+    def test_stale_replace_dialog_cannot_replace_newer_assignment(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        replacement_at = original.effective_from + timedelta(hours=2)
+        stale = self._replacement_wizard(
+            trip, replacement_at + timedelta(minutes=20),
+            vehicle_id=self.truck_two.id,
+        )
+        self._replacement_wizard(
+            trip, replacement_at, driver_id=self.customer.id,
+        ).action_replace_resources()
+        current = trip.current_assignment_id
+        with self.assertRaises(UserError):
+            with self.env.cr.savepoint():
+                stale.action_replace_resources()
+        current.invalidate_recordset()
+        self.assertFalse(current.effective_to)
+        self.assertEqual(trip.current_assignment_id, current)
+        self.assertEqual(len(trip.assignment_ids), 2)
+
+    def test_replace_resources_rejects_no_change_and_empty_resources(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        at = original.effective_from + timedelta(hours=1)
+        for values in (
+            {},
+            dict(vehicle_id=False, trailer_id=False,
+                 driver_id=False, co_driver_id=False),
+        ):
+            wizard = self._replacement_wizard(trip, at, **values)
+            with self.assertRaises(ValidationError):
+                with self.env.cr.savepoint():
+                    wizard.action_replace_resources()
+        original.invalidate_recordset()
+        self.assertFalse(original.effective_to)
+        self.assertEqual(len(trip.assignment_ids), 1)
+
+    def test_replace_resources_rejects_bad_dates_and_missing_reason(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        for effective_at in (
+            original.effective_from,
+            original.effective_from - timedelta(minutes=1),
+            fields.Datetime.now() + timedelta(hours=1),
+        ):
+            wizard = self._replacement_wizard(
+                trip, effective_at, vehicle_id=self.truck_two.id,
+            )
+            with self.assertRaises(ValidationError):
+                with self.env.cr.savepoint():
+                    wizard.action_replace_resources()
+        wizard = self._replacement_wizard(
+            trip, original.effective_from + timedelta(hours=1),
+            vehicle_id=self.truck_two.id, reason="   ",
+        )
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                wizard.action_replace_resources()
+        original.invalidate_recordset()
+        self.assertFalse(original.effective_to)
+
+    def test_failed_replacement_rolls_back_old_closure_atomically(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        invalid_driver = self._replacement_wizard(
+            trip, original.effective_from + timedelta(hours=2),
+            driver_id=driver.id, co_driver_id=driver.id,
+        )
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                invalid_driver.action_replace_resources()
+        bad_category = self._replacement_wizard(
+            trip, original.effective_from + timedelta(hours=2),
+            trailer_id=self.truck_two.id,
+        )
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                bad_category.action_replace_resources()
+        original.invalidate_recordset()
+        trip.invalidate_recordset()
+        self.assertFalse(original.effective_to)
+        self.assertEqual(trip.current_assignment_id, original)
+        self.assertEqual(len(trip.assignment_ids), 1)
+
+    def test_cross_company_resource_failure_preserves_current_assignment(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        other_company = self.env["res.company"].create({
+            "name": "Replacement Restricted Company",
+        })
+        other_trailer = self.env["fleet.vehicle"].sudo().create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "RESTRICTED-TRAILER",
+            "company_id": other_company.id,
+        })
+        wizard = self._replacement_wizard(
+            trip, original.effective_from + timedelta(hours=2),
+            trailer_id=other_trailer.id,
+        )
+        with self.assertRaises((ValidationError, UserError, AccessError)):
+            with self.env.cr.savepoint():
+                wizard.action_replace_resources()
+        original.invalidate_recordset()
+        trip.invalidate_recordset()
+        self.assertFalse(original.effective_to)
+        self.assertEqual(trip.current_assignment_id, original)
+
+    def test_archived_current_truck_can_be_replaced_preserving_old_history(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        self.truck.active = False
+        replacement_at = original.effective_from + timedelta(hours=2)
+        self._replacement_wizard(
+            trip, replacement_at, vehicle_id=self.truck_two.id,
+        ).action_replace_resources()
+        original.invalidate_recordset()
+        self.assertEqual(original.vehicle_id, self.truck)
+        self.assertEqual(original.effective_to, replacement_at)
+        self.assertFalse(self.truck.active)
+        self.assertEqual(trip.current_vehicle_id, self.truck_two)
+
+    def test_immutable_history_and_direct_initial_assignment_bypass_blocked(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        self._replacement_wizard(
+            trip, original.effective_from + timedelta(hours=2),
+            vehicle_id=self.truck_two.id,
+        ).action_replace_resources()
+        with self.assertRaises(UserError):
+            original.write({"effective_to": fields.Datetime.now()})
+        with self.assertRaises(UserError):
+            original.write({"vehicle_id": self.truck_two.id})
+        with self.assertRaises(UserError):
+            original.unlink()
+        with self.assertRaises(UserError):
+            self.env["taj.transport.assignment"].create({
+                "trip_id": trip.id, "vehicle_id": self.truck.id,
+            })
+        self.assertEqual(len(trip.assignment_ids), 2)
+
+    def test_dispatcher_can_replace_without_general_assignment_write_acl(self):
+        from odoo.tests.common import new_test_user
+
+        trip, original, trailer, driver = self._replacement_fixture()
+        dispatcher = new_test_user(
+            self.env, login="transport_replacement_dispatcher",
+            groups="taj_transport_operations.group_transport_user,sales_team.group_sale_salesman_all_leads",
+        )
+        dispatcher.company_ids = self.env.company
+        dispatcher.company_id = self.env.company
+        with self.assertRaises(UserError):
+            original.with_user(dispatcher).write({
+                "effective_to": fields.Datetime.now(),
+            })
+        # The dispatcher creates and runs *their own* transient wizard.
+        # Direct history edits remain forbidden even to authorized dispatchers.
+        action = trip.with_user(dispatcher).action_open_replace_assignment_wizard()
+        wizard = self.env[
+            "taj.transport.replace.assignment.wizard"
+        ].with_user(dispatcher).with_context(**action["context"]).create({
+            "trip_id": trip.id,
+            "expected_assignment_id": original.id,
+            "effective_from": original.effective_from + timedelta(hours=1),
+            "vehicle_id": self.truck_two.id,
+            "reason": "Dispatcher-approved replacement",
+        })
+        wizard.action_replace_resources()
+        self.assertEqual(trip.current_assignment_id.vehicle_id, self.truck_two)
+        self.assertEqual(trip.current_assignment_id.assigned_by_id, dispatcher)
+
+    def test_closed_history_cannot_overlap_new_assignment(self):
+        trip, original, trailer, driver = self._replacement_fixture()
+        closed_at = original.effective_from + timedelta(hours=3)
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                # Simulate a faulty internal workflow trying to backdate a new
+                # assignment over an existing closed interval.
+                original._close_for_replacement(closed_at)
+                self.env["taj.transport.assignment"]._create_from_replacement({
+                    "trip_id": trip.id,
+                    "vehicle_id": self.truck_two.id,
+                    "effective_from": closed_at - timedelta(hours=1),
+                    "reason": "Invalid overlapping period",
+                })
+        original.invalidate_recordset()
+        trip.invalidate_recordset()
+        self.assertFalse(original.effective_to)
+        self.assertEqual(trip.current_assignment_id, original)
+
+    def test_replace_resources_form_and_access(self):
+        from lxml import etree
+
+        trip, original, trailer, driver = self._replacement_fixture()
+        action = trip.action_open_replace_assignment_wizard()
+        self.assertEqual(
+            action["res_model"], "taj.transport.replace.assignment.wizard",
+        )
+        self.assertEqual(
+            action["context"]["default_expected_assignment_id"], original.id,
+        )
+        self.assertEqual(action["context"]["default_trailer_id"], trailer.id)
+        self.assertEqual(action["context"]["default_driver_id"], driver.id)
+        form = self.env.ref(
+            "taj_transport_operations.view_transport_trip_form"
+        )
+        root = etree.fromstring(form.get_combined_arch())
+        self.assertEqual(
+            len(root.xpath(
+                "//page[@name='trip_resources']"
+                "//button[@name='action_open_replace_assignment_wizard']"
+            )), 1,
+        )
+        wizard_view = self.env.ref(
+            "taj_transport_operations.view_replace_resource_assignment_wizard_form"
+        )
+        wizard_root = etree.fromstring(wizard_view.get_combined_arch())
+        self.assertEqual(
+            len(wizard_root.xpath("//button[@name='action_replace_resources']")), 1,
+        )
+        self.assertEqual(
+            len(wizard_root.xpath("//field[@name='expected_assignment_id']")), 1,
+        )
+        access = self.env.ref(
+            "taj_transport_operations.access_taj_transport_replace_wizard_user"
+        )
+        self.assertTrue(access.perm_create)
+        self.assertTrue(access.perm_write)
+        self.assertFalse(access.perm_unlink)
 
     def test_batch_three_route_timing_optional_and_independent_of_sales(self):
         before = self.line_1._prepare_invoice_line()

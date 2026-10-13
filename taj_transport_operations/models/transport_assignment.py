@@ -1,4 +1,4 @@
-"""Time-based trip assignments: immutable initial assignment in this batch."""
+"""Audited, time-based trip resource assignments with controlled replacement."""
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
@@ -57,7 +57,7 @@ class TajTransportAssignment(models.Model):
     )
     effective_to = fields.Datetime(
         string="Effective To", readonly=True, copy=False,
-        help="Reserved for assignment replacements in the next batch.",
+        help="Set only by the controlled resource replacement workflow.",
     )
     effective_location = fields.Char(
         string="Effective Location", copy=False,
@@ -90,7 +90,8 @@ class TajTransportAssignment(models.Model):
         for assignment in self:
             for kind, vehicle in (("truck", assignment.vehicle_id),
                                   ("trailer", assignment.trailer_id)):
-                if vehicle:
+                if vehicle and not assignment.effective_to:
+                    # Preserve closed history even if a vehicle was later archived.
                     category = self.env.ref("taj_transport_operations.fleet_category_" + kind)
                     if not vehicle.active or vehicle.category_id != category:
                         raise ValidationError(_("Select an active Fleet vehicle in the correct resource category."))
@@ -116,52 +117,104 @@ class TajTransportAssignment(models.Model):
                     "An assignment cannot end before it starts."
                 ))
 
+    @api.constrains("trip_id", "effective_from", "effective_to")
+    def _check_non_overlapping_periods(self):
+        """A closed period may touch the next start, but may not overlap it."""
+        for assignment in self:
+            domain = [
+                ("trip_id", "=", assignment.trip_id.id),
+                ("id", "!=", assignment.id),
+                "|",
+                ("effective_to", "=", False),
+                ("effective_to", ">", assignment.effective_from),
+            ]
+            if assignment.effective_to:
+                domain.append(("effective_from", "<", assignment.effective_to))
+            if self.search_count(domain):
+                raise ValidationError(_(
+                    "Resource assignment periods must not overlap for the same trip."
+                ))
+
+    @api.model
+    def _prepare_assignment_values(self, entry, replacement=False):
+        vals = dict(entry)
+        trip = self.env["taj.transport.trip"].browse(
+            vals.get("trip_id") or 0
+        ).exists()
+        if not trip:
+            raise ValidationError(_("Select an existing trip."))
+        trip.check_access("write")
+        for field, model in (
+            ("vehicle_id", "fleet.vehicle"),
+            ("trailer_id", "fleet.vehicle"),
+            ("driver_id", "res.partner"),
+            ("co_driver_id", "res.partner"),
+        ):
+            if vals.get(field):
+                resource = self.env[model].browse(vals[field]).exists()
+                if not resource:
+                    raise ValidationError(_("Select an existing resource."))
+                resource.check_access("read")
+        if trip.state != "draft":
+            raise UserError(_(
+                "Resources can only be changed on Draft trips in this release."
+            ))
+        any_history = bool(self.search_count([("trip_id", "=", trip.id)]))
+        if replacement and not any_history:
+            raise UserError(_("Assign initial resources before replacing them."))
+        if not replacement and any_history:
+            raise UserError(_(
+                "This trip already has assignment history. "
+                "Use Replace Resources; do not create another initial assignment."
+            ))
+        if self.search_count([
+            ("trip_id", "=", trip.id), ("effective_to", "=", False),
+        ]):
+            raise UserError(_("This trip already has an active assignment."))
+        if vals.get("effective_to"):
+            raise ValidationError(_(
+                "An active assignment cannot be created with an end time."
+            ))
+        if vals.get("company_id") and vals["company_id"] != trip.company_id.id:
+            raise ValidationError(_("The assignment company must match the trip."))
+        vals.pop("company_id", None)
+        vals["effective_to"] = False
+        vals["assigned_by_id"] = self.env.user.id
+        return vals
+
     @api.model_create_multi
     def create(self, vals_list):
-        prepared = []
-        for entry in vals_list:
-            vals = dict(entry)
-            trip = self.env["taj.transport.trip"].browse(
-                vals.get("trip_id") or 0
-            ).exists()
-            if not trip:
-                raise ValidationError(_("Select an existing trip."))
-            trip.check_access("read")
-            for field, model in (("vehicle_id", "fleet.vehicle"),
-                                 ("trailer_id", "fleet.vehicle"),
-                                 ("driver_id", "res.partner"),
-                                 ("co_driver_id", "res.partner")):
-                if vals.get(field):
-                    resource = self.env[model].browse(vals[field]).exists()
-                    if not resource:
-                        raise ValidationError(_("Select an existing resource."))
-                    resource.check_access("read")
-            if trip.state != "draft":
-                raise UserError(_(
-                    "Initial resources can only be assigned to a Draft trip."
-                ))
-            if trip.current_assignment_id:
-                raise UserError(_(
-                    "This trip already has an assignment. Use the replacement "
-                    "workflow when it becomes available."
-                ))
-            if vals.get("effective_to"):
-                raise ValidationError(_(
-                    "An initial assignment cannot have an end time."
-                ))
-            if vals.get("company_id") and vals["company_id"] != trip.company_id.id:
-                raise ValidationError(_("The assignment company must match the trip."))
-            vals.pop("company_id", None)
-            vals["effective_to"] = False
-            vals["assigned_by_id"] = self.env.user.id
-            prepared.append(vals)
+        prepared = [
+            self._prepare_assignment_values(entry) for entry in vals_list
+        ]
         return super().create(prepared)
+
+    @api.model
+    def _create_from_replacement(self, vals):
+        """Private entrypoint: only a locked, authorized replacement uses this."""
+        prepared = self._prepare_assignment_values(vals, replacement=True)
+        return super().create([prepared])
+
+    def _close_for_replacement(self, effective_to):
+        """Only close the current row; keep every other field immutable."""
+        self.ensure_one()
+        if self.effective_to:
+            raise UserError(_("This assignment has already been closed."))
+        if effective_to <= self.effective_from:
+            raise ValidationError(_(
+                "Replacement time must be later than the current assignment start."
+            ))
+        # Dispatchers can create assignments but have no general write ACL.
+        # This private ORM method bypasses that ACL for the end timestamp only.
+        return super(TajTransportAssignment, self.sudo()).write({
+            "effective_to": effective_to,
+        })
 
     def write(self, vals):
         if vals:
             raise UserError(_(
-                "Assignment history is immutable in this batch. "
-                "Use the replacement workflow in a later batch."
+                "Assignment history cannot be edited directly. "
+                "Use the controlled Replace Resources wizard."
             ))
         return True
 

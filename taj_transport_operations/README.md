@@ -78,10 +78,9 @@ Resources**, available only while the Draft trip has no active assignment.
 - The wizard records the selected truck/trailer/driver/co-driver (at least
   one), the **effective time and location**, reason, notes, user and
   company. The current assignment is derived from active history.
-- Assignment rows are currently **immutable and not deletable**, even for
-  managers. A partial unique PostgreSQL index guarantees at most one open
-  assignment per trip. It will allow completed historical periods after
-  the future replacement workflow is built.
+- Assignment rows are **immutable and not deletable**, even for managers.
+  A partial unique PostgreSQL index guarantees at most one open assignment per
+  trip. Only the trusted replacement workflow can close a historical period.
 - Dispatchers and Transport Managers can create assignments and read Fleet
   trucks/trailers in allowed companies. Creating/editing Fleet trailers requires
   an existing Fleet Officer/Administrator role. Transport roles do not grant
@@ -91,16 +90,44 @@ Resources**, available only while the Draft trip has no active assignment.
 - These operations do not change the original sales truck or invoice
   amounts, and they do not create a trip state transition.
 - Odoo records assignment creation timestamps and usernames in the
-  immutable assignment record. Resource changes are **not** editable yet:
-  Tuesday's replacement workflow will close the previous period and
-  create a new row, preserving the audit trail.
+  immutable assignment record. Later changes append a fresh row rather than
+  mutating an existing resource assignment.
+
+## Phase 2 / Batch 4 (Part 2): Resource Replacements and History
+
+Once a Draft trip has an active resource assignment, **Replace Resources**
+opens a prefilled wizard with the current truck, trailer, driver and co-driver.
+Dispatchers may change one or several resources, or clear an individual
+resource, while keeping the others unchanged. A completely empty or identical
+resource set is rejected.
+
+- Replacement requires an effective time, nonblank reason, and optional
+  effective location and notes. The time must be after the current assignment
+  started and no later than the present: future-dated *active* assignments
+  are not supported in this batch.
+- The workflow locks the Trip's database row and checks that the wizard still
+  refers to the current active assignment. Concurrent dialogs cannot silently
+  overwrite each other's changes.
+- The old assignment is closed at the replacement time and a new assignment
+  is created at the same instant. The database transaction commits both or
+  neither. Historical rows retain the original truck, trailer, drivers, start
+  time, author and reason; a partial PostgreSQL unique index allows only one
+  active assignment per trip.
+- Server-side validation rejects invalid vehicle categories, inaccessible or
+  wrong-company resources, same driver/co-driver, overlapping periods,
+  replacement before the previous start, and direct history edits. Archived
+  historical vehicles remain valid in closed periods; they cannot be selected
+  for a new active period.
+- Each replacement records the responsible user and is noted in trip Chatter.
+  Trip status remains Draft. The original Sales truck snapshot, sales line
+  and invoice values are not modified.
 
 ## Scope intentionally deferred
 
-Resource **replacement** history workflow, overlapping assignments checks
-across different trips, operational status transitions, incidents, route
-templates and milestones, Navirec monitoring inside trips and financial
-analytics are **not** implemented in Batch 4 Part 1.
+Resource overlap/availability enforcement **across different trips**,
+operational status transitions, incidents, route templates and milestones,
+Navirec monitoring inside trips and financial analytics are **not**
+implemented in Batch 4.
 
 ## Installation and testing
 
@@ -108,7 +135,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.4.1` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+`19.0.1.5.0` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
 Run Odoo tests on a **staging/development database**, not production, using
 the test tag:
@@ -122,8 +149,9 @@ The test suite covers one-to-one uniqueness, source/truck snapshots, no-truck
 lines, non-unit quantities, draft rejection, idempotent actions, wizard selection,
 related Sales commercial/cargo fields, independent editable operational fields,
 tracking configuration, route/timing chronology, initial resources, form
-tabs, assignment uniqueness and immutability, company separation and
-invoicing invariance.
+tabs, resource replacements, stale/concurrent wizard protection, timeline
+validation, failed-transaction rollback, assignment uniqueness and
+immutability, company separation and invoicing invariance.
 
 For a manual smoke test, open an existing Draft trip; the new Commercial and
 Cargo tabs should show its existing Sales data while its optional dispatcher
@@ -142,6 +170,15 @@ its effective time and recording user. The button should disappear once
 assigned. Create trailers in **Fleet** or **Transport Operations > Trailers** with an
 existing Fleet role. Choose a model and vehicle category of **Trailer**;
 Dispatchers and Transport Managers without Fleet rights have read-only access.
+
+For a **replacement** smoke test, click **Replace Resources** on an already
+assigned Draft trip, change one resource and enter the effective time,
+location and reason. Save and reopen. The old history row should now have
+an effective end time, and a new active row should have the same start time.
+Try opening two replacement wizards: complete one, then confirm the older
+dialog refuses to overwrite it. Verify that entering an invalid driver,
+vehicle category or effective date leaves the original assignment untouched.
+The Sales truck snapshot and invoice details must remain unchanged.
 
 Do **not** manually edit assignment history, change the Sales truck
 to test reassignment, or attempt an operational status transition in

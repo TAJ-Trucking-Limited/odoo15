@@ -8,3 +8,4 @@ access_taj_transport_fleet_model_read,taj.transport.fleet.model.read,fleet.model
 access_taj_transport_fleet_brand_read,taj.transport.fleet.brand.read,fleet.model_fleet_vehicle_model_brand,taj_transport_operations.group_transport_user,1,0,0,0
 access_taj_transport_fleet_category_read,taj.transport.fleet.category.read,fleet.model_fleet_vehicle_model_category,taj_transport_operations.group_transport_user,1,0,0,0
 access_taj_transport_fleet_state_read,taj.transport.fleet.state.read,fleet.model_fleet_vehicle_state,taj_transport_operations.group_transport_user,1,0,0,0
+access_taj_transport_replace_wizard_user,taj.transport.replace.assignment.wizard.user,model_taj_transport_replace_assignment_wizard,taj_transport_operations.group_transport_user,1,1,1,0
