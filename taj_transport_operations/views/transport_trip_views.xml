@@ -32,7 +32,24 @@
         <field name="arch" type="xml">
             <form string="Transport Trip" delete="0">
                 <header>
-                    <field name="state" widget="statusbar"/>
+                    <button string="Mark Ready" name="action_mark_ready"
+                            type="object" class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button string="Start Trip" name="action_start_trip"
+                            type="object" class="btn-primary"
+                            invisible="state != 'ready'"/>
+                    <button string="Complete Trip" name="action_complete_trip"
+                            type="object" class="btn-primary"
+                            invisible="state != 'in_progress'"/>
+                    <button string="Cancel Trip" name="action_open_cancel_trip_wizard"
+                            type="object" class="btn-secondary"
+                            invisible="state not in ('draft', 'ready')"/>
+                    <button string="Cancel Trip" name="action_open_cancel_trip_wizard"
+                            type="object" class="btn-secondary"
+                            groups="taj_transport_operations.group_transport_manager"
+                            invisible="state != 'in_progress'"/>
+                    <field name="state" widget="statusbar" readonly="1"
+                           statusbar_visible="draft,ready,in_progress,completed,cancelled"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -72,9 +89,9 @@
                                     <field name="payment_term_id" readonly="1"/>
                                 </group>
                                 <group string="Operational Commercial Data">
-                                    <field name="transporter_id"
+                                    <field name="transporter_id" readonly="state in ('completed', 'cancelled')"
                                            options="{'no_quick_create': True}"/>
-                                    <field name="transport_reference"
+                                    <field name="transport_reference" readonly="state in ('completed', 'cancelled')"
                                            placeholder="Carrier or booking reference"/>
                                 </group>
                             </group>
@@ -98,11 +115,11 @@
                                     <field name="sale_description" readonly="1"/>
                                 </group>
                                 <group string="Operational Cargo Data">
-                                    <field name="cargo_type"
+                                    <field name="cargo_type" readonly="state in ('completed', 'cancelled')"
                                            placeholder="e.g. General cargo"/>
-                                    <field name="cargo_description"
+                                    <field name="cargo_description" readonly="state in ('completed', 'cancelled')"
                                            placeholder="Actual goods to transport"/>
-                                    <field name="special_handling_instructions"
+                                    <field name="special_handling_instructions" readonly="state in ('completed', 'cancelled')"
                                            placeholder="Loading, storage and handling instructions"/>
                                 </group>
                             </group>
@@ -115,15 +132,15 @@
                         <page string="Route &amp; Timing" name="route_timing">
                             <group>
                                 <group string="Route">
-                                    <field name="origin_location" placeholder="Loading / departure location"/>
-                                    <field name="destination_location" placeholder="Unloading / delivery location"/>
-                                    <field name="route_notes" placeholder="Route and dispatch instructions"/>
+                                    <field name="origin_location" readonly="state in ('completed', 'cancelled')" placeholder="Loading / departure location"/>
+                                    <field name="destination_location" readonly="state in ('completed', 'cancelled')" placeholder="Unloading / delivery location"/>
+                                    <field name="route_notes" readonly="state in ('completed', 'cancelled')" placeholder="Route and dispatch instructions"/>
                                 </group>
                                 <group string="Schedule">
-                                    <field name="planned_departure_at"/>
-                                    <field name="planned_arrival_at"/>
-                                    <field name="actual_departure_at"/>
-                                    <field name="actual_arrival_at"/>
+                                    <field name="planned_departure_at" readonly="state in ('completed', 'cancelled')"/>
+                                    <field name="planned_arrival_at" readonly="state in ('completed', 'cancelled')"/>
+                                    <field name="actual_departure_at" readonly="state in ('completed', 'cancelled')"/>
+                                    <field name="actual_arrival_at" readonly="state in ('completed', 'cancelled')"/>
                                 </group>
                             </group>
                             <p class="text-muted">
@@ -136,11 +153,19 @@
                         <page string="Resources" name="trip_resources">
                             <field name="current_assignment_id" invisible="1"/>
                             <group>
-                                <group string="Current Assignment">
+                                <group string="Current Assignment"
+                                       invisible="state in ('completed', 'cancelled')">
                                     <field name="current_vehicle_id" readonly="1"/>
                                     <field name="current_trailer_id" readonly="1"/>
                                     <field name="current_driver_id" readonly="1"/>
                                     <field name="current_co_driver_id" readonly="1"/>
+                                </group>
+                                <group string="Last Assigned Resources"
+                                       invisible="state not in ('completed', 'cancelled')">
+                                    <field name="last_vehicle_id" readonly="1"/>
+                                    <field name="last_trailer_id" readonly="1"/>
+                                    <field name="last_driver_id" readonly="1"/>
+                                    <field name="last_co_driver_id" readonly="1"/>
                                 </group>
                                 <group string="Resource Actions">
                                     <button string="Assign Initial Resources"
@@ -150,7 +175,7 @@
                                     <button string="Replace Resources"
                                             name="action_open_replace_assignment_wizard"
                                             type="object" class="btn-primary"
-                                            invisible="not current_assignment_id or state != 'draft'"/>
+                                            invisible="not current_assignment_id or state not in ('draft', 'ready', 'in_progress')"/>
                                 </group>
                             </group>
                             <p class="text-muted">
@@ -174,6 +199,26 @@
                                 </list>
                             </field>
                         </page>
+                        <page string="Lifecycle" name="trip_lifecycle">
+                            <group>
+                                <group string="Operational Milestones">
+                                    <field name="ready_at" readonly="1"/>
+                                    <field name="started_at" readonly="1"/>
+                                    <field name="completed_at" readonly="1"/>
+                                    <field name="cancelled_at" readonly="1"/>
+                                </group>
+                                <group string="Cancellation" invisible="state != 'cancelled'">
+                                    <field name="cancelled_by_id" readonly="1"/>
+                                    <field name="cancellation_reason" readonly="1"/>
+                                </group>
+                            </group>
+                            <p class="text-muted">
+                                State transitions are controlled actions.
+                                Start/Complete stamp missing actual times.
+                                Completion and cancellation close the active resource
+                                assignment, keeping all history and the original Sales truck.
+                            </p>
+                        </page>
                     </notebook>
                 </sheet>
                 <chatter/>
@@ -196,6 +241,10 @@
                 <field name="destination_location"/>
                 <field name="initial_vehicle_id"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="ready" string="Ready" domain="[('state', '=', 'ready')]"/>
+                <filter name="in_progress" string="In Progress" domain="[('state', '=', 'in_progress')]"/>
+                <filter name="completed" string="Completed" domain="[('state', '=', 'completed')]"/>
+                <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
                 <group>
                     <filter name="by_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
                     <filter name="by_transporter" string="Transporter" context="{'group_by': 'transporter_id'}"/>

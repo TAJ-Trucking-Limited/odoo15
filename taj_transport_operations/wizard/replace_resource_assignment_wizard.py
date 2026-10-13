@@ -1,4 +1,4 @@
-"""Audited atomic replacement of resources on an existing Draft trip."""
+"""Audited atomic replacement on a Draft, Ready or In Progress trip."""
 from markupsafe import Markup
 
 from odoo import _, fields, models
@@ -59,9 +59,9 @@ class TajTransportReplaceAssignmentWizard(models.TransientModel):
             (trip.id,),
         )
         trip.invalidate_recordset(["state", "current_assignment_id"])
-        if trip.state != "draft":
+        if trip.state not in ("draft", "ready", "in_progress"):
             raise UserError(_(
-                "Resources can only be replaced on Draft trips in this release."
+                "Resources cannot be replaced on completed or cancelled trips."
             ))
 
         # Query the database *after* obtaining the lock; the cached assignment
@@ -111,6 +111,21 @@ class TajTransportReplaceAssignmentWizard(models.TransientModel):
         if not any(new_resources.values()):
             raise ValidationError(_(
                 "At least one truck, trailer or driver must remain assigned."
+            ))
+        if trip.state in ("ready", "in_progress") and (
+            not new_resources["vehicle_id"] or not new_resources["driver_id"]
+        ):
+            raise ValidationError(_(
+                "Ready and In Progress trips require a truck and primary driver."
+            ))
+        if (
+            trip.state == "in_progress"
+            and trip.actual_departure_at
+            and effective_from < trip.actual_departure_at
+        ):
+            raise ValidationError(_(
+                "An in-progress resource replacement cannot precede "
+                "the actual departure."
             ))
         if all(
             new_resources[field] == (getattr(current, field).id or False)

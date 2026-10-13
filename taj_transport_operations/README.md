@@ -113,6 +113,9 @@ resource set is rejected.
   neither. Historical rows retain the original truck, trailer, drivers, start
   time, author and reason; a partial PostgreSQL unique index allows only one
   active assignment per trip.
+- Draft, Ready and In Progress trips support replacements. The Batch 5
+  lifecycle closes active history on terminal states, and prevents replacement
+  after a trip is completed or cancelled.
 - Server-side validation rejects invalid vehicle categories, inaccessible or
   wrong-company resources, same driver/co-driver, overlapping periods,
   replacement before the previous start, and direct history edits. Archived
@@ -122,12 +125,67 @@ resource set is rejected.
   Trip status remains Draft. The original Sales truck snapshot, sales line
   and invoice values are not modified.
 
+## Phase 2 / Batch 5: Trip Lifecycle
+
+Trip status transitions now use **server-validated action buttons**, not
+directly editable `state` values. Existing trips remain `Draft` on upgrade.
+The intended linear lifecycle is:
+
+- **Draft → Ready:** Requires a still-confirmed Sales Order, nonempty origin
+  and destination, planned departure and arrival (strictly increasing), and
+  exactly one active assignment with an **active Truck-category Fleet truck**
+  and a primary driver. Trailer and co-driver are optional. Inactive or
+  misclassified trucks are rejected: categorize legacy trucks as **Truck** in
+  Fleet before attempting Ready. Fleet company and driver company must match
+  the trip where those values are set.
+- **Ready → In Progress:** Rechecks the planning/resource prerequisites.
+  The current assignment must already be effective. The **Start Trip**
+  action stamps `started_at`, and populates `actual_departure_at` with
+  current time only if the dispatcher has not supplied it. A future or
+  pre-assignment actual departure is refused.
+- **In Progress → Completed:** The **Complete Trip** action requires an
+  actual departure, stamps `completed_at`, and fills missing
+  `actual_arrival_at` using the current time. Arrival must be later than
+  departure, not in the future, and not before the current resource
+  assignment began. The active assignment closes at the actual arrival,
+  freeing resources without losing their immutable history.
+- **Draft/Ready → Cancelled:** Dispatchers and managers may cancel with a
+  mandatory explanation. **In Progress → Cancelled** additionally requires
+  the Transport Manager role. Completed and Cancelled states are terminal:
+  no reopen or cancellation after completion is implemented in this batch.
+
+The `Lifecycle` tab displays system-owned timestamps, cancellation reason
+and cancelling user. Trip Chatter tracks state changes and cancellation
+reasons. Completed/cancelled trips cannot edit operational commercial,
+cargo, route or timing fields. When a trip is finished, its `Current
+Assignment` becomes empty, while the `Last Assigned Resources` panel and
+full historical assignment rows remain available. Original Sales truck
+snapshots and invoice preparation remain unchanged.
+
+**Replacement integration:** Resource swaps remain available in
+Draft, Ready and In Progress. Ready and In Progress swaps must keep a valid
+truck and primary driver; in-progress swaps may not predate actual
+departure. Neither completed nor cancelled trips accept resource changes.
+The trip-row lock serializes lifecycle transitions and resource replacements.
+Only dedicated private workflow methods write status or close an assignment;
+direct ORM state/history editing remains blocked.
+
+**Staging acceptance:** After upgrading the module, create or open a Draft
+trip, assign a properly categorized truck and driver, fill the route and
+planned times, and test Mark Ready → Start Trip → Complete Trip. Reopen the
+record to verify timestamps, released current assignment, last-assigned
+resource panel, and immutable history. Confirm valid resource replacements
+in Ready/In Progress and rejection in terminal states. Test cancellation
+with reason by both Dispatcher and Transport Manager users. Ensure invalid
+transitions, missing prerequisites, invalid chronology and direct state
+writes fail without side effects.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
-operational status transitions, incidents, route templates and milestones,
-Navirec monitoring inside trips and financial analytics are **not**
-implemented in Batch 4.
+incidents, route templates and milestones, Navirec geofencing/monitoring
+inside trips, automated state transitions, reopening closed trips and
+financial analytics are **not** implemented in Batch 5.
 
 ## Installation and testing
 
@@ -135,7 +193,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.5.0` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+`19.0.1.6.0` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
 Run Odoo tests on a **staging/development database**, not production, using
 the test tag:
@@ -146,12 +204,14 @@ odoo-bin -d "$PGDATABASE" --stop-after-init -u taj_transport_operations \
 ```
 
 The test suite covers one-to-one uniqueness, source/truck snapshots, no-truck
-lines, non-unit quantities, draft rejection, idempotent actions, wizard selection,
+lines, non-unit quantities, initial Draft creation, idempotent actions,
+wizard selection, lifecycle transitions and roles,
 related Sales commercial/cargo fields, independent editable operational fields,
 tracking configuration, route/timing chronology, initial resources, form
 tabs, resource replacements, stale/concurrent wizard protection, timeline
 validation, failed-transaction rollback, assignment uniqueness and
-immutability, company separation and invoicing invariance.
+immutability, company separation, terminal resource release, cancellation
+reason/audit fields and invoicing invariance.
 
 For a manual smoke test, open an existing Draft trip; the new Commercial and
 Cargo tabs should show its existing Sales data while its optional dispatcher
@@ -180,9 +240,9 @@ dialog refuses to overwrite it. Verify that entering an invalid driver,
 vehicle category or effective date leaves the original assignment untouched.
 The Sales truck snapshot and invoice details must remain unchanged.
 
-Do **not** manually edit assignment history, change the Sales truck
-to test reassignment, or attempt an operational status transition in
-this batch.
+Do **not** manually edit assignment history or change the Sales truck to
+simulate resource reassignment. Instead, test replacements and status
+transitions through their dedicated buttons on the trip.
 
 ## Sales line eligibility
 

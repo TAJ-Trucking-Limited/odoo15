@@ -155,9 +155,14 @@ class TajTransportAssignment(models.Model):
                 if not resource:
                     raise ValidationError(_("Select an existing resource."))
                 resource.check_access("read")
-        if trip.state != "draft":
+        allowed_states = (
+            ("draft", "ready", "in_progress")
+            if replacement else ("draft",)
+        )
+        if trip.state not in allowed_states:
             raise UserError(_(
-                "Resources can only be changed on Draft trips in this release."
+                "Initial resources require Draft; replacements are allowed "
+                "only in Draft, Ready or In Progress."
             ))
         any_history = bool(self.search_count([("trip_id", "=", trip.id)]))
         if replacement and not any_history:
@@ -206,6 +211,21 @@ class TajTransportAssignment(models.Model):
             ))
         # Dispatchers can create assignments but have no general write ACL.
         # This private ORM method bypasses that ACL for the end timestamp only.
+        return super(TajTransportAssignment, self.sudo()).write({
+            "effective_to": effective_to,
+        })
+
+    def _close_for_trip_end(self, effective_to):
+        """Release resources at completion/cancellation; keep history intact."""
+        self.ensure_one()
+        if self.effective_to:
+            raise UserError(_("This resource assignment is already closed."))
+        if effective_to < self.effective_from:
+            raise ValidationError(_(
+                "The assignment cannot end before its effective start."
+            ))
+        # Only the trusted private trip lifecycle invokes this method. Direct
+        # writes and unlink remain forbidden, including for administrators.
         return super(TajTransportAssignment, self.sudo()).write({
             "effective_to": effective_to,
         })

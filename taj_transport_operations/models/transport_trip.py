@@ -1,6 +1,6 @@
 """Transport trip foundation; invoicing and operational assignments stay separate."""
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 
 class TajTransportTrip(models.Model):
@@ -37,9 +37,46 @@ class TajTransportTrip(models.Model):
         store=True, readonly=True,
     )
     state = fields.Selection(
-        [("draft", "Draft")], default="draft", string="Status",
-        required=True, readonly=True, tracking=True,
+        [
+            ("draft", "Draft"),
+            ("ready", "Ready"),
+            ("in_progress", "In Progress"),
+            ("completed", "Completed"),
+            ("cancelled", "Cancelled"),
+        ],
+        default="draft", string="Status",
+        required=True, readonly=True, tracking=True, copy=False,
     )
+    ready_at = fields.Datetime(
+        string="Marked Ready At", readonly=True, copy=False,
+    )
+    started_at = fields.Datetime(
+        string="Started At", readonly=True, copy=False,
+    )
+    completed_at = fields.Datetime(
+        string="Completed At", readonly=True, copy=False,
+    )
+    cancelled_at = fields.Datetime(
+        string="Cancelled At", readonly=True, copy=False,
+    )
+    cancellation_reason = fields.Text(
+        string="Cancellation Reason", readonly=True, copy=False,
+    )
+    cancelled_by_id = fields.Many2one(
+        "res.users", string="Cancelled By", readonly=True, copy=False,
+    )
+
+    _workflow_fields = frozenset({
+        "state", "ready_at", "started_at", "completed_at",
+        "cancelled_at", "cancellation_reason", "cancelled_by_id",
+    })
+    _operational_fields = frozenset({
+        "transporter_id", "transport_reference", "cargo_type",
+        "cargo_description", "special_handling_instructions",
+        "origin_location", "destination_location", "route_notes",
+        "planned_departure_at", "planned_arrival_at",
+        "actual_departure_at", "actual_arrival_at",
+    })
     initial_vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck at Trip Creation",
         readonly=True, copy=False,
@@ -194,6 +231,35 @@ class TajTransportTrip(models.Model):
         related="current_assignment_id.co_driver_id", readonly=True,
     )
 
+    last_assignment_id = fields.Many2one(
+        "taj.transport.assignment", string="Last Assignment",
+        compute="_compute_last_assignment", readonly=True,
+    )
+    last_vehicle_id = fields.Many2one(
+        "fleet.vehicle", string="Last Truck",
+        related="last_assignment_id.vehicle_id", readonly=True,
+    )
+    last_trailer_id = fields.Many2one(
+        "fleet.vehicle", string="Last Trailer",
+        related="last_assignment_id.trailer_id", readonly=True,
+    )
+    last_driver_id = fields.Many2one(
+        "res.partner", string="Last Driver",
+        related="last_assignment_id.driver_id", readonly=True,
+    )
+    last_co_driver_id = fields.Many2one(
+        "res.partner", string="Last Co-driver",
+        related="last_assignment_id.co_driver_id", readonly=True,
+    )
+
+    @api.depends("assignment_ids", "assignment_ids.effective_from")
+    def _compute_last_assignment(self):
+        for trip in self:
+            trip.last_assignment_id = trip.assignment_ids.sorted(
+                key=lambda assignment: (assignment.effective_from, assignment.id),
+                reverse=True,
+            )[:1]
+
     @api.depends("assignment_ids", "assignment_ids.effective_to")
     def _compute_current_assignment(self):
         for trip in self:
@@ -228,8 +294,10 @@ class TajTransportTrip(models.Model):
     def action_open_replace_assignment_wizard(self):
         self.ensure_one()
         self.check_access("write")
-        if self.state != "draft":
-            raise UserError(_("Resources can only be replaced on Draft trips."))
+        if self.state not in ("draft", "ready", "in_progress"):
+            raise UserError(_(
+                "Resources cannot be replaced after completion or cancellation."
+            ))
         current = self.current_assignment_id
         if not current:
             raise UserError(_(
@@ -286,8 +354,10 @@ class TajTransportTrip(models.Model):
             ).exists()
             self._validate_sale_line(line)
             if vals.get("state", "draft") != "draft":
+                raise ValidationError(_("Transport trips must start in Draft."))
+            if self._workflow_fields.intersection(vals) - {"state"}:
                 raise ValidationError(_(
-                    "Only Draft transport trips can be created in this release."
+                    "Workflow timestamps and cancellation metadata are system-managed."
                 ))
             if vals.get("company_id") and vals["company_id"] != line.company_id.id:
                 raise ValidationError(_("Company must match the sales order."))
@@ -313,11 +383,247 @@ class TajTransportTrip(models.Model):
             raise UserError(_(
                 "Trip reference and original truck are immutable."
             ))
-        if vals.get("state", "draft") != "draft":
+        if self._workflow_fields.intersection(vals):
             raise UserError(_(
-                "Trip status transitions will be introduced in a later batch."
+                "Trip states and workflow audit fields may only be changed "
+                "through their dedicated actions."
             ))
+        if self._operational_fields.intersection(vals):
+            # Serialize with lifecycle transitions. A stale form submission
+            # must not modify an already completed/cancelled trip.
+            self.flush_recordset(["state"])
+            self.env.cr.execute(
+                "SELECT id FROM taj_transport_trip WHERE id = ANY(%s) "
+                "ORDER BY id FOR UPDATE",
+                (sorted(self.ids),),
+            )
+            self.invalidate_recordset(["state"])
+            if any(trip.state in ("completed", "cancelled") for trip in self):
+                raise UserError(_(
+                    "Completed or cancelled trips cannot be edited."
+                ))
         return super().write(vals)
+
+    def _lock_for_transition(self):
+        """Serialize lifecycle actions and resource swaps on this trip."""
+        self.ensure_one()
+        self.check_access("write")
+        self.flush_recordset(["state"])
+        self.env.cr.execute(
+            "SELECT id FROM taj_transport_trip WHERE id = %s FOR UPDATE",
+            (self.id,),
+        )
+        self.invalidate_recordset(["state", "current_assignment_id"])
+
+    def _locked_active_assignment(self):
+        """Fetch the actual open resource period, not a stale computed value."""
+        self.ensure_one()
+        self.env["taj.transport.assignment"].flush_model([
+            "trip_id", "effective_to",
+        ])
+        self.env.cr.execute(
+            "SELECT id FROM taj_transport_assignment "
+            "WHERE trip_id = %s AND effective_to IS NULL FOR UPDATE",
+            (self.id,),
+        )
+        ids = [row[0] for row in self.env.cr.fetchall()]
+        if len(ids) != 1:
+            raise ValidationError(_(
+                "The trip needs exactly one active resource assignment."
+            ))
+        assignment = self.env["taj.transport.assignment"].browse(ids[0])
+        assignment.check_access("read")
+        assignment.invalidate_recordset([
+            "effective_from", "effective_to", "vehicle_id",
+            "trailer_id", "driver_id", "co_driver_id",
+        ])
+        return assignment
+
+    def _validate_ready_requirements(self, assignment):
+        self.ensure_one()
+        if self.sale_order_id.state not in ("sale", "done"):
+            raise ValidationError(_(
+                "The linked Sales Order must remain confirmed."
+            ))
+        if not (self.origin_location or "").strip():
+            raise ValidationError(_("Enter an origin before marking the trip Ready."))
+        if not (self.destination_location or "").strip():
+            raise ValidationError(_("Enter a destination before marking the trip Ready."))
+        if not self.planned_departure_at or not self.planned_arrival_at:
+            raise ValidationError(_(
+                "Both planned departure and planned arrival are required."
+            ))
+        if self.planned_arrival_at <= self.planned_departure_at:
+            raise ValidationError(_(
+                "Planned arrival must be later than planned departure."
+            ))
+        if not assignment.vehicle_id:
+            raise ValidationError(_("Assign a truck before marking the trip Ready."))
+        if not assignment.driver_id:
+            raise ValidationError(_("Assign a driver before marking the trip Ready."))
+        if not assignment.driver_id.active:
+            raise ValidationError(_("The primary driver must be an active contact."))
+        for kind, vehicle in (
+            ("truck", assignment.vehicle_id),
+            ("trailer", assignment.trailer_id),
+        ):
+            if vehicle:
+                category = self.env.ref(
+                    "taj_transport_operations.fleet_category_" + kind,
+                )
+                if not vehicle.active or vehicle.category_id != category:
+                    raise ValidationError(_(
+                        "%s must be active and categorized as %s in Fleet."
+                    ) % (vehicle.display_name, kind.title()))
+                if vehicle.company_id and vehicle.company_id != self.company_id:
+                    raise ValidationError(_(
+                        "Assigned Fleet resources must belong to the trip company."
+                    ))
+        for partner in (assignment.driver_id, assignment.co_driver_id):
+            if partner and partner.company_id and partner.company_id != self.company_id:
+                raise ValidationError(_(
+                    "Assigned drivers must belong to the trip company."
+                ))
+
+    def action_mark_ready(self):
+        self.ensure_one()
+        self._lock_for_transition()
+        if self.state != "draft":
+            raise UserError(_("Only Draft trips can be marked Ready."))
+        assignment = self._locked_active_assignment()
+        self._validate_ready_requirements(assignment)
+        # Deliberately bypass *this* model's direct state-write guard only
+        # after access, source, resources and chronology have been checked.
+        super(TajTransportTrip, self).write({
+            "state": "ready",
+            "ready_at": fields.Datetime.now(),
+        })
+        return True
+
+    def action_start_trip(self):
+        self.ensure_one()
+        self._lock_for_transition()
+        if self.state != "ready":
+            raise UserError(_("Only Ready trips can be started."))
+        assignment = self._locked_active_assignment()
+        self._validate_ready_requirements(assignment)
+        now = fields.Datetime.now()
+        if assignment.effective_from > now:
+            raise ValidationError(_(
+                "The active resource assignment has not started yet."
+            ))
+        if self.actual_arrival_at:
+            raise ValidationError(_(
+                "Clear the actual arrival before starting the trip."
+            ))
+        departure = self.actual_departure_at or now
+        if departure > now:
+            raise ValidationError(_("Actual departure cannot be in the future."))
+        if departure < assignment.effective_from:
+            raise ValidationError(_(
+                "Actual departure cannot precede the current resource assignment."
+            ))
+        super(TajTransportTrip, self).write({
+            "state": "in_progress",
+            "started_at": now,
+            "actual_departure_at": departure,
+        })
+        return True
+
+    def action_complete_trip(self):
+        self.ensure_one()
+        self._lock_for_transition()
+        if self.state != "in_progress":
+            raise UserError(_("Only In Progress trips can be completed."))
+        assignment = self._locked_active_assignment()
+        now = fields.Datetime.now()
+        departure = self.actual_departure_at
+        if not departure:
+            raise ValidationError(_(
+                "The trip needs an actual departure time before completion."
+            ))
+        arrival = self.actual_arrival_at or now
+        if arrival > now:
+            raise ValidationError(_("Actual arrival cannot be in the future."))
+        if arrival <= departure:
+            raise ValidationError(_(
+                "Actual arrival must be later than actual departure."
+            ))
+        if arrival < assignment.effective_from:
+            raise ValidationError(_(
+                "Actual arrival cannot precede the current assignment."
+            ))
+        # Closing the final period releases the resources. Last Assignment
+        # remains visible on the trip, without claiming they are still active.
+        assignment._close_for_trip_end(arrival)
+        super(TajTransportTrip, self).write({
+            "state": "completed",
+            "completed_at": now,
+            "actual_arrival_at": arrival,
+        })
+        return True
+
+    def _check_can_cancel(self):
+        self.ensure_one()
+        if self.state not in ("draft", "ready", "in_progress"):
+            raise UserError(_("Completed or cancelled trips cannot be cancelled."))
+        if self.state == "in_progress" and not self.env.user.has_group(
+            "taj_transport_operations.group_transport_manager"
+        ):
+            raise AccessError(_(
+                "Only Transport Managers can cancel a trip in progress."
+            ))
+
+    def action_open_cancel_trip_wizard(self):
+        self.ensure_one()
+        self.check_access("write")
+        self._check_can_cancel()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Cancel Transport Trip"),
+            "res_model": "taj.transport.cancel.trip.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_trip_id": self.id},
+        }
+
+    def _cancel_with_reason(self, reason):
+        self.ensure_one()
+        self._lock_for_transition()
+        self._check_can_cancel()
+        reason = (reason or "").strip()
+        if not reason:
+            raise ValidationError(_("Enter a reason for cancelling the trip."))
+        now = fields.Datetime.now()
+        # A Draft/Ready trip can have an assignment starting in the future.
+        # End it at its start (zero active duration), never before its start.
+        self.env["taj.transport.assignment"].flush_model([
+            "trip_id", "effective_to",
+        ])
+        self.env.cr.execute(
+            "SELECT id FROM taj_transport_assignment "
+            "WHERE trip_id = %s AND effective_to IS NULL FOR UPDATE",
+            (self.id,),
+        )
+        ids = [r[0] for r in self.env.cr.fetchall()]
+        if len(ids) > 1:
+            raise ValidationError(_("Multiple active assignments found."))
+        if ids:
+            assignment = self.env["taj.transport.assignment"].browse(ids[0])
+            assignment.check_access("read")
+            assignment.invalidate_recordset(["effective_from", "effective_to"])
+            assignment._close_for_trip_end(max(now, assignment.effective_from))
+        super(TajTransportTrip, self).write({
+            "state": "cancelled",
+            "cancelled_at": now,
+            "cancelled_by_id": self.env.user.id,
+            "cancellation_reason": reason,
+        })
+        from markupsafe import Markup
+        self.message_post(
+            body=Markup("<p>%s</p>") % (_("Trip cancelled: %s") % reason),
+        )
+        return True
 
     def action_open_sale_order(self):
         self.ensure_one()
