@@ -20,7 +20,7 @@ MODULE = ROOT / "taj_transport_operations"
 
 def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
-    if manifest["version"] != "19.0.1.6.1":
+    if manifest["version"] != "19.0.1.6.2":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))

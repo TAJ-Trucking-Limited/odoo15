@@ -162,6 +162,12 @@ Assignment` becomes empty, while the `Last Assigned Resources` panel and
 full historical assignment rows remain available. Original Sales truck
 snapshots and invoice preparation remain unchanged.
 
+The `Last Assigned Resources` fields use a shared non-stored compute on
+`assignment_ids`, rather than related fields traversing the non-searchable
+`last_assignment_id`. This prevents the Odoo 19 inverse-dependency warnings
+seen when a Fleet vehicle category is edited. No Fleet classification, Sales
+truck or historical assignment is changed by this code update.
+
 **Replacement integration:** Resource swaps remain available in
 Draft, Ready and In Progress. Ready and In Progress swaps must keep a valid
 truck and primary driver; in-progress swaps may not predate actual
@@ -193,7 +199,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.6.1` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+`19.0.1.6.2` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
 Check the source checkout without Odoo using:
 
@@ -350,7 +356,7 @@ subscriptions and truck device mappings are not rewritten.
    development/staging build, never production. Keep a restorable database backup.
 2. In Apps, manually upgrade **TAJ Navirec Fleet Integration** to `19.0.1.3.2`
    first (if not previously done), then **TAJ Transport Operations** to
-   `19.0.1.6.1`. Installing the Navirec schema first ensures that the
+   `19.0.1.6.2`. Installing the Navirec schema first ensures that the
    tracking-request field exists before any legacy Fleet migration.
    Do not uninstall/reinstall.
    The legacy migration runs as part of the Transport module upgrade transaction.

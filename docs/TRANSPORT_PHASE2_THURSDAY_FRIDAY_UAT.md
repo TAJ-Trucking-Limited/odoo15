@@ -1,6 +1,6 @@
 # TAJ Transport Operations — Phase 2, Thursday/Friday release gate
 
-**Scope:** Branch 19_upgrade, TAJ Transport Operations version 19.0.1.6.1,
+**Scope:** Branch 19_upgrade, TAJ Transport Operations version 19.0.1.6.2,
 and existing move_invoice_line / Fleet Navirec modules.
 
 **Safety:** Development/staging only. Upgrade modules manually from Odoo Apps;
@@ -26,7 +26,7 @@ references, view fields and action methods. **It does not run Odoo.**
 - [ ] A restorable staging database backup exists.
 - [ ] In Odoo Apps manually upgrade TAJ Navirec Fleet Integration to
       19.0.1.3.2 if that upgrade has not happened yet; then manually upgrade
-      TAJ Transport Operations to 19.0.1.6.1.
+      TAJ Transport Operations to 19.0.1.6.2.
 - [ ] Confirm assigned Fleet trucks and trailers have the intended Truck or
       Trailer category. Existing original Sales trucks with blank Category
       must be reviewed by a Fleet administrator; do not bulk guess categories.

@@ -231,34 +231,49 @@ class TajTransportTrip(models.Model):
         related="current_assignment_id.co_driver_id", readonly=True,
     )
 
+    # Compute the last assignment and its resource snapshot together.
+    # Related fields through a *non-stored computed* last_assignment_id
+    # cannot resolve inverse dependency triggers in Odoo 19: writing
+    # fleet.vehicle then emits "last_assignment_id should be searchable".
+    # Direct dependencies on assignment_ids are searchable and preserve
+    # accurate history without adding a stored column or migration.
     last_assignment_id = fields.Many2one(
         "taj.transport.assignment", string="Last Assignment",
         compute="_compute_last_assignment", readonly=True,
     )
     last_vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Last Truck",
-        related="last_assignment_id.vehicle_id", readonly=True,
+        compute="_compute_last_assignment", readonly=True,
     )
     last_trailer_id = fields.Many2one(
         "fleet.vehicle", string="Last Trailer",
-        related="last_assignment_id.trailer_id", readonly=True,
+        compute="_compute_last_assignment", readonly=True,
     )
     last_driver_id = fields.Many2one(
         "res.partner", string="Last Driver",
-        related="last_assignment_id.driver_id", readonly=True,
+        compute="_compute_last_assignment", readonly=True,
     )
     last_co_driver_id = fields.Many2one(
         "res.partner", string="Last Co-driver",
-        related="last_assignment_id.co_driver_id", readonly=True,
+        compute="_compute_last_assignment", readonly=True,
     )
 
-    @api.depends("assignment_ids", "assignment_ids.effective_from")
+    @api.depends(
+        "assignment_ids", "assignment_ids.effective_from",
+        "assignment_ids.vehicle_id", "assignment_ids.trailer_id",
+        "assignment_ids.driver_id", "assignment_ids.co_driver_id",
+    )
     def _compute_last_assignment(self):
         for trip in self:
-            trip.last_assignment_id = trip.assignment_ids.sorted(
+            last = trip.assignment_ids.sorted(
                 key=lambda assignment: (assignment.effective_from, assignment.id),
                 reverse=True,
             )[:1]
+            trip.last_assignment_id = last
+            trip.last_vehicle_id = last.vehicle_id
+            trip.last_trailer_id = last.trailer_id
+            trip.last_driver_id = last.driver_id
+            trip.last_co_driver_id = last.co_driver_id
 
     @api.depends("assignment_ids", "assignment_ids.effective_to")
     def _compute_current_assignment(self):

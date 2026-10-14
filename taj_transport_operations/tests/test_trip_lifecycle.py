@@ -142,6 +142,70 @@ class TestTripLifecycle(TransactionCase):
         self.assertEqual(self.line.vehicle_id, self.truck)
         self.assertEqual(self.line._prepare_invoice_line(), invoice_before)
 
+    def test_last_resource_snapshot_recomputes_without_related_search_warnings(self):
+        import warnings
+
+        trip = self._trip()
+        initial = trip.current_assignment_id
+        self.assertEqual(trip.last_assignment_id, initial)
+        self.assertEqual(trip.last_vehicle_id, self.truck)
+        self.assertEqual(trip.last_driver_id, self.driver)
+        self.assertFalse(trip.last_trailer_id)
+        self.assertFalse(trip.last_co_driver_id)
+
+        # This write previously triggered Odoo 19 warnings because the
+        # four related last-resource fields depended on a non-searchable
+        # computed last_assignment_id.
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            self.truck.write({
+                "category_id": self.env.ref(
+                    "taj_transport_operations.fleet_category_truck"
+                ).id,
+            })
+        self.assertFalse([
+            warning for warning in captured
+            if "last_assignment_id" in str(warning.message)
+            and "should be searchable" in str(warning.message)
+        ])
+
+        action = trip.action_open_replace_assignment_wizard()
+        self.env["taj.transport.replace.assignment.wizard"].with_context(
+            **action["context"]
+        ).create({
+            "trip_id": trip.id,
+            "expected_assignment_id": initial.id,
+            "vehicle_id": self.truck_two.id,
+            "driver_id": self.customer.id,
+            "effective_from": fields.Datetime.now() - timedelta(hours=1),
+            "reason": "Audited resource replacement",
+        }).action_replace_resources()
+
+        latest = trip.current_assignment_id
+        self.assertNotEqual(latest, initial)
+        self.assertEqual(trip.last_assignment_id, latest)
+        self.assertEqual(trip.last_vehicle_id, self.truck_two)
+        self.assertEqual(trip.last_driver_id, self.customer)
+        trip.action_mark_ready()
+        trip.write({
+            "actual_departure_at": fields.Datetime.now() - timedelta(minutes=30),
+        })
+        trip.action_start_trip()
+        trip.action_complete_trip()
+        trip.invalidate_recordset()
+        self.assertFalse(trip.current_assignment_id)
+        self.assertEqual(trip.last_assignment_id, latest)
+        self.assertEqual(trip.last_vehicle_id, self.truck_two)
+        self.assertEqual(trip.last_driver_id, self.customer)
+
+    def test_last_resources_empty_when_trip_never_assigned(self):
+        trip = self._trip(assignment=False)
+        self.assertFalse(trip.last_assignment_id)
+        self.assertFalse(trip.last_vehicle_id)
+        self.assertFalse(trip.last_trailer_id)
+        self.assertFalse(trip.last_driver_id)
+        self.assertFalse(trip.last_co_driver_id)
+
     def test_start_stamps_actual_departure_if_missing(self):
         trip = self._trip()
         trip.action_mark_ready()
