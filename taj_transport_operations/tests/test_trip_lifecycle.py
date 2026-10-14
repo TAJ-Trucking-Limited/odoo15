@@ -246,6 +246,19 @@ class TestTripLifecycle(TransactionCase):
                 trip.action_complete_trip()
         self.assertEqual(trip.state, "in_progress")
 
+    def test_invalid_actual_arrival_write_cannot_corrupt_started_trip(self):
+        trip = self._started_trip()
+        with self.assertRaises(ValidationError):
+            with self.env.cr.savepoint():
+                trip.write({
+                    "actual_arrival_at": (
+                        trip.actual_departure_at - timedelta(minutes=1)
+                    ),
+                })
+        self.assertFalse(trip.actual_arrival_at)
+        self.assertEqual(trip.state, "in_progress")
+        self.assertFalse(trip.completed_at)
+
     def test_cannot_directly_write_state_or_audit_fields(self):
         trip = self._trip()
         for vals in (

@@ -898,6 +898,91 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertTrue(access.perm_write)
         self.assertFalse(access.perm_unlink)
 
+    def test_transport_company_record_rules_hide_other_company_history(self):
+        from odoo.tests.common import new_test_user
+
+        own_trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        own_assignment = self.env["taj.transport.assignment"].create({
+            "trip_id": own_trip.id,
+            "vehicle_id": self.truck.id,
+        })
+        other_company = self.env["res.company"].create({
+            "name": "Transport security isolated company",
+        })
+        other_order = self.env["sale.order"].sudo().with_company(
+            other_company
+        ).create({
+            "company_id": other_company.id,
+            "partner_id": self.customer.id,
+        })
+        other_line = self.env["sale.order.line"].sudo().with_company(
+            other_company
+        ).create({
+            "order_id": other_order.id,
+            "company_id": other_company.id,
+            "product_id": self.product.id,
+            "product_uom_qty": 1,
+            "price_unit": 95,
+        })
+        other_order.action_confirm()
+        foreign_trip = self.env["taj.transport.trip"].sudo().with_company(
+            other_company
+        ).create({
+            "sale_line_id": other_line.id,
+        })
+        foreign_assignment = self.env[
+            "taj.transport.assignment"
+        ].sudo().with_company(other_company).create({
+            "trip_id": foreign_trip.id,
+            "driver_id": self.customer.id,
+        })
+
+        dispatcher = new_test_user(
+            self.env,
+            login="cross_company_transport_dispatcher",
+            groups=(
+                "taj_transport_operations.group_transport_user,"
+                "sales_team.group_sale_salesman_all_leads"
+            ),
+        )
+        dispatcher.company_ids = self.env.company
+        dispatcher.company_id = self.env.company
+        visible_trips = self.env["taj.transport.trip"].with_user(
+            dispatcher
+        ).search([("id", "in", (own_trip | foreign_trip).ids)])
+        self.assertEqual(visible_trips, own_trip)
+
+        visible_assignments = self.env[
+            "taj.transport.assignment"
+        ].with_user(dispatcher).search([
+            ("id", "in", (own_assignment | foreign_assignment).ids),
+        ])
+        self.assertEqual(visible_assignments, own_assignment)
+        with self.assertRaises(AccessError):
+            foreign_trip.with_user(dispatcher).check_access("read")
+        with self.assertRaises(AccessError):
+            foreign_trip.with_user(dispatcher).action_mark_ready()
+        with self.assertRaises(AccessError):
+            foreign_assignment.with_user(dispatcher).check_access("read")
+
+    def test_uncategorized_or_mismatched_fleet_vehicle_error_is_actionable(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "TRUCK-CATEGORY-MISMATCH",
+        })
+        with self.assertRaisesRegex(ValidationError, "expected Truck"):
+            with self.env.cr.savepoint():
+                self.env["taj.transport.assignment"].create({
+                    "trip_id": trip.id,
+                    "vehicle_id": trailer.id,
+                })
+        self.assertFalse(trip.current_assignment_id)
+
     def test_batch_three_route_timing_optional_and_independent_of_sales(self):
         before = self.line_1._prepare_invoice_line()
         trip = self.env["taj.transport.trip"].create({

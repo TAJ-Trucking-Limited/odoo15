@@ -193,15 +193,35 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.6.0` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+`19.0.1.6.1` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
-Run Odoo tests on a **staging/development database**, not production, using
-the test tag:
+Check the source checkout without Odoo using:
 
 ```sh
-odoo-bin -d "$PGDATABASE" --stop-after-init -u taj_transport_operations \
+python3 scripts/taj_transport_phase2_static_gate.py
+```
+
+After the **manual Odoo Apps upgrade** on Odoo.sh development/staging, run
+the read-only database integrity gate:
+
+```sh
+odoo-bin shell -d "$PGDATABASE" --no-http --max-cron-threads=0 \
+  < ~/src/user/scripts/taj_transport_phase2_staging_gate.py
+```
+
+Run the full Odoo TransactionCase test suite only on an **isolated copy**
+of development/staging (not Production or the shared staging DB), since
+the test command includes a module upgrade on the disposable clone:
+
+```sh
+odoo-bin -d "$PGDATABASE" --no-http --max-cron-threads=0 \
+  --stop-after-init -u taj_transport_operations \
   --test-enable --test-tags /taj_transport_operations
 ```
+
+The complete Thursday/Friday role, Sales/Accounting, replacement and
+lifecycle acceptance matrix is in
+`docs/TRANSPORT_PHASE2_THURSDAY_FRIDAY_UAT.md`.
 
 The test suite covers one-to-one uniqueness, source/truck snapshots, no-truck
 lines, non-unit quantities, initial Draft creation, idempotent actions,
@@ -211,7 +231,8 @@ tracking configuration, route/timing chronology, initial resources, form
 tabs, resource replacements, stale/concurrent wizard protection, timeline
 validation, failed-transaction rollback, assignment uniqueness and
 immutability, company separation, terminal resource release, cancellation
-reason/audit fields and invoicing invariance.
+reason/audit fields, real draft customer invoices, VAT, payment terms,
+multi-line invoice creation, cross-company record rules and invoicing invariance.
 
 For a manual smoke test, open an existing Draft trip; the new Commercial and
 Cargo tabs should show its existing Sales data while its optional dispatcher
@@ -328,8 +349,9 @@ subscriptions and truck device mappings are not rewritten.
 1. Wait for Odoo.sh `19_upgrade` to build the pushed commit successfully. Use the
    development/staging build, never production. Keep a restorable database backup.
 2. In Apps, manually upgrade **TAJ Navirec Fleet Integration** to `19.0.1.3.2`
-   first, then **TAJ Transport Operations** to `19.0.1.4.1`. This creates the new
-   Navirec tracking-request column before legacy Fleet records are migrated.
+   first (if not previously done), then **TAJ Transport Operations** to
+   `19.0.1.6.1`. Installing the Navirec schema first ensures that the
+   tracking-request field exists before any legacy Fleet migration.
    Do not uninstall/reinstall.
    The legacy migration runs as part of the Transport module upgrade transaction.
    If it stops on ambiguous data, review the reported legacy record and correct

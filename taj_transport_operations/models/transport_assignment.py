@@ -93,8 +93,20 @@ class TajTransportAssignment(models.Model):
                 if vehicle and not assignment.effective_to:
                     # Preserve closed history even if a vehicle was later archived.
                     category = self.env.ref("taj_transport_operations.fleet_category_" + kind)
-                    if not vehicle.active or vehicle.category_id != category:
-                        raise ValidationError(_("Select an active Fleet vehicle in the correct resource category."))
+                    if not vehicle.active:
+                        raise ValidationError(_(
+                            "%s is archived in Fleet. Choose an active %s."
+                        ) % (vehicle.display_name, kind))
+                    if vehicle.category_id != category:
+                        raise ValidationError(_(
+                            "%(vehicle)s has Fleet category %(actual)s; expected "
+                            "%(expected)s. A Fleet administrator must correct "
+                            "the vehicle/model category before it can be assigned."
+                        ) % {
+                            "vehicle": vehicle.display_name,
+                            "actual": vehicle.category_id.display_name or _("Not set"),
+                            "expected": category.display_name,
+                        })
             if not any((
                 assignment.vehicle_id, assignment.trailer_id,
                 assignment.driver_id, assignment.co_driver_id,
