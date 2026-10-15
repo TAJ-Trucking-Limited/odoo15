@@ -50,6 +50,18 @@ Odoo's standard `mail.thread` tracking (including the responsible user and
 timestamp). Commercial values remain owned by Sales; the trip's new fields
 do not write to Sales, Purchase, Accounting or invoice records.
 
+**Cargo Type dropdown (19.0.1.6.3):** The Cargo tab, list and search view
+now offer a configurable Cargo Type selection backed by a dedicated catalog
+(`taj.transport.cargo.type`). The Transport Manager maintains options at
+**Transport Operations > Cargo Types**; Dispatcher users can only select
+existing options. Suggested starting options are editable, not
+TAJ-approved hard-coded classifications. The pre-existing `cargo_type`
+Char field is retained and synchronized for historic data, integrations and
+Chatter tracking. The 19.0.1.6.3 post-migration imports any distinct
+non-empty legacy cargo type text, preserves the original text unchanged
+and populates `cargo_type_id`. Archiving catalog entries does not erase
+historic trips. Renaming in-use categories is intentionally blocked.
+
 All new fields are nullable, so existing Draft trips from Batch 1 continue to
 work. No backfill, auto-creation, or pricing recalculation is performed.
 `Sales Line Quantity` is informative and is **not** a count of trips.
@@ -199,7 +211,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.6.2` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+`19.0.1.6.3` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
 Check the source checkout without Odoo using:
 
@@ -356,7 +368,7 @@ subscriptions and truck device mappings are not rewritten.
    development/staging build, never production. Keep a restorable database backup.
 2. In Apps, manually upgrade **TAJ Navirec Fleet Integration** to `19.0.1.3.2`
    first (if not previously done), then **TAJ Transport Operations** to
-   `19.0.1.6.2`. Installing the Navirec schema first ensures that the
+   `19.0.1.6.3`. Installing the Navirec schema first ensures that the
    tracking-request field exists before any legacy Fleet migration.
    Do not uninstall/reinstall.
    The legacy migration runs as part of the Transport module upgrade transaction.

@@ -20,7 +20,7 @@ MODULE = ROOT / "taj_transport_operations"
 
 def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
-    if manifest["version"] != "19.0.1.6.2":
+    if manifest["version"] != "19.0.1.6.3":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))
@@ -109,6 +109,18 @@ def run():
     assert actions.issubset(trip["methods"])
     assert {"initial_vehicle_id", "sale_line_id", "sale_order_id", "payment_term_id"}.issubset(
         trip["fields"]
+    )
+    assert {"cargo_type_id", "cargo_type"}.issubset(trip["fields"])
+    assert 'cargo_type_id = fields.Many2one(' in (
+        MODULE / "models/transport_trip.py"
+    ).read_text()
+    assert (MODULE / "migrations/19.0.1.6.3/post-migration.py").is_file()
+    cargo_form = etree.parse(str(MODULE / "views/transport_trip_views.xml"))
+    assert cargo_form.xpath(
+        "//page[@name='cargo_details']//field[@name='cargo_type_id']"
+    )
+    assert not cargo_form.xpath(
+        "//page[@name='cargo_details']//field[@name='cargo_type']"
     )
     form = etree.parse(str(MODULE / "views/transport_trip_views.xml"))
     header = form.xpath("//record[@id='view_transport_trip_form']"

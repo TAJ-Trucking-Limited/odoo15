@@ -1113,6 +1113,10 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.transporter_id, carrier)
         self.assertEqual(trip.transport_reference, "BOOK-100")
         self.assertEqual(trip.cargo_type, "General cargo")
+        self.assertEqual(
+            trip.cargo_type_id,
+            self.env.ref("taj_transport_operations.cargo_type_general"),
+        )
         self.assertEqual(trip.cargo_description, "Palletized goods")
         self.assertEqual(trip.special_handling_instructions, "Keep dry")
 
@@ -1124,6 +1128,10 @@ class TestTransportTripFoundation(TransactionCase):
         })
         self.assertEqual(trip.transport_reference, "BOOK-101")
         self.assertEqual(trip.cargo_type, "Fragile cargo")
+        self.assertEqual(
+            trip.cargo_type_id,
+            self.env.ref("taj_transport_operations.cargo_type_fragile"),
+        )
         self.assertEqual(trip.cargo_description, "Fragile palletized goods")
         self.assertEqual(trip.special_handling_instructions, "Do not stack")
         self.assertEqual(trip.initial_vehicle_id, self.truck)
@@ -1149,6 +1157,10 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertFalse(trip.special_handling_instructions)
         trip.write({"cargo_type": "Bulk"})
         self.assertEqual(trip.cargo_type, "Bulk")
+        self.assertEqual(
+            trip.cargo_type_id,
+            self.env.ref("taj_transport_operations.cargo_type_bulk"),
+        )
         self.assertFalse(trip.initial_vehicle_id)
         self.assertEqual(trip.sale_line_id.product_uom_qty, 3)
 
@@ -1174,7 +1186,7 @@ class TestTransportTripFoundation(TransactionCase):
                 name,
             )
         for name in (
-            "transporter_id", "transport_reference", "cargo_type",
+            "transporter_id", "transport_reference", "cargo_type_id",
             "cargo_description", "special_handling_instructions",
         ):
             self.assertEqual(
@@ -1184,6 +1196,99 @@ class TestTransportTripFoundation(TransactionCase):
                 root.xpath(f"//field[@name='{name}'][@readonly='1']"),
                 name,
             )
+
+    def test_cargo_type_dropdown_writes_legacy_text_without_changing_sales(self):
+        before = self.line_1._prepare_invoice_line()
+        first = self.env.ref("taj_transport_operations.cargo_type_general")
+        second = self.env.ref("taj_transport_operations.cargo_type_refrigerated")
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+            "cargo_type_id": first.id,
+        })
+        self.assertEqual(trip.cargo_type_id, first)
+        self.assertEqual(trip.cargo_type, first.name)
+
+        trip.write({"cargo_type_id": second.id})
+        self.assertEqual(trip.cargo_type_id, second)
+        self.assertEqual(trip.cargo_type, second.name)
+        self.assertEqual(self.line_1._prepare_invoice_line(), before)
+
+        trip.write({"cargo_type_id": False})
+        self.assertFalse(trip.cargo_type_id)
+        self.assertFalse(trip.cargo_type)
+
+    def test_cargo_type_dropdown_disallows_invalid_or_archived_types(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        with self.assertRaises(ValidationError):
+            trip.write({"cargo_type_id": 999999999})
+        category = self.env.ref("taj_transport_operations.cargo_type_general")
+        category.write({"active": False})
+        with self.assertRaises(ValidationError):
+            trip.write({"cargo_type_id": category.id})
+
+    def test_cargo_type_legacy_unknown_is_preserved_without_fake_mapping(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+            "cargo_type": "Unique historical commodity type",
+        })
+        self.assertEqual(trip.cargo_type, "Unique historical commodity type")
+        self.assertFalse(trip.cargo_type_id)
+
+    def test_cargo_type_used_record_cannot_be_renamed(self):
+        category = self.env.ref("taj_transport_operations.cargo_type_general")
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+            "cargo_type_id": category.id,
+        })
+        self.assertEqual(trip.cargo_type_id, category)
+        with self.assertRaises(UserError):
+            category.write({"name": "Renamed type"})
+        self.assertEqual(trip.cargo_type, "General cargo")
+
+    def test_cargo_type_catalog_dispatcher_read_manager_edit(self):
+        from odoo.tests.common import new_test_user
+
+        dispatcher = new_test_user(
+            self.env, login="cargo_type_test_dispatcher",
+            groups="taj_transport_operations.group_transport_user",
+        )
+        manager = new_test_user(
+            self.env, login="cargo_type_test_manager",
+            groups="taj_transport_operations.group_transport_manager",
+        )
+        catalog = self.env["taj.transport.cargo.type"]
+        self.assertEqual(
+            self.env.ref(
+                "taj_transport_operations.cargo_type_general"
+            ).with_user(dispatcher).name,
+            "General cargo",
+        )
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            catalog.with_user(dispatcher).create({
+                "name": "Unauthorized dispatcher-created type",
+            })
+        created = catalog.with_user(manager).create({
+            "name": "Manager-approved cargo type",
+        })
+        self.assertEqual(created.name, "Manager-approved cargo type")
+
+    def test_cargo_type_ui_uses_catalog_many2one_not_free_text(self):
+        from lxml import etree
+        field = self.env["taj.transport.trip"]._fields["cargo_type_id"]
+        self.assertEqual(field.type, "many2one")
+        self.assertEqual(field.comodel_name, "taj.transport.cargo.type")
+        view = self.env.ref("taj_transport_operations.view_transport_trip_form")
+        root = etree.fromstring(view.get_combined_arch())
+        dropdown = root.xpath(
+            "//page[@name='cargo_details']//field[@name='cargo_type_id']"
+        )
+        self.assertEqual(len(dropdown), 1)
+        self.assertIn("no_create", dropdown[0].get("options", ""))
+        self.assertFalse(
+            root.xpath("//page[@name='cargo_details']//field[@name='cargo_type']")
+        )
 
     def test_sales_order_buttons_and_combined_view(self):
         with self.assertRaises(UserError):

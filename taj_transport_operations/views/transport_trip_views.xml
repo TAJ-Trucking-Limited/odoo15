@@ -10,7 +10,7 @@
                 <field name="sale_line_id" optional="hide"/>
                 <field name="partner_id"/>
                 <field name="transporter_id" optional="show"/>
-                <field name="cargo_type" optional="show"/>
+                <field name="cargo_type_id" optional="show"/>
                 <field name="transport_reference" optional="hide"/>
                 <field name="initial_vehicle_id" optional="show"/>
                 <field name="current_vehicle_id" optional="show"/>
@@ -115,8 +115,8 @@
                                     <field name="sale_description" readonly="1"/>
                                 </group>
                                 <group string="Operational Cargo Data">
-                                    <field name="cargo_type" readonly="state in ('completed', 'cancelled')"
-                                           placeholder="e.g. General cargo"/>
+                                    <field name="cargo_type_id" readonly="state in ('completed', 'cancelled')"
+                                           options="{'no_create': True, 'no_create_edit': True}"/>
                                     <field name="cargo_description" readonly="state in ('completed', 'cancelled')"
                                            placeholder="Actual goods to transport"/>
                                     <field name="special_handling_instructions" readonly="state in ('completed', 'cancelled')"
@@ -236,7 +236,7 @@
                 <field name="partner_id"/>
                 <field name="transporter_id"/>
                 <field name="transport_reference"/>
-                <field name="cargo_type"/>
+                <field name="cargo_type_id"/>
                 <field name="origin_location"/>
                 <field name="destination_location"/>
                 <field name="initial_vehicle_id"/>

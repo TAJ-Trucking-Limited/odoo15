@@ -1,6 +1,6 @@
 # TAJ Transport Operations — Phase 2, Thursday/Friday release gate
 
-**Scope:** Branch 19_upgrade, TAJ Transport Operations version 19.0.1.6.2,
+**Scope:** Branch 19_upgrade, TAJ Transport Operations version 19.0.1.6.3,
 and existing move_invoice_line / Fleet Navirec modules.
 
 **Safety:** Development/staging only. Upgrade modules manually from Odoo Apps;
@@ -26,7 +26,7 @@ references, view fields and action methods. **It does not run Odoo.**
 - [ ] A restorable staging database backup exists.
 - [ ] In Odoo Apps manually upgrade TAJ Navirec Fleet Integration to
       19.0.1.3.2 if that upgrade has not happened yet; then manually upgrade
-      TAJ Transport Operations to 19.0.1.6.2.
+      TAJ Transport Operations to 19.0.1.6.3.
 - [ ] Confirm assigned Fleet trucks and trailers have the intended Truck or
       Trailer category. Existing original Sales trucks with blank Category
       must be reviewed by a Fleet administrator; do not bulk guess categories.
@@ -45,6 +45,21 @@ The script only reads; it reports Fleet categorization warnings, ambiguous
 history, impossible statuses, company mismatches and unreleased resources.
 Errors require investigation, but historical invoice-to-Sales drift is only a
 warning because Sales could have been edited independently.
+
+## Cargo Type dropdown smoke test (19.0.1.6.3)
+
+- [ ] After manually upgrading the module, open a Draft Transport Trip,
+      **Cargo** tab. Cargo Type must open an existing-option dropdown rather
+      than accept free text. Try selecting **General cargo**, saving and
+      reopening; the selection and existing text mirror must match.
+- [ ] A Dispatcher can select a cargo type but cannot create new catalog
+      categories from the trip field. A Transport Manager can maintain types
+      via **Transport Operations > Cargo Types**.
+- [ ] Legacy non-empty free-text cargo types must remain unchanged and have
+      matching `cargo_type_id` records after the versioned post-migration.
+      The read-only staging gate reports any unmatched legacy values.
+- [ ] Confirm original Sales Order, Sales line and invoice are unchanged.
+      No additional accounting module, report or pricing edits are intended.
 
 ## Thursday — authorization and financial boundary UAT
 
@@ -108,18 +123,17 @@ on this Mac.
 
 ## Release outcome (fill after runtime evidence)
 
-- Offline Python/XML/ACL preflight: **PASS locally** (21 Python files,
-  10 XML files, 112 view fields, 12 action buttons, 11 ACL rows).
-- Defined Odoo TransactionCase tests: **85** (defined, not executed).
-- Read-only staging gate: **offline synthetic checks PASS** (empty/valid
-  Draft scenarios accepted; an invalid Ready trip correctly rejected).
-  Real Odoo ORM/database execution is still pending.
-- Odoo.sh build/actual deployed SHA: **not verified**; the previously
-  used development URL was unreachable from the connected Mac.
-- Manual module upgrade on staging: **not performed by this change**.
-- Read-only staging database gate on Odoo.sh: **not executed**.
-- Full ORM integration tests on isolated clone: **not executed**.
-- Manual UAT (two roles, Sales/Invoices, Fleet): **not executed**.
+- Offline Python/XML/ACL preflight: **PASS locally** (23 Python files,
+  12 XML files, 118 view fields, 12 action buttons, 13 ACL rows).
+- Defined Odoo TransactionCase tests: **93** (defined, not executed).
+- Earlier 19.0.1.6.2 staging integrity gate: **PASS on Odoo.sh** (2 trips,
+  2 assignments, 0 errors, 0 warnings after Fleet category correction).
+- Earlier manual shell lifecycle/resource replacement tests: **PASS** with
+  verified database rollback and no Sales/invoice changes. Permission and
+  cancellation UAT, isolated-clone suite remain pending.
+- 19.0.1.6.3 manual module upgrade, cargo dropdown UI check and migration
+  evidence on Staging: **not yet performed**.
+- Full Odoo TransactionCase suite on isolated clone: **not executed**.
 
 No Production release is authorized by this checklist. Review the results,
 resolve critical issues, and confirm the staging gate before deciding on

@@ -108,6 +108,14 @@ def check_transport_integrity(environment):
             record(failures, "cancellation_audit", trip, "Missing cancellation author/time/reason.")
         if trip.initial_vehicle_id and trip.initial_vehicle_id.category_id != category_truck:
             record(warnings, "legacy_fleet_category", trip, "Original Sales truck is not categorized Truck.")
+        if (trip.cargo_type or "").strip() and not trip.cargo_type_id:
+            record(warnings, "cargo_type_unmapped", trip,
+                   "Legacy cargo type has no dropdown category; review post-migration.")
+        if (trip.cargo_type_id and trip.cargo_type
+                and trip.cargo_type.strip().casefold()
+                != trip.cargo_type_id.name.strip().casefold()):
+            record(warnings, "cargo_type_mismatch", trip,
+                   "Legacy cargo type text differs from selected category.")
 
     if lines_seen:
         invoice_lines = environment["account.move.line"].sudo().search([

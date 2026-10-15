@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_cargo_type_list" model="ir.ui.view">
+        <field name="name">taj.transport.cargo.type.list</field>
+        <field name="model">taj.transport.cargo.type</field>
+        <field name="arch" type="xml">
+            <list string="Cargo Types" delete="0">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_transport_cargo_type_form" model="ir.ui.view">
+        <field name="name">taj.transport.cargo.type.form</field>
+        <field name="model">taj.transport.cargo.type</field>
+        <field name="arch" type="xml">
+            <form string="Cargo Type" delete="0">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_transport_cargo_types" model="ir.actions.act_window">
+        <field name="name">Cargo Types</field>
+        <field name="res_model">taj.transport.cargo.type</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="menu_transport_cargo_types" name="Cargo Types"
+              parent="menu_transport_operations"
+              action="action_transport_cargo_types" sequence="30"
+              groups="taj_transport_operations.group_transport_manager"/>
+</odoo>

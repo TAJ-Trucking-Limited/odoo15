@@ -71,7 +71,7 @@ class TajTransportTrip(models.Model):
         "cancelled_at", "cancellation_reason", "cancelled_by_id",
     })
     _operational_fields = frozenset({
-        "transporter_id", "transport_reference", "cargo_type",
+        "transporter_id", "transport_reference", "cargo_type", "cargo_type_id",
         "cargo_description", "special_handling_instructions",
         "origin_location", "destination_location", "route_notes",
         "planned_departure_at", "planned_arrival_at",
@@ -142,9 +142,17 @@ class TajTransportTrip(models.Model):
         string="Transport / Booking Reference", tracking=True, copy=False,
         help="Optional dispatcher or carrier reference for this trip.",
     )
+    # Keep the historical Char column so existing trips, integrations and
+    # change-tracking retain their original text after the catalog upgrade.
+    # Only cargo_type_id is displayed in the UI as a searchable dropdown.
     cargo_type = fields.Char(
         string="Cargo Type", tracking=True, copy=False,
-        help="Operational description of the cargo category.",
+        help="Historical cargo type text, synchronized with the dropdown.",
+    )
+    cargo_type_id = fields.Many2one(
+        "taj.transport.cargo.type", string="Cargo Type",
+        tracking=False, copy=False, index=True, ondelete="restrict",
+        help="Choose a type maintained by the Transport Manager.",
     )
     cargo_description = fields.Text(
         string="Operational Cargo Description", tracking=True, copy=False,
@@ -357,11 +365,32 @@ class TajTransportTrip(models.Model):
         for trip in self:
             trip._validate_sale_line(trip.sale_line_id)
 
+    @api.model
+    def _sync_cargo_type_values(self, entry):
+        """Synchronize the dropdown and existing textual cargo type field."""
+        vals = dict(entry)
+        CargoType = self.env["taj.transport.cargo.type"].sudo()
+        if "cargo_type_id" in vals:
+            type_id = vals["cargo_type_id"]
+            cargo_type = CargoType.browse(type_id).exists() if type_id else CargoType
+            if type_id and (not cargo_type or not cargo_type.active):
+                raise ValidationError(_("Choose an active cargo type."))
+            vals["cargo_type"] = cargo_type.name if type_id else False
+        elif "cargo_type" in vals:
+            # Legacy API callers can still write the original text. Map known
+            # names without creating a catalog entry or discarding their text.
+            name = (vals["cargo_type"] or "").strip()
+            cargo_type = CargoType.with_context(active_test=False).search(
+                [("name", "=ilike", name)], limit=1
+            ) if name else CargoType
+            vals["cargo_type_id"] = cargo_type.id or False
+        return vals
+
     @api.model_create_multi
     def create(self, vals_list):
         new_vals_list = []
         for entry in vals_list:
-            vals = dict(entry)
+            vals = self._sync_cargo_type_values(entry)
             if not vals.get("sale_line_id"):
                 raise ValidationError(_("A sales order line is required."))
             line = self.env["sale.order.line"].browse(
@@ -387,6 +416,7 @@ class TajTransportTrip(models.Model):
         return super().create(new_vals_list)
 
     def write(self, vals):
+        vals = self._sync_cargo_type_values(vals)
         if "sale_line_id" in vals:
             for trip in self:
                 if vals["sale_line_id"] != trip.sale_line_id.id:

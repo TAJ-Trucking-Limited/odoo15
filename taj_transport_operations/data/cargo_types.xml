@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Initial suggestions only; managers maintain the catalog. -->
+    <record id="cargo_type_general" model="taj.transport.cargo.type">
+        <field name="name">General cargo</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="cargo_type_containerized" model="taj.transport.cargo.type">
+        <field name="name">Containerized cargo</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="cargo_type_bulk" model="taj.transport.cargo.type">
+        <field name="name">Bulk</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="cargo_type_fragile" model="taj.transport.cargo.type">
+        <field name="name">Fragile cargo</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="cargo_type_refrigerated" model="taj.transport.cargo.type">
+        <field name="name">Refrigerated cargo</field>
+        <field name="sequence">50</field>
+    </record>
+    <record id="cargo_type_hazardous" model="taj.transport.cargo.type">
+        <field name="name">Hazardous cargo</field>
+        <field name="sequence">60</field>
+    </record>
+    <record id="cargo_type_oversized" model="taj.transport.cargo.type">
+        <field name="name">Oversized cargo</field>
+        <field name="sequence">70</field>
+    </record>
+    <record id="cargo_type_other" model="taj.transport.cargo.type">
+        <field name="name">Other</field>
+        <field name="sequence">80</field>
+    </record>
+</odoo>
