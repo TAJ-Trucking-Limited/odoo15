@@ -1,4 +1,6 @@
 """Transport trip foundation; invoicing and operational assignments stay separate."""
+
+import re
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 
@@ -366,6 +368,84 @@ class TajTransportTrip(models.Model):
             trip._validate_sale_line(trip.sale_line_id)
 
     @api.model
+    def _route_from_product_name(self, name):
+        """Extract a simple Origin - Destination pair, ignoring cargo specs.
+
+        Read the product template name (not the Sales line description or
+        display_name, which may contain product codes/variants). A product
+        that does not have exactly one spaced route delimiter is not a
+        safe source for a route suggestion.
+        """
+        name = (name or "").strip()
+        # Remove an optional cargo-spec suffix *before* splitting, since
+        # container descriptions themselves sometimes contain dashes.
+        # Keep meaningful place qualifiers such as "(Port)".
+        spec = re.search(r"\s+\(([^()]*)\)\s*$", name)
+        if spec and (
+            "," in spec.group(1)
+            or re.search(
+                r"\b(?:20|40|45)\s*(?:ft|feet|hc)\b", spec.group(1), re.I,
+            )
+        ):
+            name = name[:spec.start()].strip()
+        parts = re.split(r"\s+[-\u2013\u2014]\s+", name)
+        if len(parts) != 2:
+            return False, False
+        origin, destination = (part.strip() for part in parts)
+        if not origin or not destination:
+            return False, False
+        return origin, destination
+
+    @api.model
+    def _route_from_sale_line_product(self, line):
+        if not line or not line.product_id:
+            return False, False
+        name = line.product_id.product_tmpl_id.name
+        return self._route_from_product_name(name)
+
+    @api.model
+    def _suggest_missing_route_values(self, vals, line):
+        if vals.get("origin_location") and vals.get("destination_location"):
+            return vals
+        origin, destination = self._route_from_sale_line_product(line)
+        if origin and not (vals.get("origin_location") or "").strip():
+            vals["origin_location"] = origin
+        if destination and not (vals.get("destination_location") or "").strip():
+            vals["destination_location"] = destination
+        return vals
+
+    @api.onchange("sale_line_id")
+    def _onchange_sale_line_suggest_route(self):
+        # Standalone trip creation: suggest from the selected product before
+        # saving. Operators may edit either field, including independently.
+        for trip in self:
+            origin, destination = trip._route_from_sale_line_product(trip.sale_line_id)
+            if origin and not (trip.origin_location or "").strip():
+                trip.origin_location = origin
+            if destination and not (trip.destination_location or "").strip():
+                trip.destination_location = destination
+
+    def action_prefill_route_from_product(self):
+        """Opt-in suggestion for existing Draft trips; never overwrite routes."""
+        self.ensure_one()
+        self.check_access("write")
+        if self.state != "draft":
+            raise UserError(_("Route suggestion is only available for Draft trips."))
+        vals = self._suggest_missing_route_values({}, self.sale_line_id)
+        missing = {
+            key: value for key, value in vals.items()
+            if not (getattr(self, key) or "").strip()
+        }
+        if not vals:
+            raise UserError(_(
+                "The Sales product name does not contain a clear "
+                "'Origin - Destination' route. Enter locations manually."
+            ))
+        if missing:
+            self.write(missing)
+        return {"type": "ir.actions.client", "tag": "reload"}
+
+    @api.model
     def _sync_cargo_type_values(self, entry):
         """Synchronize the dropdown and existing textual cargo type field."""
         vals = dict(entry)
@@ -397,6 +477,9 @@ class TajTransportTrip(models.Model):
                 vals["sale_line_id"]
             ).exists()
             self._validate_sale_line(line)
+            # Creation via Sales button, batch wizard, API or Trip form all
+            # pass through this defaulting logic. Explicit values win.
+            vals = self._suggest_missing_route_values(vals, line)
             if vals.get("state", "draft") != "draft":
                 raise ValidationError(_("Transport trips must start in Draft."))
             if self._workflow_fields.intersection(vals) - {"state"}:

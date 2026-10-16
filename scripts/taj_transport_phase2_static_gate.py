@@ -20,7 +20,7 @@ MODULE = ROOT / "taj_transport_operations"
 
 def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
-    if manifest["version"] != "19.0.1.6.3":
+    if manifest["version"] != "19.0.1.6.4":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))
@@ -105,6 +105,7 @@ def run():
         "action_mark_ready", "action_start_trip", "action_complete_trip",
         "action_open_cancel_trip_wizard", "action_open_initial_assignment_wizard",
         "action_open_replace_assignment_wizard",
+        "action_prefill_route_from_product",
     }
     assert actions.issubset(trip["methods"])
     assert {"initial_vehicle_id", "sale_line_id", "sale_order_id", "payment_term_id"}.issubset(
@@ -132,6 +133,10 @@ def run():
     assert len(form.xpath("//record[@id='view_transport_trip_form']"
                          "/field[@name='arch']/form/sheet/notebook"
                          "/page[@name='trip_resources']")) == 1
+    assert len(form.xpath("//record[@id='view_transport_trip_form']"
+                         "/field[@name='arch']/form/sheet/notebook"
+                         "/page[@name='route_timing']//button"
+                         "[@name='action_prefill_route_from_product']")) == 1
     # Transport module should not mutate source sale.order/sale.order.line or
     # account.move/account.move.line: Sales and Accounting are authoritative.
     trip_file = (MODULE / "models/transport_trip.py").read_text()

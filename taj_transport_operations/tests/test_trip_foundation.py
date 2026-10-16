@@ -983,6 +983,151 @@ class TestTransportTripFoundation(TransactionCase):
                 })
         self.assertFalse(trip.current_assignment_id)
 
+    def test_product_name_route_parser_strips_cargo_specifications(self):
+        Trip = self.env["taj.transport.trip"]
+        self.assertEqual(
+            Trip._route_from_product_name(
+                "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)"
+            ),
+            ("DRC kasumbalesa", "TZ Dar"),
+        )
+        self.assertEqual(
+            Trip._route_from_product_name(
+                "  Dar es Salaam \u2013 Lusaka (20ft Reefer) "
+            ),
+            ("Dar es Salaam", "Lusaka"),
+        )
+        self.assertEqual(
+            Trip._route_from_product_name("Dar (Port) - Lusaka (Destination)"),
+            ("Dar (Port)", "Lusaka (Destination)"),
+        )
+        self.assertEqual(
+            Trip._route_from_product_name(
+                "Kasumbalesa - Dar (40ft - Normal - No Special Requirements)"
+            ),
+            ("Kasumbalesa", "Dar"),
+        )
+        for ambiguous in (
+            "Freight service",
+            "DRC Kasumbalesa - TZ Dar - Border Point",
+            "No spaces-TZ Dar",
+            "DRC - ",
+            "",
+        ):
+            self.assertEqual(
+                Trip._route_from_product_name(ambiguous),
+                (False, False),
+                ambiguous,
+            )
+
+    def test_new_trip_prefills_route_from_product_not_sale_line_description(self):
+        self.product.product_tmpl_id.write({
+            "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
+        })
+        # The Sales description deliberately differs from the Product name.
+        self.assertEqual(self.line_1.name, "Freight line 1")
+        before_invoice = self.line_1._prepare_invoice_line()
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        self.assertEqual(trip.origin_location, "DRC kasumbalesa")
+        self.assertEqual(trip.destination_location, "TZ Dar")
+        self.assertEqual(trip.state, "draft")
+        self.assertEqual(self.line_1._prepare_invoice_line(), before_invoice)
+
+        # Changing the product catalog later must not change trip operations.
+        self.product.product_tmpl_id.write({
+            "name": "TZ Dar - DRC kasumbalesa (20ft, Normal)",
+        })
+        self.assertEqual(trip.origin_location, "DRC kasumbalesa")
+        self.assertEqual(trip.destination_location, "TZ Dar")
+
+    def test_sales_buttons_and_batch_wizard_use_same_product_route_defaults(self):
+        self.product.product_tmpl_id.write({
+            "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
+        })
+        action = self.line_1.action_open_or_create_transport_trip()
+        trip = self.env["taj.transport.trip"].browse(action["res_id"])
+        self.assertEqual(trip.origin_location, "DRC kasumbalesa")
+        self.assertEqual(trip.destination_location, "TZ Dar")
+
+        wizard = self.env["taj.transport.trip.create.wizard"].create({
+            "sale_order_id": self.order.id,
+            "line_ids": [Command.set([self.line_2.id])],
+        })
+        action = wizard.action_create_trips()
+        created = self.env["taj.transport.trip"].browse(action["res_id"])
+        self.assertEqual(created.origin_location, "DRC kasumbalesa")
+        self.assertEqual(created.destination_location, "TZ Dar")
+        self.assertEqual(len(self.order.transport_trip_ids), 2)
+
+    def test_explicit_origin_wins_and_operator_may_edit_product_suggestion(self):
+        self.product.product_tmpl_id.write({
+            "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+            "origin_location": "Custom loading location",
+        })
+        self.assertEqual(trip.origin_location, "Custom loading location")
+        self.assertEqual(trip.destination_location, "TZ Dar")
+        trip.write({"destination_location": "Manual destination"})
+        self.assertEqual(trip.destination_location, "Manual destination")
+        trip.action_prefill_route_from_product()
+        self.assertEqual(trip.origin_location, "Custom loading location")
+        self.assertEqual(trip.destination_location, "Manual destination")
+
+    def test_existing_draft_can_fill_missing_route_without_overwriting_origin(self):
+        # The trip predates a route-like product name. Existing Trips are
+        # deliberately NOT overwritten by module upgrades.
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+            "origin_location": "Existing custom origin",
+        })
+        self.assertFalse(trip.destination_location)
+        self.product.product_tmpl_id.write({
+            "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
+        })
+        action = trip.action_prefill_route_from_product()
+        self.assertEqual(action, {"type": "ir.actions.client", "tag": "reload"})
+        self.assertEqual(trip.origin_location, "Existing custom origin")
+        self.assertEqual(trip.destination_location, "TZ Dar")
+
+    def test_manual_new_trip_form_onchange_suggests_missing_route_only(self):
+        self.product.product_tmpl_id.write({
+            "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
+        })
+        preview = self.env["taj.transport.trip"].new({
+            "sale_line_id": self.line_1.id,
+            "origin_location": "Entered in form",
+        })
+        preview._onchange_sale_line_suggest_route()
+        self.assertEqual(preview.origin_location, "Entered in form")
+        self.assertEqual(preview.destination_location, "TZ Dar")
+
+    def test_ambiguous_product_does_not_invent_route(self):
+        self.product.product_tmpl_id.write({
+            "name": "DRC - TZ Dar - Extra Stop",
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        self.assertFalse(trip.origin_location)
+        self.assertFalse(trip.destination_location)
+        with self.assertRaises(UserError):
+            trip.action_prefill_route_from_product()
+
+    def test_route_suggestion_button_only_available_in_draft(self):
+        self.product.product_tmpl_id.write({
+            "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_1.id,
+        })
+        trip._cancel_with_reason("QA cancelled before assignment")
+        with self.assertRaises(UserError):
+            trip.action_prefill_route_from_product()
+
     def test_batch_three_route_timing_optional_and_independent_of_sales(self):
         before = self.line_1._prepare_invoice_line()
         trip = self.env["taj.transport.trip"].create({

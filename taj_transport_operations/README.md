@@ -75,6 +75,31 @@ departure. Fields remain optional while trips are Draft. These are manual
 operational timestamps, not automatic Navirec or GPS events; route templates
 and milestones remain later phases. Sales and invoices are never changed.
 
+### Product-name route suggestions (19.0.1.6.4)
+
+When a transport trip is created from a confirmed Sales Order line,
+`Origin` and `Destination` are prefilled from the **product template name**
+if it contains exactly one spaced route separator (` - `, ` – `, or
+` — `). Example: `DRC kasumbalesa - TZ Dar (40ft, Normal, No
+Special Requirements)` becomes `DRC kasumbalesa` / `TZ Dar`. Trailing
+cargo specifications in parentheses (comma-separated or 20/40/45ft)
+are excluded from the destination. Product codes, Sales line descriptions,
+cargo attributes and Sales/Accounting records are not changed.
+
+This applies to the Sales Order `Create Trips` wizard, individual Sales line
+`Trip` action, direct Trip creation and the Trip form's Sales line onchange.
+Any explicitly entered Origin/Destination wins; the fields remain editable
+and can be corrected by dispatchers. Subsequent product renames never
+silently change a trip's route.
+
+Existing Draft trips are **not bulk changed on upgrade**. Where a location
+is missing, `Route & Timing > Fill Route from Product` fills only missing
+values. If the name has no clear route separator or contains multiple
+candidate separators, it declines to guess and the operator enters the
+route manually. The button is unavailable after the Draft state. This
+feature is text-prefill only: Route Templates and Milestones belong to
+Phase 3, and GPS detection remains Phase 4.
+
 ## Phase 2 / Batch 4 (Part 1): Initial Resource Assignments
 
 Each trip now has a **Resources** tab and a button to **Assign Initial
@@ -211,7 +236,7 @@ After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
 it automatically during Git deployment. The manifest version is
-`19.0.1.6.3` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+`19.0.1.6.4` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
 
 Check the source checkout without Odoo using:
 
@@ -368,7 +393,7 @@ subscriptions and truck device mappings are not rewritten.
    development/staging build, never production. Keep a restorable database backup.
 2. In Apps, manually upgrade **TAJ Navirec Fleet Integration** to `19.0.1.3.2`
    first (if not previously done), then **TAJ Transport Operations** to
-   `19.0.1.6.3`. Installing the Navirec schema first ensures that the
+   `19.0.1.6.4`. Installing the Navirec schema first ensures that the
    tracking-request field exists before any legacy Fleet migration.
    Do not uninstall/reinstall.
    The legacy migration runs as part of the Transport module upgrade transaction.

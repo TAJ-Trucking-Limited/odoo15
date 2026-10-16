@@ -135,6 +135,10 @@
                                     <field name="origin_location" readonly="state in ('completed', 'cancelled')" placeholder="Loading / departure location"/>
                                     <field name="destination_location" readonly="state in ('completed', 'cancelled')" placeholder="Unloading / delivery location"/>
                                     <field name="route_notes" readonly="state in ('completed', 'cancelled')" placeholder="Route and dispatch instructions"/>
+                                    <button string="Fill Route from Product"
+                                            name="action_prefill_route_from_product"
+                                            type="object" class="btn-secondary"
+                                            invisible="state != 'draft' or (origin_location and destination_location)"/>
                                 </group>
                                 <group string="Schedule">
                                     <field name="planned_departure_at" readonly="state in ('completed', 'cancelled')"/>

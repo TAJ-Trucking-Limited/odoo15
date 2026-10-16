@@ -1,6 +1,6 @@
 # TAJ Transport Operations — Phase 2, Thursday/Friday release gate
 
-**Scope:** Branch 19_upgrade, TAJ Transport Operations version 19.0.1.6.3,
+**Scope:** Branch 19_upgrade, TAJ Transport Operations version 19.0.1.6.4,
 and existing move_invoice_line / Fleet Navirec modules.
 
 **Safety:** Development/staging only. Upgrade modules manually from Odoo Apps;
@@ -26,7 +26,7 @@ references, view fields and action methods. **It does not run Odoo.**
 - [ ] A restorable staging database backup exists.
 - [ ] In Odoo Apps manually upgrade TAJ Navirec Fleet Integration to
       19.0.1.3.2 if that upgrade has not happened yet; then manually upgrade
-      TAJ Transport Operations to 19.0.1.6.3.
+      TAJ Transport Operations to 19.0.1.6.4.
 - [ ] Confirm assigned Fleet trucks and trailers have the intended Truck or
       Trailer category. Existing original Sales trucks with blank Category
       must be reviewed by a Fleet administrator; do not bulk guess categories.
@@ -60,6 +60,26 @@ warning because Sales could have been edited independently.
       The read-only staging gate reports any unmatched legacy values.
 - [ ] Confirm original Sales Order, Sales line and invoice are unchanged.
       No additional accounting module, report or pricing edits are intended.
+
+## Product route suggestion smoke test (19.0.1.6.4)
+
+- [ ] In a *new* confirmed Sales Order, select an existing route-named
+      service product such as `DRC kasumbalesa - TZ Dar (40ft, Normal,
+      No Special Requirements)`. Use `Create Trips` or the sales line
+      `Trip` action. The new Draft trip must have Origin `DRC
+      kasumbalesa` and Destination `TZ Dar`; the 40ft specifications
+      must not appear in Destination.
+- [ ] Edit the Origin or Destination manually and save. Product name
+      changes must not silently overwrite either manual value.
+- [ ] For a previously-created Draft trip with empty route fields, press
+      **Route & Timing > Fill Route from Product**. Only empty fields may
+      be filled; user-entered values must remain untouched.
+- [ ] A non-route-named or ambiguous product should leave Origin/
+      Destination empty and allow manual entry; never guess when more
+      than one possible route separator exists.
+- [ ] Confirm Sales Order, Sales line, original truck, prices and linked
+      invoices remain unchanged. No Route Template/Milestone creation
+      is part of this patch.
 
 ## Thursday — authorization and financial boundary UAT
 
@@ -124,15 +144,15 @@ on this Mac.
 ## Release outcome (fill after runtime evidence)
 
 - Offline Python/XML/ACL preflight: **PASS locally** (23 Python files,
-  12 XML files, 118 view fields, 12 action buttons, 13 ACL rows).
-- Defined Odoo TransactionCase tests: **93** (defined, not executed).
+  12 XML files, 118 view fields, 13 action buttons, 13 ACL rows).
+- Defined Odoo TransactionCase tests: **101** (defined, not executed).
 - Earlier 19.0.1.6.2 staging integrity gate: **PASS on Odoo.sh** (2 trips,
   2 assignments, 0 errors, 0 warnings after Fleet category correction).
 - Earlier manual shell lifecycle/resource replacement tests: **PASS** with
   verified database rollback and no Sales/invoice changes. Permission and
   cancellation UAT, isolated-clone suite remain pending.
-- 19.0.1.6.3 manual module upgrade, cargo dropdown UI check and migration
-  evidence on Staging: **not yet performed**.
+- 19.0.1.6.4 manual module upgrade, route suggestion UI check and
+  migration evidence on Staging: **not yet verified for this change**.
 - Full Odoo TransactionCase suite on isolated clone: **not executed**.
 
 No Production release is authorized by this checklist. Review the results,
