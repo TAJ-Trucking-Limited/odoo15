@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Editable starting suggestions taken from the documented checkpoint
+         vocabulary (site arrival, loading, departure, borders, destination,
+         offloading). They are NOT a TAJ-approved list: managers maintain this
+         catalog in Transport Operations > Checkpoint Types, and a route
+         template checkpoint works without any type. -->
+    <record id="milestone_type_site_arrival" model="taj.transport.milestone.type">
+        <field name="name">Arrival at Site</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="milestone_type_loading" model="taj.transport.milestone.type">
+        <field name="name">Loading</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="milestone_type_departure" model="taj.transport.milestone.type">
+        <field name="name">Departure</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="milestone_type_border" model="taj.transport.milestone.type">
+        <field name="name">Border Crossing</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="milestone_type_destination" model="taj.transport.milestone.type">
+        <field name="name">Destination Arrival</field>
+        <field name="sequence">50</field>
+    </record>
+    <record id="milestone_type_offloading" model="taj.transport.milestone.type">
+        <field name="name">Offloading</field>
+        <field name="sequence">60</field>
+    </record>
+    <record id="milestone_type_other" model="taj.transport.milestone.type">
+        <field name="name">Other Checkpoint</field>
+        <field name="sequence">70</field>
+    </record>
+</odoo>

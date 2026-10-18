@@ -31,4 +31,28 @@
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
         <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
     </record>
+    <record id="rule_transport_route_companies" model="ir.rule">
+        <field name="name">Route templates: allowed companies only</field>
+        <field name="model_id" ref="model_taj_transport_route"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
+    </record>
+    <record id="rule_transport_route_line_companies" model="ir.rule">
+        <field name="name">Route template checkpoints: allowed companies only</field>
+        <field name="model_id" ref="model_taj_transport_route_line"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
+    </record>
+    <record id="rule_transport_milestone_companies" model="ir.rule">
+        <field name="name">Trip milestones: allowed companies only</field>
+        <field name="model_id" ref="model_taj_transport_milestone"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
+    </record>
+    <record id="rule_transport_milestone_event_companies" model="ir.rule">
+        <field name="name">Trip milestone audit events: allowed companies only</field>
+        <field name="model_id" ref="model_taj_transport_milestone_event"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
+    </record>
 </odoo>

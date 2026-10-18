@@ -78,6 +78,8 @@ class TajTransportTrip(models.Model):
         "origin_location", "destination_location", "route_notes",
         "planned_departure_at", "planned_arrival_at",
         "actual_departure_at", "actual_arrival_at",
+        # Phase 3: selected route template (guarded by the milestone mixin).
+        "route_id",
     })
     initial_vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck at Trip Creation",
@@ -689,7 +691,33 @@ class TajTransportTrip(models.Model):
             "completed_at": now,
             "actual_arrival_at": arrival,
         })
+        self._report_open_checkpoints_on_completion()
         return True
+
+    def _report_open_checkpoints_on_completion(self):
+        """Report outstanding checkpoints without blocking completion.
+
+        Phase 3 checkpoints are operational facts: they never impose a
+        surprise mandatory step on an existing Phase 2 trip. The trip records
+        what is still open so the gap stays visible for follow-up.
+        """
+        self.ensure_one()
+        if not self.milestone_open_count:
+            return
+        from markupsafe import Markup
+        open_names = self.milestone_ids.filtered(
+            lambda milestone: (
+                milestone.state not in ("completed", "departed")
+                and milestone.state != "skipped"
+            )
+        ).mapped("name")
+        self.message_post(body=Markup("<p>{header}</p><ul>{items}</ul>").format(
+            header=_("Trip completed with %s checkpoint(s) still open:")
+            % len(open_names),
+            items=Markup("").join(
+                Markup("<li>{}</li>").format(name) for name in open_names
+            ),
+        ))
 
     def _check_can_cancel(self):
         self.ensure_one()

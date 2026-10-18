@@ -1,11 +1,32 @@
 """Acceptance tests for Phase 2, batch 1. Run with Odoo's --test-tags."""
+from contextlib import contextmanager
 from datetime import timedelta
 
 from psycopg2 import IntegrityError
+from psycopg2.errors import CheckViolation
 
 from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
+
+
+@contextmanager
+def assert_raises_any(*exceptions):
+    """``assertRaises`` accepting several exception classes.
+
+    Odoo 19's ``TestCase.assertRaises`` calls ``issubclass(exception,
+    AccessError)`` internally and therefore rejects a tuple of classes. A
+    violated PostgreSQL CHECK constraint also reaches a test unwrapped as
+    ``CheckViolation``, so database-level refusals accept it too.
+    """
+    try:
+        yield
+    except exceptions:
+        return
+    raise AssertionError(
+        "Expected one of %s to be raised."
+        % ", ".join(exception.__name__ for exception in exceptions)
+    )
 
 
 @tagged("post_install", "-at_install")
@@ -304,7 +325,7 @@ class TestTransportTripFoundation(TransactionCase):
 
         with self.assertRaises(UserError):
             trip.action_open_initial_assignment_wizard()
-        with self.assertRaises((UserError, IntegrityError)):
+        with assert_raises_any(UserError, IntegrityError, CheckViolation):
             with self.env.cr.savepoint():
                 self.env["taj.transport.assignment"].create({
                     "trip_id": trip.id,
@@ -337,7 +358,7 @@ class TestTransportTripFoundation(TransactionCase):
         driver = self.env["res.partner"].create({
             "name": "A single driver contact",
         })
-        with self.assertRaises((ValidationError, IntegrityError)):
+        with assert_raises_any(ValidationError, IntegrityError, CheckViolation):
             with self.env.cr.savepoint():
                 self.env["taj.transport.assignment"].create({
                     "trip_id": trip.id,
@@ -350,7 +371,7 @@ class TestTransportTripFoundation(TransactionCase):
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_1.id,
         })
-        with self.assertRaises((ValidationError, IntegrityError)):
+        with assert_raises_any(ValidationError, IntegrityError, CheckViolation):
             with self.env.cr.savepoint():
                 self.env["taj.transport.assignment"].create({
                     "trip_id": trip.id,
@@ -381,7 +402,7 @@ class TestTransportTripFoundation(TransactionCase):
             "license_plate": "OTHER-TRAILER-001",
             "company_id": other_company.id,
         })
-        with self.assertRaises((ValidationError, UserError, AccessError)):
+        with assert_raises_any(ValidationError, UserError, AccessError):
             with self.env.cr.savepoint():
                 self.env["taj.transport.assignment"].create({
                     "trip_id": trip.id,
@@ -740,7 +761,7 @@ class TestTransportTripFoundation(TransactionCase):
             trip, original.effective_from + timedelta(hours=2),
             driver_id=driver.id, co_driver_id=driver.id,
         )
-        with self.assertRaises(ValidationError):
+        with assert_raises_any(ValidationError, CheckViolation):
             with self.env.cr.savepoint():
                 invalid_driver.action_replace_resources()
         bad_category = self._replacement_wizard(
@@ -770,7 +791,7 @@ class TestTransportTripFoundation(TransactionCase):
             trip, original.effective_from + timedelta(hours=2),
             trailer_id=other_trailer.id,
         )
-        with self.assertRaises((ValidationError, UserError, AccessError)):
+        with assert_raises_any(ValidationError, UserError, AccessError):
             with self.env.cr.savepoint():
                 wizard.action_replace_resources()
         original.invalidate_recordset()

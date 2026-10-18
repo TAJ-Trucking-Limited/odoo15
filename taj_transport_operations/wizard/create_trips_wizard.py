@@ -16,6 +16,16 @@ class TajTransportTripCreateWizard(models.TransientModel):
         help="Select only transport lines. Lines already assigned to a truck "
              "are suggested; select lines without a truck manually.",
     )
+    route_id = fields.Many2one(
+        "taj.transport.route", string="Route Template",
+        domain="[('active', '=', True), ('company_id', '=', company_id)]",
+        help="Optional route template for the trips created here. Each trip "
+             "keeps its own copy of the checkpoints, so editing the template "
+             "later never changes them.",
+    )
+    company_id = fields.Many2one(
+        "res.company", related="sale_order_id.company_id", readonly=True,
+    )
 
     @api.model
     def default_get(self, fields_list):
@@ -54,7 +64,9 @@ class TajTransportTripCreateWizard(models.TransientModel):
                 ))
             trips._validate_sale_line(line)
             existing = line.transport_trip_ids[:1]
-            trips |= existing or trips.create({"sale_line_id": line.id})
+            trips |= existing or trips.create({
+                "sale_line_id": line.id, "route_id": self.route_id.id or False,
+            })
         if len(trips) == 1:
             return {
                 "type": "ir.actions.act_window",

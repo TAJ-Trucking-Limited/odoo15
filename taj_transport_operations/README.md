@@ -223,25 +223,102 @@ with reason by both Dispatcher and Transport Manager users. Ensure invalid
 transitions, missing prerequisites, invalid chronology and direct state
 writes fail without side effects.
 
+## Phase 3: Route Templates and Trip Milestones (19.0.1.7.0)
+
+Phase 3 adds manual checkpoint planning and recording on top of the Phase 2
+trip. It changes **no** Sales, Accounting, invoicing or Fleet behaviour, and it
+never backfills existing trips.
+
+**Route templates (Transport Manager):** `taj.transport.route` holds an
+ordered, editable list of checkpoints (`taj.transport.route.line`) with a name,
+an optional type, a requires-business-confirmation flag, a planned offset in
+hours and optional coordinates kept for a later phase. Templates are managed at
+**Transport Operations > Route Templates** and are read-only for
+Dispatchers. A template name is unique per company; the same name in another
+company is allowed.
+
+**Checkpoint types (Transport Manager):** `taj.transport.milestone.type` is a
+small editable catalog at **Transport Operations > Configuration > Checkpoint
+Types**. Seven starting suggestions ship as editable, not TAJ-approved data:
+Arrival at Site, Loading, Departure, Border Crossing, Destination Arrival,
+Offloading and Other Checkpoint. A checkpoint works without any type, and
+renaming a type never rewrites the checkpoints that already used it (each
+checkpoint keeps its own *Checkpoint Type at Planning* snapshot).
+
+**Trip checkpoints (Dispatcher):** selecting a template on a trip copies its
+checkpoint lines into `taj.transport.milestone` rows on the trip's **Milestones**
+tab (also listed standalone at **Transport Operations > Milestones**), once,
+in template order, in the same transaction as the trip. Repeating
+the action only adds the lines that are still missing, and a partial unique
+index on `(trip_id, template_line_id)` makes duplicated generation impossible
+even for concurrent requests. The copy is a **snapshot**: editing the template
+afterwards (including archiving it) never changes a trip that was already
+generated. Manual checkpoints added for operational variances (a weighbridge, an
+extra stop) are never removed by regeneration. Regenerating or switching the
+template is only possible while nothing has been recorded yet; from the first
+recorded event the checkpoint set is frozen and only a manager correction can
+change recorded times.
+
+**Recording workflow:** `pending -> arrived -> awaiting_confirmation ->
+completed`, plus `departed` and `skipped`. Dispatchers record arrival,
+departure and business confirmation **by hand** through the checkpoint form
+buttons (each wizard asks for the time, defaulting to now, and refuses future
+times). Recording is only allowed while the trip is Ready or In Progress;
+completed trips accept manager corrections only, cancelled trips refuse
+recording. A departure cannot precede its arrival, a confirmation cannot
+precede its arrival, double recording is refused, and `departed`/`completed`
+count as done in the progress bar while `skipped` checkpoints are excluded.
+Open checkpoints never block Ready, Start or Complete; completing a trip with
+open checkpoints posts an informational note in the Chatter.
+
+**Audit trail:** every movement appends an immutable
+`taj.transport.milestone.event` row (event type, acting user, business
+timestamp, recorded timestamp, note) shown in the checkpoint's *Checkpoint
+History*. Timestamp corrections are Transport Manager only, require a reason and
+record the before/after values; a correction also re-validates the chronology of
+the checkpoint and its neighbours. Checkpoint operational fields can only be
+changed through these workflows: the milestone model accepts direct writes to
+**Notes** only, and no user can create or delete checkpoints or their history
+rows by hand (the messages explain the supported path instead).
+
+**Permissions and company isolation:** Dispatchers read templates and
+checkpoint types, and work with the checkpoints of their own company's trips;
+Transport Managers maintain templates, types, skips and corrections. Record
+rules keep templates, checkpoints and history inside the user's allowed
+companies. Generation and audit writes run with elevated rights **after**
+explicit access checks, so the ACL-free create/delete rules cannot be abused by
+a direct RPC call.
+
+**Upgrade:** the manifest moves to `19.0.1.7.0`. The change is purely additive
+(new tables, columns, views, menus and data), so there is no post-migration
+script: existing trips keep their data, receive no checkpoints, and keep
+working exactly as before. See `docs/TRANSPORT_PHASE3_UAT.md` for the manual
+acceptance script and the runtime test command.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
-incidents, route templates and milestones, Navirec geofencing/monitoring
-inside trips, automated state transitions, reopening closed trips and
-financial analytics are **not** implemented in Batch 5.
+incidents, Navirec geofencing/monitoring inside trips, automated state
+transitions (including GPS- or event-driven checkpoint detection), reopening
+closed trips and financial analytics are **not** implemented. Route templates
+and manual trip milestones were delivered in Phase 3; the `gps` event source
+value exists in the audit model as a reserved placeholder only.
 
 ## Installation and testing
 
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is
-`19.0.1.6.4` (Navirec compatibility: `fleet_navirec` version `19.0.1.3.2`).
+it automatically during Git deployment. The manifest version is `19.0.1.7.0`
+(Phase 3 added route templates and trip milestones; Navirec compatibility:
+`fleet_navirec` version `19.0.1.3.2`). The upgrade from `19.0.1.6.4` is
+additive and runs no post-migration script.
 
 Check the source checkout without Odoo using:
 
 ```sh
 python3 scripts/taj_transport_phase2_static_gate.py
+python3 scripts/taj_transport_phase3_static_gate.py
 ```
 
 After the **manual Odoo Apps upgrade** on Odoo.sh development/staging, run

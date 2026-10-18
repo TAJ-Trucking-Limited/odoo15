@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trip_milestone_action_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.milestone.action.wizard.form</field>
+        <field name="model">taj.transport.milestone.action.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Record Checkpoint Event">
+                <group>
+                    <field name="milestone_id" readonly="1"/>
+                    <field name="trip_id" readonly="1"/>
+                    <field name="action_type" readonly="1"/>
+                    <field name="event_at"
+                           invisible="action_type in ('confirmation', 'cancel_confirmation', 'skip')"
+                           required="action_type in ('arrival', 'departure')"/>
+                    <field name="reason"
+                           invisible="action_type not in ('skip', 'cancel_confirmation')"
+                           required="action_type in ('skip', 'cancel_confirmation')"
+                           placeholder="Why is this the right decision?"/>
+                    <field name="note" placeholder="Optional operational note"/>
+                </group>
+                <p class="text-muted" invisible="action_type != 'confirmation'">
+                    Confirming records the manual business event (for example
+                    loading or offloading completed). The acting user and time
+                    are stored in the checkpoint history.
+                </p>
+                <p class="text-muted" invisible="action_type != 'cancel_confirmation'">
+                    Cancelling withdraws a recorded confirmation. The reason is
+                    mandatory, and the withdrawn confirmation (time, user,
+                    note), the reason, your name and the time of the
+                    cancellation are stored permanently in the checkpoint
+                    history.
+                </p>
+                <p class="text-muted" invisible="action_type != 'skip'">
+                    Skipping is a manager decision: the checkpoint does not
+                    apply to this trip. The reason is stored permanently.
+                </p>
+                <p class="text-muted" invisible="action_type not in ('arrival', 'departure')">
+                    Enter the operational time of the event, not the time of
+                    data entry. It cannot be in the future, and checkpoints
+                    must follow the route order.
+                </p>
+                <footer>
+                    <button name="action_confirm" string="Save"
+                            type="object" class="btn-primary"/>
+                    <button string="Discard" special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_trip_milestone_correction_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.milestone.correction.wizard.form</field>
+        <field name="model">taj.transport.milestone.correction.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Correct Checkpoint Timestamp">
+                <group>
+                    <field name="milestone_id" readonly="1"/>
+                    <field name="trip_id" readonly="1"/>
+                    <field name="field_name"/>
+                    <field name="current_value" readonly="1"/>
+                    <field name="new_value"/>
+                    <field name="reason" placeholder="Why is the recorded value wrong?"/>
+                    <field name="note"/>
+                </group>
+                <p class="text-muted">
+                    The previous value, the new value, your name, the reason
+                    and the correction time are stored permanently in the
+                    checkpoint history. Leave the new value empty to clear a
+                    wrongly recorded event.
+                </p>
+                <footer>
+                    <button name="action_apply_correction" string="Save Correction"
+                            type="object" class="btn-primary"/>
+                    <button string="Discard" special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_trip_milestone_add_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.milestone.add.wizard.form</field>
+        <field name="model">taj.transport.milestone.add.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Add Trip Checkpoint">
+                <group>
+                    <field name="trip_id" readonly="1"/>
+                    <field name="name" placeholder="e.g. Extra stop at Nakonde"/>
+                    <field name="milestone_type_id"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="requires_confirmation"/>
+                    <field name="planned_offset_hours"/>
+                    <field name="notes"/>
+                </group>
+                <p class="text-muted">
+                    The checkpoint is added after the existing ones and is kept
+                    when the trip's route template is regenerated.
+                </p>
+                <footer>
+                    <button name="action_add_checkpoint" string="Add"
+                            type="object" class="btn-primary"/>
+                    <button string="Discard" special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_regenerate_milestones_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.regenerate.milestones.wizard.form</field>
+        <field name="model">taj.transport.regenerate.milestones.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Regenerate Trip Checkpoints">
+                <group>
+                    <field name="trip_id" readonly="1"/>
+                    <field name="route_id" readonly="1"/>
+                    <field name="generated_count" readonly="1"/>
+                    <field name="recorded_count" readonly="1"/>
+                </group>
+                <field name="note" readonly="1" nolabel="1"/>
+                <p class="text-muted" invisible="not recorded_count">
+                    This trip already has recorded checkpoint progress.
+                    Regeneration will be refused: add the missing checkpoint
+                    instead.
+                </p>
+                <footer>
+                    <button name="action_regenerate" string="Regenerate"
+                            type="object" class="btn-primary"/>
+                    <button string="Discard" special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

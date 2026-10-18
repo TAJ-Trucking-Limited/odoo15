@@ -2,3 +2,7 @@ from . import create_trips_wizard
 from . import initial_resource_assignment_wizard
 from . import replace_resource_assignment_wizard
 from . import cancel_trip_wizard
+from . import trip_milestone_action_wizard
+from . import trip_milestone_correction_wizard
+from . import trip_milestone_add_wizard
+from . import regenerate_milestones_wizard

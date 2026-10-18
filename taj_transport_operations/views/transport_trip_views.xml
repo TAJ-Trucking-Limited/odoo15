@@ -18,6 +18,9 @@
                 <field name="container_num" optional="show"/>
                 <field name="origin_location" optional="show"/>
                 <field name="destination_location" optional="show"/>
+                <field name="route_id" optional="hide"/>
+                <field name="milestone_progress" optional="hide" widget="progressbar"/>
+                <field name="milestone_open_count" optional="hide"/>
                 <field name="planned_departure_at" optional="hide"/>
                 <field name="planned_arrival_at" optional="hide"/>
                 <field name="state" widget="badge"/>
@@ -57,6 +60,12 @@
                                 class="oe_stat_button" icon="fa-file-text-o"
                                 invisible="not sale_order_id">
                             <span>Sales Order</span>
+                        </button>
+                        <button type="object" name="action_open_trip_milestones"
+                                class="oe_stat_button" icon="fa-map-marker"
+                                invisible="not milestone_count">
+                            <field name="milestone_done_count" widget="statinfo"
+                                   string="Milestones"/>
                         </button>
                     </div>
                     <div class="oe_title">
@@ -132,6 +141,9 @@
                         <page string="Route &amp; Timing" name="route_timing">
                             <group>
                                 <group string="Route">
+                                    <field name="route_id"
+                                           readonly="state in ('completed', 'cancelled')"
+                                           options="{'no_create': True, 'no_create_edit': True}"/>
                                     <field name="origin_location" readonly="state in ('completed', 'cancelled')" placeholder="Loading / departure location"/>
                                     <field name="destination_location" readonly="state in ('completed', 'cancelled')" placeholder="Unloading / delivery location"/>
                                     <field name="route_notes" readonly="state in ('completed', 'cancelled')" placeholder="Route and dispatch instructions"/>
@@ -149,9 +161,78 @@
                             </group>
                             <p class="text-muted">
                                 Enter route details and planned times during planning.
-                                Actual times are entered manually for now. Route
-                                templates, milestones and GPS automation are out of
-                                scope for this batch.
+                                Actual times are entered manually for now. Selecting a
+                                route template copies its checkpoints into the
+                                Milestones tab; editing the template later never
+                                changes a trip that was already generated. GPS
+                                detection is a later phase.
+                            </p>
+                        </page>
+                        <page string="Milestones" name="trip_milestones">
+                            <group>
+                                <group string="Checkpoint Progress">
+                                    <field name="milestone_progress" widget="progressbar"/>
+                                    <field name="milestone_count"/>
+                                    <field name="milestone_done_count"/>
+                                    <field name="milestone_open_count"/>
+                                </group>
+                                <group string="Checkpoint Actions">
+                                    <field name="generated_route_id" readonly="1"/>
+                                    <button string="Generate Checkpoints"
+                                            name="action_generate_milestones"
+                                            type="object" class="btn-secondary"
+                                            invisible="not route_id or milestone_count or state != 'draft'"/>
+                                    <button string="Regenerate Checkpoints"
+                                            name="action_open_regenerate_milestones_wizard"
+                                            type="object" class="btn-secondary"
+                                            invisible="not route_id or not milestone_count or state != 'draft'"/>
+                                    <button string="Add Checkpoint"
+                                            name="action_open_add_milestone_wizard"
+                                            type="object" class="btn-secondary"
+                                            invisible="state in ('completed', 'cancelled')"/>
+                                </group>
+                            </group>
+                            <field name="milestone_ids" readonly="1" nolabel="1">
+                                <list create="0" delete="0" edit="0">
+                                    <field name="sequence" optional="hide"/>
+                                    <field name="name"/>
+                                    <field name="milestone_type_id" optional="show"/>
+                                    <field name="planned_arrival_at" optional="show"/>
+                                    <field name="actual_arrival_at"/>
+                                    <field name="actual_departure_at"/>
+                                    <field name="confirmed_at" optional="hide"/>
+                                    <field name="requires_confirmation" optional="hide"/>
+                                    <field name="state" widget="badge"
+                                           decoration-info="state == 'pending'"
+                                           decoration-warning="state == 'awaiting_confirmation'"
+                                           decoration-success="state in ('completed', 'departed')"
+                                           decoration-muted="state == 'skipped'"/>
+                                    <field name="notes" optional="hide"/>
+                                    <button name="action_open_arrival_wizard" string="Arrival"
+                                            type="object" class="btn-secondary"
+                                            invisible="actual_arrival_at or state == 'skipped'"/>
+                                    <button name="action_open_departure_wizard" string="Departure"
+                                            type="object" class="btn-secondary"
+                                            invisible="not actual_arrival_at or actual_departure_at or state == 'skipped'"/>
+                                    <button name="action_open_confirmation_wizard" string="Confirm"
+                                            type="object" class="btn-secondary"
+                                            invisible="not actual_arrival_at or confirmed_at or state == 'skipped'"/>
+                                    <button name="action_open_correction_wizard" string="Correct"
+                                            type="object" class="btn-link"
+                                            groups="taj_transport_operations.group_transport_manager"
+                                            invisible="state in ('pending', 'skipped') or not actual_arrival_at"/>
+                                </list>
+                            </field>
+                            <p class="text-muted">
+                                Arrival and departure are recorded manually per
+                                checkpoint. Checkpoints requiring business
+                                confirmation (loading, offloading) stay
+                                <b>Awaiting Confirmation</b> until operations
+                                confirm them. Open checkpoints never block
+                                Ready, Start or Complete: completion only reports
+                                them. Corrections require the Transport Manager
+                                role and a reason, and are kept in the checkpoint
+                                history.
                             </p>
                         </page>
                         <page string="Resources" name="trip_resources">

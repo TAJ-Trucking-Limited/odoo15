@@ -9,12 +9,19 @@
                     <field name="sale_order_id" readonly="1"/>
                     <field name="line_ids" widget="many2many_tags"
                            options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="route_id"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
                 </group>
                 <p class="text-muted">
                     Only select actual transport/freight lines. Truck-assigned
                     lines without trips are suggested by default. You can
                     also select a transport line without a truck.
                     Existing trips will be reused; no duplicate trips created.
+                </p>
+                <p class="text-muted">
+                    The optional route template applies to the trips created by
+                    this dialog and copies its checkpoints into each one. Leave
+                    it empty to keep the per-trip choice.
                 </p>
                 <footer>
                     <button name="action_create_trips" type="object"

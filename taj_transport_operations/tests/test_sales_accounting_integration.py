@@ -16,6 +16,12 @@ class TestTransportSalesAccountingBoundary(AccountTestInvoicingCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        # Odoo 19's accounting test common (BaseCommon) switches the test
+        # environment to an independent internal user, which has neither
+        # Sales nor Fleet rights. This case covers the Sales/Accounting
+        # integration boundary, not permissions, so it keeps the environment
+        # used by the other Phase 2 cases.
+        cls.env = cls.env(su=True)
         cls.customer = cls.env["res.partner"].create({
             "name": "Transport integration customer",
         })
@@ -90,7 +96,7 @@ class TestTransportSalesAccountingBoundary(AccountTestInvoicingCommon):
             ],
         })
         order.action_confirm()
-        lines = order.order_line.filtered(lambda line: line.display_type == "product")
+        lines = order.order_line.filtered(lambda line: not line.display_type)
         return order, lines
 
     def _trip(self, line):
