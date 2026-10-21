@@ -29,7 +29,7 @@
                 <button name="action_open_confirmation_wizard" string="Confirm"
                         type="object" class="btn-secondary"
                         invisible="not actual_arrival_at or confirmed_at or state == 'skipped'"/>
-                <button name="action_open_correction_wizard" string="Correct"
+                <button name="action_open_correction_wizard" string="Edit"
                         type="object" class="btn-link"
                         groups="taj_transport_operations.group_transport_manager"
                         invisible="state in ('pending', 'skipped') or not actual_arrival_at"/>
@@ -52,7 +52,7 @@
                     <button name="action_open_confirmation_wizard" string="Confirm Checkpoint"
                             type="object" class="btn-primary"
                             invisible="not actual_arrival_at or confirmed_at or state == 'skipped'"/>
-                    <button name="action_open_correction_wizard" string="Correct Timestamp"
+                    <button name="action_open_correction_wizard" string="Edit Timestamp"
                             type="object" class="btn-secondary"
                             groups="taj_transport_operations.group_transport_manager"
                             invisible="state in ('pending', 'skipped') or not actual_arrival_at"/>

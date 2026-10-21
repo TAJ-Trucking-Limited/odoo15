@@ -339,7 +339,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.8.2`
+it automatically during Git deployment. The manifest version is `19.0.1.8.3`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
