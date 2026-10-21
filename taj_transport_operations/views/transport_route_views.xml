@@ -101,7 +101,7 @@
     </record>
 
     <menuitem id="menu_transport_routes" name="Route Templates"
-              parent="menu_transport_operations"
+              parent="menu_transport_configuration"
               action="action_transport_route" sequence="20"
               groups="taj_transport_operations.group_transport_manager"/>
 </odoo>

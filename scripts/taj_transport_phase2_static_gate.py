@@ -59,10 +59,9 @@ def _inherit_names(definition):
 
 def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
-    # Phase 2 shipped 19.0.1.6.4; Phase 3 (route templates and trip
-    # checkpoints) bumps the addon to 19.0.1.7.0 without touching Phase 2
-    # behaviour, which this gate still verifies.
-    if manifest["version"] != "19.0.1.7.0":
+    # Phase 2 behaviour is retained by the route/checkpoint and transporter
+    # catalog releases, which this gate still verifies.
+    if manifest["version"] != "19.0.1.8.0":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))

@@ -99,7 +99,7 @@
                                 </group>
                                 <group string="Operational Commercial Data">
                                     <field name="transporter_id" readonly="state in ('completed', 'cancelled')"
-                                           options="{'no_quick_create': True}"/>
+                                           options="{'no_create': True, 'no_create_edit': True}"/>
                                     <field name="transport_reference" readonly="state in ('completed', 'cancelled')"
                                            placeholder="Carrier or booking reference"/>
                                 </group>
@@ -355,4 +355,7 @@
     <menuitem id="menu_transport_trips" name="Trips" parent="menu_transport_operations"
               action="action_transport_trip" sequence="10"
               groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_configuration" name="Configuration"
+              parent="menu_transport_operations" sequence="90"
+              groups="taj_transport_operations.group_transport_manager"/>
 </odoo>

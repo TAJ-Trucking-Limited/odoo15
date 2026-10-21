@@ -32,7 +32,7 @@
         <field name="view_mode">list,form</field>
     </record>
     <menuitem id="menu_transport_cargo_types" name="Cargo Types"
-              parent="menu_transport_operations"
-              action="action_transport_cargo_types" sequence="30"
+              parent="menu_transport_configuration"
+              action="action_transport_cargo_types" sequence="10"
               groups="taj_transport_operations.group_transport_manager"/>
 </odoo>

@@ -1264,7 +1264,7 @@ class TestTransportTripFoundation(TransactionCase):
             self.assertTrue(field.readonly, name)
 
     def test_batch_two_operational_fields_do_not_change_sales_or_invoices(self):
-        carrier = self.env["res.partner"].create({
+        carrier = self.env["taj.transport.transporter"].create({
             "name": "Transport Test Carrier",
         })
         before = self.line_1._prepare_invoice_line()

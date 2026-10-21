@@ -40,7 +40,7 @@
     </record>
 
     <menuitem id="menu_transport_milestone_types" name="Checkpoint Types"
-              parent="menu_transport_operations"
-              action="action_transport_milestone_type" sequence="40"
+              parent="menu_transport_configuration"
+              action="action_transport_milestone_type" sequence="30"
               groups="taj_transport_operations.group_transport_manager"/>
 </odoo>

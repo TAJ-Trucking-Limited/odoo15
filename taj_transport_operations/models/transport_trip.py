@@ -138,9 +138,10 @@ class TajTransportTrip(models.Model):
     # Dispatcher-owned details. Never write these back to Sales or Accounting.
     # Tracked fields record changes, authors and timestamps in the Chatter.
     transporter_id = fields.Many2one(
-        "res.partner", string="Transporter", tracking=True,
-        check_company=True, copy=False,
-        help="Company or contact responsible for executing this transport.",
+        "taj.transport.transporter", string="Transporter", tracking=True,
+        ondelete="restrict", copy=False,
+        help="Transporter responsible for executing this transport, maintained "
+             "under Transport Operations > Configuration > Transporters.",
     )
     transport_reference = fields.Char(
         string="Transport / Booking Reference", tracking=True, copy=False,

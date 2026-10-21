@@ -40,7 +40,8 @@ Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
   related field. The original truck is never written back to Sales.
 
 **Dispatcher-maintained operational details (all optional):**
-- Transporter (an Odoo contact/company, within the allowed company scope).
+- Transporter (selected from the name/email catalog maintained by the
+  Transport Manager).
 - Transport / booking reference.
 - Cargo type and actual cargo description.
 - Special handling instructions.
@@ -53,7 +54,7 @@ do not write to Sales, Purchase, Accounting or invoice records.
 **Cargo Type dropdown (19.0.1.6.3):** The Cargo tab, list and search view
 now offer a configurable Cargo Type selection backed by a dedicated catalog
 (`taj.transport.cargo.type`). The Transport Manager maintains options at
-**Transport Operations > Cargo Types**; Dispatcher users can only select
+**Transport Operations > Configuration > Cargo Types**; Dispatcher users can only select
 existing options. Suggested starting options are editable, not
 TAJ-approved hard-coded classifications. The pre-existing `cargo_type`
 Char field is retained and synchronized for historic data, integrations and
@@ -233,7 +234,7 @@ never backfills existing trips.
 ordered, editable list of checkpoints (`taj.transport.route.line`) with a name,
 an optional type, a requires-business-confirmation flag, a planned offset in
 hours and optional coordinates kept for a later phase. Templates are managed at
-**Transport Operations > Route Templates** and are read-only for
+**Transport Operations > Configuration > Route Templates** and are read-only for
 Dispatchers. A template name is unique per company; the same name in another
 company is allowed.
 
@@ -295,6 +296,24 @@ script: existing trips keep their data, receive no checkpoints, and keep
 working exactly as before. See `docs/TRANSPORT_PHASE3_UAT.md` for the manual
 acceptance script and the runtime test command.
 
+## Configuration and Transporters (19.0.1.8.0)
+
+**Transport Operations > Configuration** groups Cargo Types, Route Templates,
+Checkpoint Types and Transporters. Transport Managers maintain these catalogs;
+Dispatchers select their values on trips.
+
+The Transporters catalog (`taj.transport.transporter`) has a required **Name**
+and optional **Email**. The trip's Transporter dropdown selects from this catalog.
+Transport Managers can add, edit and delete unused transporters. A transporter
+referenced by a trip cannot be deleted.
+
+On upgrade, the migration copies Contacts selected as trip transporters into
+the catalog and reconnects every affected trip, including closed trips. Trips
+that shared a Contact share one catalog entry; different Contacts remain
+separate even when they have the same name. Contacts themselves are unchanged.
+Only selected Contacts are copied. Fresh installations start with an empty
+Transporters catalog.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -309,10 +328,10 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.7.0`
+it automatically during Git deployment. The manifest version is `19.0.1.8.0`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
-`fleet_navirec` version `19.0.1.3.2`). The upgrade from `19.0.1.6.4` is
-additive and runs no post-migration script.
+`fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
+trip transporter selections from Contacts into the dedicated catalog.
 
 Check the source checkout without Odoo using:
 
