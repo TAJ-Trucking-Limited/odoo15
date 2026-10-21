@@ -1,7 +1,7 @@
 # TAJ Transport Operations — Phase 3 (route templates and trip milestones) UAT
 
 **Scope:** branch of this delivery, TAJ Transport Operations version
-`19.0.1.9.0`, including the Arrival → Departure workflow update.
+`19.0.1.9.1`, including Arrival → Departure and day/hour checkpoint offsets.
 
 **What Phase 3 is:** manual checkpoint planning and recording. A route template
 holds an ordered, editable list of checkpoints; selecting a template on a trip
@@ -57,8 +57,10 @@ re-runs the Phase 2 regression suites.
 
 - [ ] **Transport Operations > Route Templates > New**:
       name, company, origin, destination and ordered checkpoint lines.
-- [ ] Each line: name, type (optional), planned offset in hours, optional
+- [ ] Each line: name, type (optional), planned offset in days and hours, optional
       latitude/longitude.
+- [ ] Enter 2 days: Hours becomes 48. Enter 36 hours: Days becomes 1.5.
+      Save and reopen; both values represent the same duration.
 - [ ] Edit the line order (drag the sequence) and reorder with the
       *Sequence* column; the form keeps the order after saving.
 - [ ] A duplicate template name inside the same company is refused; the same

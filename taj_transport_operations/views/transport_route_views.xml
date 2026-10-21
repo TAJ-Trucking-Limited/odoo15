@@ -46,6 +46,7 @@
                                     <field name="name" placeholder="Checkpoint name"/>
                                     <field name="milestone_type_id"
                                            options="{'no_create': True, 'no_create_edit': True}"/>
+                                    <field name="planned_offset_days" optional="show"/>
                                     <field name="planned_offset_hours" optional="show"/>
                                     <field name="latitude" optional="hide"/>
                                     <field name="longitude" optional="hide"/>
@@ -56,6 +57,8 @@
                                 Checkpoints are copied into a trip when the trip
                                 selects this route. Editing the template later
                                 never changes trips that were already generated.
+                                Planned offsets can be entered in days or hours;
+                                one day equals 24 hours.
                                 Coordinates are optional planning data for the
                                 later GPS phase; nothing is detected
                                 automatically in this phase.

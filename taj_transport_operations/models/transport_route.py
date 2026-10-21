@@ -114,6 +114,15 @@ class TajTransportRouteLine(models.Model):
         help="Optional planning hint: hours after the trip's planned "
         "departure when this checkpoint is expected.",
     )
+    planned_offset_days = fields.Float(
+        string="Planned Offset (Days)",
+        compute="_compute_planned_offset_days",
+        inverse="_inverse_planned_offset_days",
+        readonly=False,
+        digits=(16, 6),
+        help="Days after the trip's planned departure. One day equals 24 hours; "
+             "editing either offset updates the other.",
+    )
     latitude = fields.Float(
         digits=(10, 7),
         help="Optional coordinates kept for the later GPS/geofence phase. "
@@ -121,6 +130,17 @@ class TajTransportRouteLine(models.Model):
     )
     longitude = fields.Float(digits=(10, 7))
     notes = fields.Text(string="Checkpoint Notes")
+
+    @api.depends("planned_offset_hours")
+    def _compute_planned_offset_days(self):
+        for line in self:
+            line.planned_offset_days = line.planned_offset_hours / 24.0
+
+    @api.onchange("planned_offset_days")
+    def _inverse_planned_offset_days(self):
+        # Update Hours both while editing the form and when saving Days.
+        for line in self:
+            line.planned_offset_hours = line.planned_offset_days * 24.0
 
     @api.constrains("route_id", "name")
     def _check_unique_name_per_route(self):
