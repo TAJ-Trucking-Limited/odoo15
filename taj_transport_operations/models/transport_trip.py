@@ -140,6 +140,7 @@ class TajTransportTrip(models.Model):
     transporter_id = fields.Many2one(
         "taj.transport.transporter", string="Transporter", tracking=True,
         ondelete="restrict", copy=False,
+        default=lambda self: self._default_transporter_id(),
         help="Transporter responsible for executing this transport, maintained "
              "under Transport Operations > Configuration > Transporters.",
     )
@@ -194,6 +195,13 @@ class TajTransportTrip(models.Model):
     route_notes = fields.Text(
         string="Route Instructions", tracking=True, copy=False,
     )
+
+    @api.model
+    def _default_transporter_id(self):
+        """Suggest the configured TAJ transporter without creating a duplicate."""
+        return self.env["taj.transport.transporter"].search(
+            [("name", "=ilike", "TAJ")], limit=1,
+        ).id
 
     @api.constrains(
         "planned_departure_at", "planned_arrival_at",

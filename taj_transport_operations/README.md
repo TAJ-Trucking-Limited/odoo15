@@ -314,6 +314,12 @@ separate even when they have the same name. Contacts themselves are unchanged.
 Only selected Contacts are copied. Fresh installations start with an empty
 Transporters catalog.
 
+**Default transporter (19.0.1.8.1):** New trips preselect the transporter named
+`TAJ` (case-insensitive). This applies to the Trip form, Sales line action and
+Create Trips wizard. Dispatchers can select another transporter or clear the
+field; explicit selections are preserved. If no `TAJ` transporter exists, the
+field stays empty. Existing trips are not changed.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -328,7 +334,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.8.0`
+it automatically during Git deployment. The manifest version is `19.0.1.8.1`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
