@@ -18,6 +18,8 @@
                     <field name="notes"/>
                 </group>
                 <p class="text-muted">
+                    Selecting a truck suggests its driver from Fleet. You can
+                    choose another driver for this trip.
                     Select at least one resource. Only the initial assignment
                     can be created here. Replacements will have a separate
                     audited workflow.

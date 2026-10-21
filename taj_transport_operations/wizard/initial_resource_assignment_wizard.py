@@ -1,5 +1,5 @@
 """Explicit one-time resource assignment for a Draft transport trip."""
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -26,6 +26,9 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
     company_id = fields.Many2one("res.company", related="trip_id.company_id", readonly=True)
     driver_id = fields.Many2one(
         "res.partner", string="Driver",
+        compute="_compute_driver_id", store=True, readonly=False, precompute=True,
+        help="Defaults to the selected truck's driver in Fleet. You can choose "
+             "another driver for this trip.",
     )
     co_driver_id = fields.Many2one(
         "res.partner", string="Co-driver",
@@ -39,6 +42,11 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
         string="Reason", default="Initial assignment", required=True,
     )
     notes = fields.Text(string="Notes")
+
+    @api.depends("vehicle_id")
+    def _compute_driver_id(self):
+        for wizard in self:
+            wizard.driver_id = wizard.vehicle_id.driver_id
 
     def action_assign_initial_resources(self):
         self.ensure_one()

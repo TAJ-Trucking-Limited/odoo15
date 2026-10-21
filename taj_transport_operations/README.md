@@ -113,6 +113,11 @@ Resources**, available only while the Draft trip has no active assignment.
 - Existing Draft trips stay unassigned until the dispatcher explicitly
   records an initial assignment; the initial Sales truck is *suggested* in
   the wizard, but never silently assigned to a trip.
+- In `19.0.1.8.2`, the initial assignment wizard also suggests the selected
+  truck's Fleet driver, including when opened with the initial Sales truck.
+  Changing the truck refreshes the suggestion; the Dispatcher can override or
+  clear it. Trucks without a Fleet driver leave the Driver field empty.
+  The chosen driver is saved in assignment history, without updating Fleet.
 - The wizard records the selected truck/trailer/driver/co-driver (at least
   one), the **effective time and location**, reason, notes, user and
   company. The current assignment is derived from active history.
@@ -334,7 +339,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.8.1`
+it automatically during Git deployment. The manifest version is `19.0.1.8.2`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
