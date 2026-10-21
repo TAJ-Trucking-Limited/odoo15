@@ -237,7 +237,7 @@ never backfills existing trips.
 
 **Route templates (Transport Manager):** `taj.transport.route` holds an
 ordered, editable list of checkpoints (`taj.transport.route.line`) with a name,
-an optional type, a requires-business-confirmation flag, a planned offset in
+an optional type, a planned offset in
 hours and optional coordinates kept for a later phase. Templates are managed at
 **Transport Operations > Configuration > Route Templates** and are read-only for
 Dispatchers. A template name is unique per company; the same name in another
@@ -265,15 +265,15 @@ template is only possible while nothing has been recorded yet; from the first
 recorded event the checkpoint set is frozen and only a manager correction can
 change recorded times.
 
-**Recording workflow:** `pending -> arrived -> awaiting_confirmation ->
-completed`, plus `departed` and `skipped`. Dispatchers record arrival,
-departure and business confirmation **by hand** through the checkpoint form
-buttons (each wizard asks for the time, defaulting to now, and refuses future
-times). Recording is only allowed while the trip is Ready or In Progress;
+**Recording workflow:** `pending -> arrived -> departed`, plus `skipped`.
+Dispatchers record arrival and departure **by hand** through the checkpoint
+form buttons. Departure completes the checkpoint; there is no separate
+confirmation step. Each wizard asks for the time, defaults to now and refuses
+future times. Recording is only allowed while the trip is Ready or In Progress;
 completed trips accept manager corrections only, cancelled trips refuse
-recording. A departure cannot precede its arrival, a confirmation cannot
-precede its arrival, double recording is refused, and `departed`/`completed`
-count as done in the progress bar while `skipped` checkpoints are excluded.
+recording. A departure cannot precede its arrival, double recording is refused,
+and departures count as done in the progress bar while `skipped` checkpoints
+are excluded. Historical `completed` checkpoints retain their done status.
 Open checkpoints never block Ready, Start or Complete; completing a trip with
 open checkpoints posts an informational note in the Chatter.
 
@@ -325,6 +325,24 @@ Create Trips wizard. Dispatchers can select another transporter or clear the
 field; explicit selections are preserved. If no `TAJ` transporter exists, the
 field stays empty. Existing trips are not changed.
 
+## Arrival and departure workflow (19.0.1.9.0)
+
+The checkpoint workflow uses **Arrival → Departure**. Recording Departure
+completes every checkpoint, including Loading and Offloading. Confirm,
+Cancel Confirmation and Requires Business Confirmation are removed from the
+trip, milestone, template and Add Checkpoint screens.
+
+The upgrade moves checkpoints still Awaiting Confirmation to Departed when a
+departure is already recorded, or Arrived when only an arrival exists. It
+never invents a departure time or changes an audit event. Historically
+completed confirmations keep their status and are shown as read-only history.
+The legacy columns and event types remain available to preserve that history.
+
+Manager timestamp edits use the same arrival/departure rules. Clearing a
+departure reopens the checkpoint; an arrival cannot be cleared while a
+departure remains. Editing a historical checkpoint preserves its confirmation
+evidence and derives its status from the corrected movement times.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -339,7 +357,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.8.3`
+it automatically during Git deployment. The manifest version is `19.0.1.9.0`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.

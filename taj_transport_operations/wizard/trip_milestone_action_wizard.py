@@ -1,4 +1,4 @@
-"""Manual checkpoint events: arrival, departure, business confirmation, skip."""
+"""Manual checkpoint events: arrival, departure and manager skip."""
 
 from odoo import _, fields, models
 from odoo.exceptions import UserError
@@ -23,8 +23,6 @@ class TajTransportMilestoneActionWizard(models.TransientModel):
         [
             ("arrival", "Record Arrival"),
             ("departure", "Record Departure"),
-            ("confirmation", "Confirm Business Event"),
-            ("cancel_confirmation", "Cancel Confirmation"),
             ("skip", "Skip Checkpoint"),
         ],
         string="Action",
@@ -40,8 +38,7 @@ class TajTransportMilestoneActionWizard(models.TransientModel):
     note = fields.Text(string="Note")
     reason = fields.Char(
         string="Reason",
-        help="Required when skipping a checkpoint or cancelling a recorded "
-        "confirmation.",
+        help="Required when skipping a checkpoint.",
     )
 
     def action_confirm(self):
@@ -53,10 +50,6 @@ class TajTransportMilestoneActionWizard(models.TransientModel):
             milestone._record_arrival(self.event_at, self.note)
         elif self.action_type == "departure":
             milestone._record_departure(self.event_at, self.note)
-        elif self.action_type == "confirmation":
-            milestone._confirm_checkpoint(self.note)
-        elif self.action_type == "cancel_confirmation":
-            milestone._cancel_confirmation(self.reason, self.note)
         elif self.action_type == "skip":
             milestone._skip_checkpoint(self.reason)
         else:

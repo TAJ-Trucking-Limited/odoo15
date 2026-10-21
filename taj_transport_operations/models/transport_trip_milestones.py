@@ -44,7 +44,6 @@ DONE_STATES = ("completed", "departed")
 MANUAL_MILESTONE_FIELDS = (
     "name",
     "milestone_type_id",
-    "requires_confirmation",
     "planned_offset_hours",
     "latitude",
     "longitude",
@@ -98,8 +97,9 @@ class TajTransportTrip(models.Model):
     milestone_progress = fields.Float(
         string="Checkpoint Progress (%)",
         compute="_compute_milestone_stats",
-        help="Share of applicable checkpoints that are departed, confirmed or "
-        "skipped. Reporting only: it never blocks a trip transition.",
+        help="Share of applicable checkpoints that have departed, including "
+        "historically completed checkpoints. Skipped checkpoints are excluded. "
+        "Reporting only: it never blocks a trip transition.",
     )
 
     @api.depends(
@@ -244,7 +244,6 @@ class TajTransportTrip(models.Model):
             "name": line.name,
             "milestone_type_id": line.milestone_type_id.id or False,
             "type_name": line.milestone_type_id.name or False,
-            "requires_confirmation": line.requires_confirmation,
             "planned_offset_hours": line.planned_offset_hours or 0.0,
             "latitude": line.latitude or 0.0,
             "longitude": line.longitude or 0.0,

@@ -105,11 +105,8 @@ class TajTransportRouteLine(models.Model):
         help="Optional classification maintained by the Transport Manager.",
     )
     requires_confirmation = fields.Boolean(
-        string="Requires Business Confirmation",
-        help="Use for checkpoints confirmed by operations rather than by "
-        "movement alone, e.g. Loading completed or Offloaded. The trip "
-        "milestone stays 'Awaiting Confirmation' until an operator "
-        "confirms it.",
+        string="Legacy Confirmation Requirement", readonly=True,
+        help="Historical planning data only. Departure completes the checkpoint.",
     )
     planned_offset_hours = fields.Float(
         string="Planned Offset (Hours)",

@@ -25,9 +25,6 @@ class TajTransportMilestoneAddWizard(models.TransientModel):
         string="Checkpoint Type",
         ondelete="restrict",
     )
-    requires_confirmation = fields.Boolean(
-        string="Requires Business Confirmation",
-    )
     planned_offset_hours = fields.Float(
         string="Planned Offset (Hours)",
         digits=(16, 2),
@@ -43,7 +40,6 @@ class TajTransportMilestoneAddWizard(models.TransientModel):
             {
                 "name": self.name,
                 "milestone_type_id": self.milestone_type_id.id or False,
-                "requires_confirmation": self.requires_confirmation,
                 "planned_offset_hours": self.planned_offset_hours or 0.0,
                 "notes": self.notes,
             }

@@ -46,7 +46,6 @@
                                     <field name="name" placeholder="Checkpoint name"/>
                                     <field name="milestone_type_id"
                                            options="{'no_create': True, 'no_create_edit': True}"/>
-                                    <field name="requires_confirmation"/>
                                     <field name="planned_offset_hours" optional="show"/>
                                     <field name="latitude" optional="hide"/>
                                     <field name="longitude" optional="hide"/>

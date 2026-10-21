@@ -23,7 +23,7 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "taj_transport_operations"
-EXPECTED_VERSION = "19.0.1.8.3"
+EXPECTED_VERSION = "19.0.1.9.0"
 
 # Comodel of the one2many fields that embed an inline list in a parent view.
 EMBEDDED_VIEWS = {
@@ -391,13 +391,12 @@ def check_no_phase4():
     assert "def _ingest" not in milestone_file
     # Every checkpoint movement writes an immutable audit event.
     milestone_file = (MODULE / "models/transport_milestone.py").read_text()
-    assert milestone_file.count("self._log_event(") >= 5, (
+    assert milestone_file.count("self._log_event(") >= 4, (
         "Each checkpoint movement must append an audit event"
     )
     for movement in (
         "_record_arrival",
         "_record_departure",
-        "_confirm_checkpoint",
         "_skip_checkpoint",
         "_correct_timestamp",
     ):
@@ -407,47 +406,35 @@ def check_no_phase4():
 
 
 def check_confirmation_integrity():
-    """A recorded confirmation never disappears without an explicit audit row."""
+    """Confirmations are read-only history; movement uses arrival/departure."""
     milestone_file = (MODULE / "models/transport_milestone.py").read_text()
-    assert '("confirmation_cancelled", "Confirmation Cancelled")' in milestone_file, (
-        "The audit trail needs an event type for a withdrawn confirmation"
-    )
     correction = milestone_file.split("def _correct_timestamp(", 1)[1]
     correction = correction.split("\n    def ", 1)[0]
-    flat_correction = " ".join(correction.split())
-    assert '"confirmed_at": False' not in correction, (
-        "A timestamp correction must never clear a confirmation on its own"
-    )
-    assert "self._cancel_confirmation(" not in correction, (
-        "A timestamp correction must not cancel a confirmation implicitly"
-    )
-    assert (
-        "not new_value and self.confirmed_at" in flat_correction
-        and "raise UserError(" in correction
-    ), "Clearing the last event of a confirmed checkpoint must be refused"
-    assert "savepoint()" in correction, (
-        "A timestamp correction must be a single atomic change"
-    )
-    cancellation = milestone_file.split("def _cancel_confirmation(", 1)[1]
-    cancellation = cancellation.split("\n    def ", 1)[0]
-    for token in (
-        "_check_manager(",
-        "savepoint()",
-        "_log_event(",
-        '"confirmation_cancelled"',
-        'reason = (reason or "").strip()',
-        '"confirmed_at": False',
-        "_recompute_state()",
-    ):
-        assert token in cancellation, "confirmation cancellation misses " + token
-    assert "def action_open_cancel_confirmation_wizard(" in milestone_file, (
-        "The cancellation needs a manager-only UI entry point"
-    )
+    for field in ("confirmed_at", "confirmed_by_id", "confirmation_note"):
+        assert '"%s": False' % field not in correction, (
+            "A timestamp correction must preserve historical confirmations"
+        )
+    assert "savepoint()" in correction
+    state = milestone_file.split("def _recompute_state(", 1)[1]
+    state = state.split("\n    def ", 1)[0]
+    assert "requires_confirmation" not in state
+    assert "confirmed_at" not in state
+    assert 'if self.actual_departure_at:' in state
+    assert 'state = "departed"' in state
     wizard_file = (MODULE / "wizard/trip_milestone_action_wizard.py").read_text()
-    assert '("cancel_confirmation", "Cancel Confirmation")' in wizard_file
-    assert "_cancel_confirmation(self.reason, self.note)" in wizard_file
-    wizard_views = (MODULE / "wizard/trip_milestone_wizard_views.xml").read_text()
-    assert "action_type not in ('skip', 'cancel_confirmation')" in wizard_views
+    assert '"confirmation"' not in wizard_file
+    assert '"cancel_confirmation"' not in wizard_file
+    for relative in (
+        "views/transport_trip_views.xml",
+        "views/transport_milestone_views.xml",
+        "views/transport_route_views.xml",
+        "wizard/trip_milestone_wizard_views.xml",
+    ):
+        view = etree.parse(str(MODULE / relative))
+        assert not view.xpath("//button[@name='action_open_confirmation_wizard']")
+        assert not view.xpath("//button[@name='action_open_cancel_confirmation_wizard']")
+        assert not view.xpath("//field[@name='requires_confirmation']")
+    assert (MODULE / "migrations/19.0.1.9.0/post-migration.py").is_file()
 
 
 def count_tests():
@@ -559,7 +546,6 @@ def run():
     for button in (
         "action_open_arrival_wizard",
         "action_open_departure_wizard",
-        "action_open_confirmation_wizard",
     ):
         assert len(header.xpath(".//button[@name='%s']" % button)) == 1, button
         assert (
@@ -573,7 +559,6 @@ def run():
         ), button
     for button in (
         "action_open_correction_wizard",
-        "action_open_cancel_confirmation_wizard",
         "action_open_skip_wizard",
     ):
         nodes = header.xpath("./button[@name='%s']" % button)
@@ -581,12 +566,6 @@ def run():
         assert nodes[0].get("groups") == (
             "taj_transport_operations.group_transport_manager"
         ), button
-    cancel_buttons = header.xpath(
-        "./button[@name='action_open_cancel_confirmation_wizard']"
-    )
-    assert "confirmed_at" in (cancel_buttons[0].get("invisible") or ""), (
-        "Cancelling a confirmation is only offered once one is recorded"
-    )
     assert len(milestone_views.xpath("//field[@name='event_ids']")) == 1
 
     per_file, total_tests = count_tests()
@@ -605,8 +584,7 @@ def run():
     print("     snapshot generation policy, company rules, no Phase 4 code")
     print("PASS route guards: active/company/access validation, Draft-only")
     print("     planning, atomic clear path, manual checkpoint whitelist")
-    print("PASS confirmation integrity: no implicit withdrawal, manager-only")
-    print("     cancellation with its own reasoned audit event")
+    print("PASS arrival/departure workflow and preserved confirmation history")
     print("Defined Odoo test cases:", total_tests, per_file)
     print("NOTE: Runtime behaviour and permissions require the Odoo test run.")
 

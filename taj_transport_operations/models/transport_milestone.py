@@ -2,7 +2,7 @@
 
 Milestone rows are created by copying a route template's checkpoint
 definition. The copy is a *snapshot*: later template edits never rewrite a
-trip's checkpoints. Operational events (arrival, departure, confirmation)
+trip's checkpoints. Operational events (arrival and departure)
 are recorded manually through the dedicated workflow methods in this file;
 direct field writes are rejected server-side and the audit trail lives in
 ``taj.transport.milestone.event``.
@@ -118,8 +118,9 @@ class TajTransportMilestone(models.Model):
         "never rewrites trip history.",
     )
     requires_confirmation = fields.Boolean(
-        string="Requires Business Confirmation",
+        string="Legacy Confirmation Requirement",
         readonly=True,
+        help="Historical planning data only. Departure completes the checkpoint.",
     )
     planned_offset_hours = fields.Float(
         string="Planned Offset (Hours)",
@@ -274,7 +275,7 @@ class TajTransportMilestone(models.Model):
             raise UserError(
                 _(
                     "Milestone values are managed by the checkpoint workflow. "
-                    "Record arrival, departure or confirmation through their "
+                    "Record arrival or departure through their "
                     "actions, and use the manager correction workflow (with a "
                     "reason) for recorded timestamps.\nRejected fields: %s"
                 )
@@ -554,47 +555,11 @@ class TajTransportMilestone(models.Model):
         return True
 
     def _confirm_checkpoint(self, note=None):
-        """Manual business confirmation, e.g. 'Loading completed'."""
-        self.ensure_one()
-        self.check_access("write")
-        trip = self._lock_trip_for_work()
-        self._check_recording_allowed(trip)
-        if self.state == "skipped":
-            raise UserError(_("This checkpoint was skipped. It cannot be confirmed."))
-        if self.confirmed_at:
-            raise UserError(
-                _("%(milestone)s was already confirmed by %(user)s on %(time)s.")
-                % {
-                    "milestone": self.name,
-                    "user": self.confirmed_by_id.display_name,
-                    "time": self.confirmed_at,
-                }
-            )
-        if not self.actual_arrival_at:
-            raise UserError(
-                _(
-                    "Record the arrival at %s before confirming it. A checkpoint "
-                    "cannot be confirmed without an operational event."
-                )
-                % self.name
-            )
-        now = fields.Datetime.now()
-        super(TajTransportMilestone, self).write(
-            {
-                "confirmed_at": now,
-                "confirmed_by_id": self.env.user.id,
-                "confirmation_note": note or False,
-            }
-        )
-        self._recompute_state()
-        self._log_event("confirmation", occurred_at=now, note=note)
-        self._post_trip_message(
-            Markup("<p>{header}</p>{note}").format(
-                header=_("Checkpoint confirmed: %s") % self.name,
-                note=Markup("<p>{}</p>").format(note) if note else "",
-            )
-        )
-        return True
+        """Reject stale clients using the retired confirmation workflow."""
+        raise UserError(_(
+            "Separate checkpoint confirmation is no longer used. "
+            "Record Departure to complete the checkpoint."
+        ))
 
     def _skip_checkpoint(self, reason):
         """Manager-only, reasoned: the checkpoint does not apply to this trip."""
@@ -632,13 +597,7 @@ class TajTransportMilestone(models.Model):
         self.ensure_one()
         if self.state == "skipped":
             return
-        if self.confirmed_at:
-            state = "completed"
-        elif self.requires_confirmation and (
-            self.actual_arrival_at or self.actual_departure_at
-        ):
-            state = "awaiting_confirmation"
-        elif self.actual_departure_at:
+        if self.actual_departure_at:
             state = "departed"
         elif self.actual_arrival_at:
             state = "arrived"
@@ -701,6 +660,14 @@ class TajTransportMilestone(models.Model):
         if (
             field_name == "actual_departure_at"
             and new_value
+            and not self.actual_arrival_at
+        ):
+            raise ValidationError(_(
+                "Record the arrival before setting a checkpoint departure."
+            ))
+        if (
+            field_name == "actual_departure_at"
+            and new_value
             and self.actual_arrival_at
             and new_value < self.actual_arrival_at
         ):
@@ -711,25 +678,6 @@ class TajTransportMilestone(models.Model):
                 )
                 % {"milestone": self.name, "arrival": self.actual_arrival_at}
             )
-        if (
-            not new_value
-            and self.confirmed_at
-            and not self._surviving_events(field_name)
-        ):
-            # Clearing the last recorded event would leave the confirmation
-            # without any operational fact. That is never done silently: the
-            # manager must withdraw the confirmation first, with a reason and
-            # an audit row of its own.
-            raise UserError(
-                _(
-                    "%(milestone)s is confirmed by %(user)s on %(time)s. "
-                    "Clearing its last recorded event would leave the "
-                    "confirmation without any operational fact. Cancel the "
-                    "confirmation first (with a reason), then correct the "
-                    "timestamp."
-                )
-                % self._confirmation_details()
-            )
         trip._validate_milestone_timeline({self.id: {field_name: new_value}})
         author_id = self.env.user.id
         extra = {}
@@ -737,8 +685,7 @@ class TajTransportMilestone(models.Model):
             extra["arrived_by_id"] = author_id if new_value else False
         else:
             extra["departed_by_id"] = author_id if new_value else False
-        # The snapshot of the confirmation taken before the write is what the
-        # audit trail reports, in case anything below can no longer be read.
+        # Historical confirmations remain independent, read-only evidence.
         kept_confirmation = self.confirmed_at
         # One savepoint for the whole change: a failure in the audit trail or
         # in the chatter leaves no half-corrected checkpoint behind.
@@ -749,9 +696,7 @@ class TajTransportMilestone(models.Model):
                     **extra,
                 }
             )
-            # A correction never removes a confirmation on its own. It stays
-            # recorded while an operational event still supports it, and the
-            # refusal above covers the case where none would remain.
+            # Status follows arrival/departure; historical confirmations stay.
             self._recompute_state()
             self._log_event(
                 "correction",
@@ -772,7 +717,7 @@ class TajTransportMilestone(models.Model):
             )
             confirmation_note = (
                 Markup("<p>{}</p>").format(
-                    _("The business confirmation stays recorded.")
+                    _("The historical business confirmation stays recorded.")
                 )
                 if kept_confirmation and self.confirmed_at
                 else ""
@@ -798,105 +743,12 @@ class TajTransportMilestone(models.Model):
             )
         return True
 
-    def _surviving_events(self, cleared_field=None):
-        """Recorded operational events this checkpoint would still hold.
-
-        ``cleared_field`` is the timestamp a correction is about to clear; it
-        is excluded because it will no longer be recorded afterwards.
-        """
-        self.ensure_one()
-        return [
-            value
-            for field_name, value in (
-                ("actual_arrival_at", self.actual_arrival_at),
-                ("actual_departure_at", self.actual_departure_at),
-            )
-            if field_name != cleared_field and value
-        ]
-
-    def _confirmation_details(self):
-        """The recorded confirmation, as the messages and audit rows show it."""
-        self.ensure_one()
-        return {
-            "milestone": self.name,
-            "user": self.confirmed_by_id.display_name or _("unknown user"),
-            "time": fields.Datetime.context_timestamp(self, self.confirmed_at).strftime(
-                "%Y-%m-%d %H:%M"
-            )
-            if self.confirmed_at
-            else _("empty"),
-        }
-
     def _cancel_confirmation(self, reason, note=None):
-        """Explicitly withdraw a recorded business confirmation, with audit.
-
-        This is the only way a confirmation can disappear. It is a manager
-        decision, it requires a reason, and it writes an independent audit row
-        carrying the withdrawn confirmation (time, user, note), the reason,
-        the author and the moment of the withdrawal. The checkpoint state is
-        then derived from the events that remain.
-        """
-        self.ensure_one()
-        self.check_access("write")
-        self._check_manager(_("cancel a recorded checkpoint confirmation"))
-        reason = (reason or "").strip()
-        if not reason:
-            raise ValidationError(
-                _(
-                    "Enter the reason for cancelling this confirmation. The "
-                    "withdrawn confirmation and the reason are kept in the "
-                    "audit trail."
-                )
-            )
-        trip = self._lock_trip_for_work()
-        if trip.state == "cancelled":
-            raise UserError(
-                _(
-                    "A cancelled trip is closed: checkpoint confirmations can "
-                    "no longer be cancelled."
-                )
-            )
-        if not self.confirmed_at:
-            raise UserError(_("%s has no recorded confirmation to cancel.") % self.name)
-        withdrawn = " | ".join(
-            [
-                "%s: %s"
-                % (_("Confirmed At"), fields.Datetime.to_string(self.confirmed_at)),
-                "%s: %s" % (_("Confirmed By"), self.confirmed_by_id.display_name),
-                "%s: %s"
-                % (_("Confirmation Note"), self.confirmation_note or _("empty")),
-            ]
-        )
-        with self.env.cr.savepoint():
-            super(TajTransportMilestone, self).write(
-                {
-                    "confirmed_at": False,
-                    "confirmed_by_id": False,
-                    "confirmation_note": False,
-                }
-            )
-            self._recompute_state()
-            self._log_event(
-                "confirmation_cancelled",
-                reason=reason,
-                note=note,
-                field_name="confirmation",
-                old_value=withdrawn,
-            )
-            self._post_trip_message(
-                Markup(
-                    "<p>{header}</p><p>{withdrawn_label}: {withdrawn}</p>"
-                    "<p>{reason_label}: {reason}</p>{note}"
-                ).format(
-                    header=_("Checkpoint confirmation cancelled: %s") % self.name,
-                    withdrawn_label=_("Withdrawn confirmation"),
-                    withdrawn=Markup("<span>{}</span>").format(withdrawn),
-                    reason_label=_("Reason"),
-                    reason=reason,
-                    note=Markup("<p>{}</p>").format(note) if note else "",
-                )
-            )
-        return True
+        """Historical confirmations remain read-only after the workflow change."""
+        raise UserError(_(
+            "Historical checkpoint confirmations are read-only. "
+            "Use Edit to correct an arrival or departure time."
+        ))
 
     # ------------------------------------------------------------------
     # UI entry points
@@ -915,12 +767,13 @@ class TajTransportMilestone(models.Model):
 
     def _record_wizard_action(self, action_type, name):
         self.ensure_one()
-        if action_type in ("skip", "cancel_confirmation"):
-            self._check_manager(
-                _("skip a checkpoint")
-                if action_type == "skip"
-                else _("cancel a recorded checkpoint confirmation")
-            )
+        if action_type not in ("arrival", "departure", "skip"):
+            raise UserError(_(
+                "Separate checkpoint confirmation is no longer used. "
+                "Record Departure to complete the checkpoint."
+            ))
+        if action_type == "skip":
+            self._check_manager(_("skip a checkpoint"))
         return self._action_wizard(
             "taj.transport.milestone.action.wizard",
             name,

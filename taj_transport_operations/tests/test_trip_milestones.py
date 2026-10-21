@@ -1,7 +1,7 @@
 """Phase 3 acceptance tests: manual checkpoint workflow, audit and security.
 
-Covers the operational half of Phase 3: recording arrival, departure and
-business confirmation per checkpoint, the checkpoint status machine, the
+Covers the operational half of Phase 3: recording arrival and departure
+per checkpoint, the checkpoint status machine, the
 manager-only audited corrections, the immutable event trail, dispatcher
 permissions and multi-company isolation, and the interaction with the Phase 2
 trip lifecycle (open checkpoints never block Ready / Start / Complete).
@@ -59,27 +59,22 @@ class TestTripMilestones(TajTransportPhase3Case):
         self.assertFalse(milestone.actual_arrival_at)
         self.assertEqual(milestone.state, "pending")
 
-    def test_arrival_departure_and_confirmation_flow(self):
+    def test_arrival_departure_completes_checkpoints(self):
         trip = self._checkpoint_trip("FLOW")
         loading = self._milestone(trip, "Loading")
         border = self._milestone(trip, "Kasumbalesa border")
         offloading = self._milestone(trip, "Offloading")
         now = fields.Datetime.now()
         self._record(loading, "arrival", event_at=now - timedelta(hours=3))
-        self.assertEqual(loading.state, "awaiting_confirmation")
-        self.assertTrue(loading.actual_arrival_at)
+        self.assertEqual(loading.state, "arrived")
         self.assertEqual(loading.arrived_by_id, self.env.user)
-        self._record(loading, "confirmation", note="Loaded 24 pallets")
-        self.assertEqual(loading.state, "completed")
-        self.assertTrue(loading.confirmed_at)
-        self.assertEqual(loading.confirmed_by_id, self.env.user)
-        self.assertEqual(loading.confirmation_note, "Loaded 24 pallets")
+        self._record(loading, "departure", event_at=now - timedelta(hours=2, minutes=30))
+        self.assertEqual(loading.state, "departed")
+        self.assertFalse(loading.confirmed_at)
         self._record(border, "arrival", event_at=now - timedelta(hours=2))
-        self.assertEqual(border.state, "arrived")
         self._record(border, "departure", event_at=now - timedelta(hours=1))
         self.assertEqual(border.state, "departed")
         self.assertEqual(offloading.state, "pending")
-        self.assertEqual(trip.milestone_count, 3)
         self.assertEqual(trip.milestone_done_count, 2)
         self.assertEqual(trip.milestone_open_count, 1)
         self.assertAlmostEqual(trip.milestone_progress, 66.67, places=1)
@@ -92,13 +87,16 @@ class TestTripMilestones(TajTransportPhase3Case):
         self.assertFalse(border.actual_departure_at)
         self.assertEqual(border.state, "pending")
 
-    def test_confirmation_requires_a_recorded_event(self):
-        trip = self._checkpoint_trip("NEEDEVENT")
+    def test_retired_confirmation_actions_are_refused(self):
+        trip = self._checkpoint_trip("RETIRED")
         loading = self._milestone(trip, "Loading")
+        self._record(loading, "arrival")
         with self.assertRaises(UserError):
-            self._record(loading, "confirmation")
+            loading._confirm_checkpoint("Stale client")
+        with self.assertRaises(UserError):
+            loading.action_open_confirmation_wizard()
         self.assertFalse(loading.confirmed_at)
-        self.assertEqual(loading.state, "pending")
+        self.assertEqual(loading.state, "arrived")
 
     def test_double_recording_is_refused(self):
         trip = self._checkpoint_trip("DOUBLE")
@@ -112,9 +110,9 @@ class TestTripMilestones(TajTransportPhase3Case):
             moment,
             delta=timedelta(seconds=1),
         )
-        self._record(border, "confirmation")
+        self._record(border, "departure", event_at=moment + timedelta(minutes=5))
         with self.assertRaises(UserError):
-            self._record(border, "confirmation")
+            self._record(border, "departure", event_at=moment + timedelta(minutes=10))
 
     def test_recorded_timestamps_cannot_be_in_the_future(self):
         trip = self._checkpoint_trip("FUTURE")
@@ -563,7 +561,6 @@ class TestTripMilestones(TajTransportPhase3Case):
                     "trip_id": trip.id,
                     "name": "Weighbridge stop",
                     "milestone_type_id": self.type_border.id,
-                    "requires_confirmation": True,
                     "planned_offset_hours": 6.0,
                     "notes": "Mandatory weighbridge before the border",
                 }
@@ -575,7 +572,7 @@ class TestTripMilestones(TajTransportPhase3Case):
         self.assertEqual(added.state, "pending")
         self.assertEqual(added.sequence, 40)
         self.assertEqual(added.type_name, "Border Crossing")
-        self.assertEqual(added.requires_confirmation, True)
+        self.assertFalse(added.requires_confirmation)
         self.assertEqual(added.company_id, trip.company_id)
         self.assertFalse(added.template_line_id)
         self.assertEqual(trip.milestone_count, 4)
@@ -659,7 +656,6 @@ class TestTripMilestones(TajTransportPhase3Case):
         for button in (
             "action_open_arrival_wizard",
             "action_open_departure_wizard",
-            "action_open_confirmation_wizard",
             "action_open_correction_wizard",
             "action_open_skip_wizard",
         ):
@@ -708,7 +704,7 @@ class TestTripMilestones(TajTransportPhase3Case):
             ).get_combined_arch()
         )
         self.assertTrue(search.xpath("//filter[@name='group_state']"))
-        self.assertTrue(search.xpath("//filter[@name='awaiting_confirmation']"))
+        self.assertTrue(search.xpath("//filter[@name='open']"))
 
     # ------------------------------------------------------------------
     # E. Independent review regressions: forged context, forged values and
@@ -824,13 +820,12 @@ class TestTripMilestones(TajTransportPhase3Case):
             {
                 "name": "Weighbridge stop",
                 "milestone_type_id": self.type_border.id,
-                "requires_confirmation": True,
                 "planned_offset_hours": 3.5,
                 "notes": "Mandatory weighbridge",
             }
         )
         self.assertEqual(manual.state, "pending")
-        self.assertTrue(manual.requires_confirmation)
+        self.assertFalse(manual.requires_confirmation)
         self.assertFalse(manual.template_line_id)
         self.assertFalse(manual.actual_arrival_at)
         self.assertEqual(manual.type_name, self.type_border.name)
@@ -925,19 +920,27 @@ class TestTripMilestones(TajTransportPhase3Case):
     # F. Confirmation integrity under manager corrections
     # ------------------------------------------------------------------
     def _confirmed_loading(self, tag, with_departure=True):
-        """A confirmed checkpoint: arrival (+ departure) and the confirmation."""
+        """Simulate a confirmation saved before arrival/departure simplification."""
         trip = self._checkpoint_trip(tag)
         loading = self._milestone(trip, "Loading")
         now = fields.Datetime.now()
-        self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        self._record(loading, "arrival", event_at=now - timedelta(hours=4))
         if with_departure:
             self._record(loading, "departure", event_at=now - timedelta(hours=2))
-        self._record(loading, "confirmation", note="Loading completed")
+        self.env.cr.execute(
+            "UPDATE taj_transport_milestone SET confirmed_at = %s, "
+            "confirmed_by_id = %s, confirmation_note = %s, state = 'completed' "
+            "WHERE id = %s",
+            (now, self.env.user.id, "Loading completed", loading.id),
+        )
         loading.invalidate_recordset()
-        # A confirmation completes the checkpoint whether or not a departure
-        # was recorded before it.
-        self.assertEqual(loading.state, "completed")
-        self.assertTrue(loading.confirmed_at)
+        self.env["taj.transport.milestone.event"].sudo().create({
+            "milestone_id": loading.id,
+            "event_type": "confirmation",
+            "user_id": self.env.user.id,
+            "occurred_at": now,
+            "note": "Loading completed",
+        })
         return trip, loading
 
     def test_correcting_a_departure_keeps_a_valid_confirmation(self):
@@ -968,7 +971,7 @@ class TestTripMilestones(TajTransportPhase3Case):
         )
         self.assertEqual(loading.confirmed_by_id, confirmed_by)
         self.assertEqual(loading.confirmation_note, "Loading completed")
-        self.assertEqual(loading.state, "completed")
+        self.assertEqual(loading.state, "departed")
         self.assertFalse(self._events(loading, "confirmation_cancelled"))
         self.assertEqual(
             len(self._events(loading, "confirmation")),
@@ -977,7 +980,7 @@ class TestTripMilestones(TajTransportPhase3Case):
         )
 
     def test_clearing_a_departure_keeps_a_supported_confirmation(self):
-        """A remaining arrival still supports the confirmation: it stays."""
+        """Clearing departure reopens the checkpoint and retains its history."""
         trip, loading = self._confirmed_loading("CONFKEEP2")
         confirmed_at = loading.confirmed_at
         arrival = loading.actual_arrival_at
@@ -996,14 +999,14 @@ class TestTripMilestones(TajTransportPhase3Case):
             arrival,
             delta=timedelta(seconds=1),
         )
-        # The confirmation is supported by the arrival, so it is untouched.
+        # Historical confirmation evidence stays independent of movement.
         self.assertAlmostEqual(
             loading.confirmed_at,
             confirmed_at,
             delta=timedelta(seconds=1),
         )
         self.assertEqual(loading.confirmation_note, "Loading completed")
-        self.assertEqual(loading.state, "completed")
+        self.assertEqual(loading.state, "arrived")
         self.assertFalse(self._events(loading, "confirmation_cancelled"))
         correction = self._events(loading, "correction")
         self.assertEqual(len(correction), 1)
@@ -1012,209 +1015,61 @@ class TestTripMilestones(TajTransportPhase3Case):
         self.assertEqual(correction.old_value, fields.Datetime.to_string(departure))
         self.assertFalse(correction.new_value)
         trip.invalidate_recordset()
-        self.assertEqual(trip.milestone_done_count, 1)
-
-    def test_clearing_the_last_event_of_a_confirmed_checkpoint_is_refused(self):
-        """No event left means no basis for the confirmation: refuse, write nothing."""
-        _trip, loading = self._confirmed_loading("CONFREFUSE", with_departure=False)
-        arrival = loading.actual_arrival_at
-        confirmed_at = loading.confirmed_at
-        with self.assertRaises(UserError) as error:
-            self._manager_milestone(loading)._correct_timestamp(
-                "actual_arrival_at",
-                False,
-                "Arrival was recorded on the wrong checkpoint",
-            )
-        self.assertIn("cancel the confirmation first", str(error.exception).lower())
-        loading.invalidate_recordset()
-        # Nothing at all was written: no timestamp, no state, no audit row.
-        self.assertAlmostEqual(
-            loading.actual_arrival_at,
-            arrival,
-            delta=timedelta(seconds=1),
-        )
-        self.assertAlmostEqual(
-            loading.confirmed_at,
-            confirmed_at,
-            delta=timedelta(seconds=1),
-        )
-        self.assertEqual(loading.state, "completed")
-        self.assertFalse(self._events(loading, "correction"))
-        self.assertEqual(len(self._events(loading, "arrival")), 1)
-        self.assertEqual(len(self._events(loading, "confirmation")), 1)
-
-    def test_cancelling_a_confirmation_is_explicit_and_fully_audited(self):
-        """The only way a confirmation disappears: reasoned, manager, audited."""
-        trip, loading = self._confirmed_loading("CONFCANCEL", with_departure=False)
-        confirmed_at = loading.confirmed_at
-        reason = "Offloading was not finished when Loading was confirmed"
-        note = "Cancelled after the daily reconciliation call"
-        self.assertTrue(
-            self._manager_milestone(loading)._cancel_confirmation(reason, note)
-        )
-        loading.invalidate_recordset()
-        self.assertFalse(loading.confirmed_at)
-        self.assertFalse(loading.confirmed_by_id)
-        self.assertFalse(loading.confirmation_note)
-        # The state follows the events that remain (arrival only, needs a
-        # confirmation), and the checkpoint counts as open again.
-        self.assertEqual(loading.state, "awaiting_confirmation")
-        trip.invalidate_recordset()
         self.assertEqual(trip.milestone_done_count, 0)
-        self.assertEqual(trip.milestone_open_count, 3)
-        events = self._events(loading, "confirmation_cancelled")
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events.user_id, self.manager)
-        self.assertEqual(events.reason, reason)
-        self.assertEqual(events.note, note)
-        self.assertEqual(events.field_name, "confirmation")
-        self.assertTrue(events.recorded_at, "The cancellation time must be stored")
-        # Before values: the withdrawn confirmation (time, author, note).
-        self.assertIn(
-            fields.Datetime.to_string(confirmed_at),
-            events.old_value,
-        )
-        self.assertIn("Loading completed", events.old_value)
-        self.assertFalse(events.new_value)
-        # The original confirmation event stays in the trail: history is
-        # never erased, only superseded.
-        self.assertEqual(len(self._events(loading, "confirmation")), 1)
-        bodies = " ".join(trip.message_ids.mapped("body"))
-        self.assertIn(reason, bodies)
-        # Once cancelled, the checkpoint can be confirmed again.
-        self._record(loading, "confirmation", note="Confirmed after the check")
-        loading.invalidate_recordset()
-        self.assertTrue(loading.confirmed_at)
-        self.assertEqual(loading.state, "completed")
 
-    def test_cancelling_a_confirmation_needs_a_reason_and_a_manager(self):
-        """Both the direct call and the wizard are manager-only and reasoned."""
-        _trip, loading = self._confirmed_loading("CONFGUARD", with_departure=False)
-        manager_milestone = self._manager_milestone(loading)
-        for invalid_reason in ("   ", False):
-            with self.assertRaises(ValidationError):
-                manager_milestone._cancel_confirmation(invalid_reason)
-        # A dispatcher cannot cancel, and cannot open the wizard either.
-        with self.assertRaises(AccessError):
-            loading.with_user(self.dispatcher)._cancel_confirmation(
-                "Dispatcher cancels the confirmation"
-            )
-        with self.assertRaises(AccessError):
-            loading.with_user(self.dispatcher).action_open_cancel_confirmation_wizard()
-        # The wizard is not the gate: the model refuses the same way.
-        dispatcher_wizard = (
-            self.env["taj.transport.milestone.action.wizard"]
-            .with_user(self.dispatcher)
-            .create(
-                {
-                    "milestone_id": loading.id,
-                    "action_type": "cancel_confirmation",
-                    "reason": "Dispatcher cancels through the wizard",
-                }
-            )
+    def test_editing_legacy_arrival_preserves_confirmation_history(self):
+        _trip, loading = self._confirmed_loading("CONFHISTORY", with_departure=False)
+        confirmed_at = loading.confirmed_at
+        self._manager_milestone(loading)._correct_timestamp(
+            "actual_arrival_at", False, "Arrival belonged to another checkpoint",
         )
-        with self.assertRaises(AccessError):
-            dispatcher_wizard.action_confirm()
         loading.invalidate_recordset()
-        self.assertTrue(loading.confirmed_at)
-        self.assertFalse(self._events(loading, "confirmation_cancelled"))
-        # An empty reason through the wizard is refused by the model too.
-        manager_wizard = (
-            self.env["taj.transport.milestone.action.wizard"]
-            .with_user(self.manager)
-            .create(
-                {
-                    "milestone_id": loading.id,
-                    "action_type": "cancel_confirmation",
-                    "reason": "",
-                }
-            )
-        )
-        with self.assertRaises(ValidationError):
-            manager_wizard.action_confirm()
-        # The manager can cancel through the wizard, with a reason.
-        manager_wizard = (
-            self.env["taj.transport.milestone.action.wizard"]
-            .with_user(self.manager)
-            .create(
-                {
-                    "milestone_id": loading.id,
-                    "action_type": "cancel_confirmation",
-                    "reason": "Wrong checkpoint was confirmed",
-                }
-            )
-        )
-        manager_wizard.action_confirm()
-        loading.invalidate_recordset()
-        self.assertFalse(loading.confirmed_at)
-        self.assertEqual(len(self._events(loading, "confirmation_cancelled")), 1)
-        # A checkpoint without a recorded confirmation has nothing to cancel.
-        border = self._milestone(_trip, "Kasumbalesa border")
+        self.assertFalse(loading.actual_arrival_at)
+        self.assertEqual(loading.state, "pending")
+        self.assertEqual(loading.confirmed_at, confirmed_at)
+        self.assertEqual(len(self._events(loading, "confirmation")), 1)
+        self.assertEqual(len(self._events(loading, "correction")), 1)
+
+    def test_historical_confirmation_cannot_be_cancelled(self):
+        _trip, loading = self._confirmed_loading("CONFREADONLY", with_departure=False)
+        confirmed_at = loading.confirmed_at
         with self.assertRaises(UserError):
-            self._manager_milestone(border)._cancel_confirmation(
-                "Nothing was confirmed here"
-            )
+            self._manager_milestone(loading)._cancel_confirmation("Retired action")
+        loading.invalidate_recordset()
+        self.assertEqual(loading.confirmed_at, confirmed_at)
+        self.assertFalse(self._events(loading, "confirmation_cancelled"))
+
+    def test_retired_confirmation_dialog_is_not_available(self):
+        _trip, loading = self._confirmed_loading("CONFRETIRED", with_departure=False)
+        for user in (self.dispatcher, self.manager):
+            with self.assertRaises(UserError):
+                loading.with_user(user).action_open_cancel_confirmation_wizard()
+        self.assertTrue(loading.confirmed_at)
 
     # ------------------------------------------------------------------
     # G. Progress semantics
     # ------------------------------------------------------------------
-    def test_progress_counts_departures_and_confirmations_not_arrivals(self):
-        """Arrival is not completion: a checkpoint ends with departure or confirmation."""
+    def test_progress_counts_departures_and_reopens_after_edit(self):
         trip = self._checkpoint_trip("PROGRESS")
         loading = self._milestone(trip, "Loading")
         border = self._milestone(trip, "Kasumbalesa border")
         offloading = self._milestone(trip, "Offloading")
         now = fields.Datetime.now()
-        trip.invalidate_recordset()
-        self.assertEqual(trip.milestone_count, 3)
-        self.assertEqual(trip.milestone_done_count, 0)
-        self.assertEqual(trip.milestone_open_count, 3)
-        self.assertEqual(trip.milestone_progress, 0.0)
-        # An arrival only records that the truck reached the stop.
-        self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        self._record(loading, "arrival", event_at=now - timedelta(hours=4))
         self._record(border, "arrival", event_at=now - timedelta(hours=2))
-        loading.invalidate_recordset()
-        border.invalidate_recordset()
-        trip.invalidate_recordset()
-        self.assertEqual(loading.state, "awaiting_confirmation")
-        self.assertEqual(border.state, "arrived")
+        self.assertEqual(loading.state, "arrived")
         self.assertEqual(trip.milestone_done_count, 0)
-        self.assertEqual(trip.milestone_open_count, 3)
-        self.assertEqual(trip.milestone_progress, 0.0)
-        # A checkpoint that needs no confirmation ends with its departure.
+        self._record(loading, "departure", event_at=now - timedelta(hours=3))
         self._record(border, "departure", event_at=now - timedelta(hours=1))
-        border.invalidate_recordset()
-        trip.invalidate_recordset()
-        self.assertEqual(border.state, "departed")
-        self.assertEqual(trip.milestone_done_count, 1)
-        self.assertAlmostEqual(trip.milestone_progress, 33.33, places=1)
-        # A checkpoint that needs one ends with the confirmation.
-        self._record(loading, "confirmation", note="Loading completed")
-        loading.invalidate_recordset()
-        trip.invalidate_recordset()
-        self.assertEqual(loading.state, "completed")
         self.assertEqual(trip.milestone_done_count, 2)
         self.assertAlmostEqual(trip.milestone_progress, 66.67, places=1)
-        # A skipped checkpoint stops counting against the trip.
-        self._record(
-            offloading,
-            "skip",
-            user=self.manager,
-            reason="Offloading performed by the customer",
+        self._record(offloading, "skip", user=self.manager, reason="Not applicable")
+        self.assertAlmostEqual(trip.milestone_progress, 100.0)
+        self._manager_milestone(loading)._correct_timestamp(
+            "actual_departure_at", False, "Departure was entered by mistake",
         )
-        offloading.invalidate_recordset()
         trip.invalidate_recordset()
-        self.assertEqual(offloading.state, "skipped")
-        self.assertEqual(trip.milestone_done_count, 2)
-        self.assertEqual(trip.milestone_open_count, 0)
-        self.assertAlmostEqual(trip.milestone_progress, 100.0, places=1)
-        # Withdrawing the confirmation reopens the checkpoint and the trip.
-        self._manager_milestone(loading)._cancel_confirmation(
-            "Loading was confirmed too early"
-        )
-        loading.invalidate_recordset()
-        trip.invalidate_recordset()
-        self.assertEqual(loading.state, "awaiting_confirmation")
+        self.assertEqual(loading.state, "arrived")
         self.assertEqual(trip.milestone_done_count, 1)
         self.assertEqual(trip.milestone_open_count, 1)
-        self.assertAlmostEqual(trip.milestone_progress, 50.0, places=1)
+        self.assertAlmostEqual(trip.milestone_progress, 50.0)

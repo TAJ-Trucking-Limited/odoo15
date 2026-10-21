@@ -1,13 +1,14 @@
 # TAJ Transport Operations — Phase 3 (route templates and trip milestones) UAT
 
 **Scope:** branch of this delivery, TAJ Transport Operations version
-`19.0.1.7.0`, on top of the Phase 2 release `19.0.1.6.4`.
+`19.0.1.9.0`, including the Arrival → Departure workflow update.
 
 **What Phase 3 is:** manual checkpoint planning and recording. A route template
 holds an ordered, editable list of checkpoints; selecting a template on a trip
 copies those checkpoints into the trip as its own snapshot; Dispatchers record
-arrival, departure and business confirmation by hand, with a full audit trail
-and manager-only corrections.
+arrival and departure by hand, with a full audit trail and manager-only
+corrections. Departure completes the checkpoint; confirmation is no longer a
+separate operational step.
 
 **What Phase 3 is not:** no GPS or event-driven automation, no automatic
 timestamps, no retroactive template edits, no backfill of existing trips, no
@@ -56,8 +57,8 @@ re-runs the Phase 2 regression suites.
 
 - [ ] **Transport Operations > Route Templates > New**:
       name, company, origin, destination and ordered checkpoint lines.
-- [ ] Each line: name, type (optional), requires business confirmation,
-      planned offset in hours, optional latitude/longitude.
+- [ ] Each line: name, type (optional), planned offset in hours, optional
+      latitude/longitude.
 - [ ] Edit the line order (drag the sequence) and reorder with the
       *Sequence* column; the form keeps the order after saving.
 - [ ] A duplicate template name inside the same company is refused; the same
@@ -77,8 +78,7 @@ re-runs the Phase 2 regression suites.
       event, with the message naming the reason. When nothing is recorded it
       replaces the generated, untouched checkpoints and keeps manual ones.
 - [ ] Switching the trip's template is refused as soon as an event exists.
-- [ ] The **Progress** bar counts a checkpoint as done once it **departed**
-      (a checkpoint that needs no confirmation) or was **confirmed by hand**;
+- [ ] The **Progress** bar counts a checkpoint as done once it **departed**;
       an arrival on its own is not completion, it only means the truck reached
       the stop. Skipped checkpoints are excluded from the bar altogether.
 - [ ] Open checkpoints never block Ready / Start / Complete; completing a trip
@@ -86,34 +86,29 @@ re-runs the Phase 2 regression suites.
 
 ### 4. Recording checkpoints by hand (Dispatcher)
 
-- [ ] Checkpoint form: **Record Arrival**, then **Record Departure**, then
-      **Confirm Checkpoint** when the checkpoint requires a confirmation.
-- [ ] Every wizard asks for the time (defaults to now) and an optional note;
-      a future time is refused.
-- [ ] Recording is only allowed while the trip is Ready or In Progress.
-- [ ] Recording twice is refused (no duplicate arrival/departure/confirmation).
-- [ ] Departure before arrival is refused; confirmation before arrival is
-      refused.
-- [ ] **Checkpoint History** on the form shows one row per event with the
-      acting user, the timestamp, the recorded time and the note.
+- [ ] Checkpoint form and trip list expose **Arrival** and **Departure**, with
+      no **Confirm** or **Cancel Confirmation** button.
+- [ ] **Requires Business Confirmation** is absent from templates and Add
+      Checkpoint.
+- [ ] Record Arrival: the checkpoint becomes Arrived and remains open.
+- [ ] Record Departure: the checkpoint becomes Departed and counts as done,
+      including Loading and Offloading.
+- [ ] Each wizard asks for an event time and optional note. Future times,
+      duplicate events and departure before arrival are refused.
+- [ ] Recording is allowed only while the trip is Ready or In Progress.
+- [ ] Checkpoint History records the actor, event time, recorded time and note.
 
-### 5. Corrections (Transport Manager only)
+### 5. Timestamp edits (Transport Manager only)
 
-- [ ] A Dispatcher has no **Skip Checkpoint**, no **Cancel Confirmation** and
-      no **Correct Timestamp** button; a Transport Manager has all three.
-- [ ] **Correct Timestamp** requires a reason, offers only arrival/departure
-      and refuses a correction that would break the checkpoint chronology.
-- [ ] After the correction, the checkpoint shows the new time, the history
-      shows one *Correction* row with reason, and the Chatter names the
-      correcting user.
-- [ ] **Cancel Confirmation** (Transport Manager only) appears as soon as a
-      confirmation is recorded. It requires a reason and writes its own
-      *Confirmation Cancelled* history row holding the withdrawn confirmation
-      (time, user, note), the reason, the manager and the time of the
-      cancellation. The checkpoint then follows the events that remain.
-- [ ] Correcting a time never withdraws a confirmation on its own, and clearing
-      the last recorded event of a confirmed checkpoint is refused with a
-      message that points to **Cancel Confirmation**.
+- [ ] A Dispatcher has no **Skip Checkpoint** or **Edit** action; a Transport
+      Manager has both.
+- [ ] **Edit** requires a reason and rejects invalid checkpoint chronology.
+- [ ] Editing records before/after values and the manager in Checkpoint
+      History and trip Chatter.
+- [ ] Clearing a departure reopens the checkpoint as Arrived. An arrival
+      cannot be cleared while a departure remains.
+- [ ] Historical confirmations are read-only. Editing a timestamp leaves
+      their time, user, note and audit events intact.
 
 ### 6. Audit and integrity
 
@@ -124,9 +119,8 @@ re-runs the Phase 2 regression suites.
 - [ ] Chatter on the trip records checkpoint generation, additions, skips and
       completions.
 - [ ] Nothing operational disappears silently: a changed time leaves a
-      *Correction* row, and a withdrawn confirmation leaves its own
-      *Confirmation Cancelled* row with the previous values. No confirmation
-      value can vanish without such a row.
+      *Correction* row, and historical confirmation and cancellation events
+      remain unchanged and readable.
 
 ### 7. Company isolation
 
@@ -141,9 +135,9 @@ re-runs the Phase 2 regression suites.
       cancelled exactly as before.
 - [ ] Sales order, sales line, invoice, VAT and Fleet assignment behaviour is
       unchanged: creating trips does not write to Sales or Accounting.
-- [ ] Upgrading the module from `19.0.1.6.4` to `19.0.1.7.0` only adds new
-      tables, columns and views. No post-migration script runs, and no Phase 2
-      record is rewritten.
+- [ ] Upgrading to `19.0.1.9.0` normalizes obsolete Awaiting Confirmation
+      states from their recorded movement times, without changing those times
+      or audit history. Earlier transporter migration also runs when required.
 
 ## Regression scenarios added by the independent review
 
@@ -204,27 +198,16 @@ by automated tests as well; run them by hand before Staging sign-off.
       saved, no checkpoint appears twice, and one user sees an error. That user
       simply retries — the retry adds nothing and the plan stays complete.
 
-### 13. Confirmation integrity and progress semantics (final correction round)
+### 13. Upgrade history and progress
 
-- [ ] Correct the **departure** of a confirmed checkpoint: the confirmation
-      stays recorded (same time, same user, same note), no *Confirmation
-      Cancelled* row appears, and the checkpoint stays Completed.
-- [ ] Clear the **departure** of a confirmed checkpoint that still has an
-      arrival: the confirmation is kept and the checkpoint stays Completed,
-      because the arrival still supports it. The history shows only the
-      *Correction* row for the departure.
-- [ ] Try to clear the **last** recorded event (an arrival-only checkpoint that
-      is confirmed): the correction is refused with a message that names the
-      confirmation and points to **Cancel Confirmation**. Nothing changes — no
-      time, no state, no history row.
-- [ ] Cancel the confirmation with a reason: the checkpoint follows its
-      remaining events (it returns to Awaiting Confirmation), the Progress bar
-      reopens it, and the history shows the withdrawal with the previous
-      values, the reason, the user and the time.
-- [ ] An empty reason, a Dispatcher calling the action, or a Dispatcher sending
-      the wizard cannot cancel a confirmation: all three are refused and the
-      confirmation stays recorded.
-- [ ] Progress semantics: a checkpoint that only **arrived** is not counted as
-      done, one that **departed** or was **confirmed** is, and a **skipped**
-      one is excluded from the total; cancelling a confirmation reopens the
-      checkpoint and lowers the bar again.
+- [ ] A checkpoint awaiting confirmation with a departure becomes Departed;
+      one with only an arrival becomes Arrived. No departure is fabricated.
+- [ ] Previously completed confirmations retain their historical done status.
+- [ ] Historical confirmation timestamps, users, notes and audit events remain
+      readable in Historical Confirmation and Checkpoint History.
+- [ ] Stale confirmation actions are refused and instruct the operator to
+      record Departure.
+- [ ] Progress counts departed checkpoints and historical completions; arrival
+      alone is open, and skipped checkpoints are excluded from the total.
+- [ ] Clearing a departure through Edit lowers progress and preserves all
+      historical confirmation evidence.

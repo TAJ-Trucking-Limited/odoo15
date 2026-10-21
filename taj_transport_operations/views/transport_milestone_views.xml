@@ -12,11 +12,9 @@
                 <field name="planned_arrival_at" optional="show"/>
                 <field name="actual_arrival_at"/>
                 <field name="actual_departure_at"/>
-                <field name="confirmed_at" optional="hide"/>
-                <field name="requires_confirmation" optional="hide"/>
                 <field name="state" widget="badge"
                        decoration-info="state == 'pending'"
-                       decoration-warning="state == 'awaiting_confirmation'"
+                       decoration-warning="state == 'arrived'"
                        decoration-success="state in ('completed', 'departed')"
                        decoration-muted="state == 'skipped'"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
@@ -26,9 +24,6 @@
                 <button name="action_open_departure_wizard" string="Departure"
                         type="object" class="btn-secondary"
                         invisible="not actual_arrival_at or actual_departure_at or state == 'skipped'"/>
-                <button name="action_open_confirmation_wizard" string="Confirm"
-                        type="object" class="btn-secondary"
-                        invisible="not actual_arrival_at or confirmed_at or state == 'skipped'"/>
                 <button name="action_open_correction_wizard" string="Edit"
                         type="object" class="btn-link"
                         groups="taj_transport_operations.group_transport_manager"
@@ -49,23 +44,16 @@
                     <button name="action_open_departure_wizard" string="Record Departure"
                             type="object" class="btn-primary"
                             invisible="not actual_arrival_at or actual_departure_at or state == 'skipped'"/>
-                    <button name="action_open_confirmation_wizard" string="Confirm Checkpoint"
-                            type="object" class="btn-primary"
-                            invisible="not actual_arrival_at or confirmed_at or state == 'skipped'"/>
                     <button name="action_open_correction_wizard" string="Edit Timestamp"
                             type="object" class="btn-secondary"
                             groups="taj_transport_operations.group_transport_manager"
                             invisible="state in ('pending', 'skipped') or not actual_arrival_at"/>
-                    <button name="action_open_cancel_confirmation_wizard" string="Cancel Confirmation"
-                            type="object" class="btn-secondary"
-                            groups="taj_transport_operations.group_transport_manager"
-                            invisible="not confirmed_at"/>
                     <button name="action_open_skip_wizard" string="Skip Checkpoint"
                             type="object" class="btn-secondary"
                             groups="taj_transport_operations.group_transport_manager"
                             invisible="state != 'pending'"/>
                     <field name="state" widget="statusbar" readonly="1"
-                           statusbar_visible="pending,arrived,awaiting_confirmation,departed,completed,skipped"/>
+                           statusbar_visible="pending,arrived,departed,skipped"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -87,7 +75,6 @@
                         <group string="Planning Snapshot">
                             <field name="milestone_type_id" readonly="1"/>
                             <field name="type_name" readonly="1"/>
-                            <field name="requires_confirmation" readonly="1"/>
                             <field name="planned_offset_hours" readonly="1"/>
                             <field name="planned_arrival_at" readonly="1"/>
                             <field name="route_id" readonly="1"/>
@@ -100,7 +87,7 @@
                             <field name="actual_departure_at" readonly="1"/>
                             <field name="departed_by_id" readonly="1"/>
                         </group>
-                        <group string="Business Confirmation">
+                        <group string="Historical Confirmation" invisible="not confirmed_at">
                             <field name="confirmed_at" readonly="1"/>
                             <field name="confirmed_by_id" readonly="1"/>
                             <field name="confirmation_note" readonly="1"/>
@@ -148,15 +135,13 @@
                 <field name="milestone_type_id"/>
                 <filter name="open" string="Open"
                         domain="[('state', 'not in', ['completed', 'departed', 'skipped'])]"/>
-                <filter name="awaiting_confirmation" string="Awaiting Confirmation"
-                        domain="[('state', '=', 'awaiting_confirmation')]"/>
                 <filter name="my_trips" string="My Trips"
                         domain="[('trip_id.create_uid', '=', uid)]"/>
                 <separator/>
                 <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
                 <filter name="arrived" string="Arrived" domain="[('state', '=', 'arrived')]"/>
                 <filter name="departed" string="Departed" domain="[('state', '=', 'departed')]"/>
-                <filter name="completed" string="Completed" domain="[('state', '=', 'completed')]"/>
+                <filter name="completed" string="Done" domain="[('state', 'in', ['departed', 'completed'])]"/>
                 <filter name="skipped" string="Skipped" domain="[('state', '=', 'skipped')]"/>
                 <group>
                     <filter name="group_state" string="Status"
@@ -177,7 +162,7 @@
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No trip milestones yet.</p>
             <p>Select a route template on a transport trip to generate its
-               checkpoints, then record arrival, departure and confirmations
+               checkpoints, then record arrival and departure
                from the trip.</p>
         </field>
     </record>

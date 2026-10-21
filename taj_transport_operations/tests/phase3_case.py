@@ -128,7 +128,7 @@ class TajTransportPhase3Case(TransactionCase):
         return line
 
     def _default_checkpoints(self):
-        """Ordered checkpoints: the first and last need a confirmation."""
+        """Legacy templates include retired confirmation flags for upgrade coverage."""
         return [
             {
                 "name": "Loading",

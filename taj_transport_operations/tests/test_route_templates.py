@@ -191,7 +191,6 @@ class TestRouteTemplates(TajTransportPhase3Case):
             "sequence",
             "name",
             "milestone_type_id",
-            "requires_confirmation",
             "planned_offset_hours",
         ):
             self.assertEqual(
@@ -239,7 +238,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
         self.assertEqual(first.state, "pending")
         self.assertEqual(first.milestone_type_id, self.type_loading)
         self.assertEqual(first.type_name, "Loading")
-        self.assertTrue(first.requires_confirmation)
+        self.assertFalse(first.requires_confirmation)
         self.assertEqual(first.template_line_id.milestone_type_id, self.type_loading)
         self.assertEqual(first.company_id, trip.company_id)
         # The planned checkpoint time follows this trip's own planning.
@@ -290,7 +289,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
                 trip.milestone_ids.mapped("name"),
                 ["Loading", "Kasumbalesa border", "Offloading"],
             )
-            self.assertTrue(trip.milestone_ids[0].requires_confirmation)
+            self.assertFalse(trip.milestone_ids[0].requires_confirmation)
             self.assertEqual(trip.milestone_ids[0].planned_offset_hours, 0.0)
 
     def test_generation_picks_up_new_template_checkpoints(self):

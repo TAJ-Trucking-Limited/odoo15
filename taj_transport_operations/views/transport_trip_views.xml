@@ -200,11 +200,9 @@
                                     <field name="planned_arrival_at" optional="show"/>
                                     <field name="actual_arrival_at"/>
                                     <field name="actual_departure_at"/>
-                                    <field name="confirmed_at" optional="hide"/>
-                                    <field name="requires_confirmation" optional="hide"/>
                                     <field name="state" widget="badge"
                                            decoration-info="state == 'pending'"
-                                           decoration-warning="state == 'awaiting_confirmation'"
+                                           decoration-warning="state == 'arrived'"
                                            decoration-success="state in ('completed', 'departed')"
                                            decoration-muted="state == 'skipped'"/>
                                     <field name="notes" optional="hide"/>
@@ -214,9 +212,6 @@
                                     <button name="action_open_departure_wizard" string="Departure"
                                             type="object" class="btn-secondary"
                                             invisible="not actual_arrival_at or actual_departure_at or state == 'skipped'"/>
-                                    <button name="action_open_confirmation_wizard" string="Confirm"
-                                            type="object" class="btn-secondary"
-                                            invisible="not actual_arrival_at or confirmed_at or state == 'skipped'"/>
                                     <button name="action_open_correction_wizard" string="Edit"
                                             type="object" class="btn-link"
                                             groups="taj_transport_operations.group_transport_manager"
@@ -225,10 +220,8 @@
                             </field>
                             <p class="text-muted">
                                 Arrival and departure are recorded manually per
-                                checkpoint. Checkpoints requiring business
-                                confirmation (loading, offloading) stay
-                                <b>Awaiting Confirmation</b> until operations
-                                confirm them. Open checkpoints never block
+                                checkpoint. Recording Departure completes the
+                                checkpoint. Open checkpoints never block
                                 Ready, Start or Complete: completion only reports
                                 them. Corrections require the Transport Manager
                                 role and a reason, and are kept in the checkpoint

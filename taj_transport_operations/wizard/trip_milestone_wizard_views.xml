@@ -10,26 +10,14 @@
                     <field name="trip_id" readonly="1"/>
                     <field name="action_type" readonly="1"/>
                     <field name="event_at"
-                           invisible="action_type in ('confirmation', 'cancel_confirmation', 'skip')"
+                           invisible="action_type == 'skip'"
                            required="action_type in ('arrival', 'departure')"/>
                     <field name="reason"
-                           invisible="action_type not in ('skip', 'cancel_confirmation')"
-                           required="action_type in ('skip', 'cancel_confirmation')"
+                           invisible="action_type != 'skip'"
+                           required="action_type == 'skip'"
                            placeholder="Why is this the right decision?"/>
                     <field name="note" placeholder="Optional operational note"/>
                 </group>
-                <p class="text-muted" invisible="action_type != 'confirmation'">
-                    Confirming records the manual business event (for example
-                    loading or offloading completed). The acting user and time
-                    are stored in the checkpoint history.
-                </p>
-                <p class="text-muted" invisible="action_type != 'cancel_confirmation'">
-                    Cancelling withdraws a recorded confirmation. The reason is
-                    mandatory, and the withdrawn confirmation (time, user,
-                    note), the reason, your name and the time of the
-                    cancellation are stored permanently in the checkpoint
-                    history.
-                </p>
                 <p class="text-muted" invisible="action_type != 'skip'">
                     Skipping is a manager decision: the checkpoint does not
                     apply to this trip. The reason is stored permanently.
@@ -37,7 +25,8 @@
                 <p class="text-muted" invisible="action_type not in ('arrival', 'departure')">
                     Enter the operational time of the event, not the time of
                     data entry. It cannot be in the future, and checkpoints
-                    must follow the route order.
+                    must follow the route order. Departure completes the
+                    checkpoint.
                 </p>
                 <footer>
                     <button name="action_confirm" string="Save"
@@ -89,7 +78,6 @@
                     <field name="name" placeholder="e.g. Extra stop at Nakonde"/>
                     <field name="milestone_type_id"
                            options="{'no_create': True, 'no_create_edit': True}"/>
-                    <field name="requires_confirmation"/>
                     <field name="planned_offset_hours"/>
                     <field name="notes"/>
                 </group>
