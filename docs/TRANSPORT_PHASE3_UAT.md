@@ -1,7 +1,7 @@
 # TAJ Transport Operations — Phase 3 (route templates and trip milestones) UAT
 
 **Scope:** branch of this delivery, TAJ Transport Operations version
-`19.0.1.9.2`, including Arrival → Departure, day/hour offsets and Proof of Delivery.
+`19.0.1.9.3`, including milestone navigation and Sales references.
 
 **What Phase 3 is:** manual checkpoint planning and recording. A route template
 holds an ordered, editable list of checkpoints; selecting a template on a trip
@@ -223,3 +223,10 @@ by automated tests as well; run them by hand before Staging sign-off.
       operational fields remain locked; filename and note changes appear in
       Chatter.
 - [ ] File access follows the trip's permissions and company visibility.
+
+### 15. Milestone navigation and Sales references
+
+- [ ] Milestones is directly after Trips in the Transport Operations menu.
+- [ ] The Milestones menu and trip smart button open grouped by Trip.
+- [ ] Sales Order and Customer appear on milestone lists and forms, reflect
+      their trip's source records, and can be searched.

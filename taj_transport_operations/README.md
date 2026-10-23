@@ -363,6 +363,13 @@ Transport users can upload or replace the file and edit notes after completion
 so delivery paperwork can be recorded when it arrives. Filename and note
 changes are tracked in Chatter. POD is optional and never blocks completion.
 
+## Milestone navigation and Sales references (19.0.1.9.3)
+
+The Milestones menu follows Trips directly and opens grouped by Trip by
+default. The trip's Milestones smart button uses the same default grouping.
+Milestone lists and forms show the linked Sales Order and Customer as
+read-only references, and both are available in the milestone search.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -377,7 +384,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.9.2`
+it automatically during Git deployment. The manifest version is `19.0.1.9.3`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.

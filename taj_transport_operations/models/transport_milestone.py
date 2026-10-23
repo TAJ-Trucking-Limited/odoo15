@@ -73,6 +73,14 @@ class TajTransportMilestone(models.Model):
         check_company=True,
         copy=False,
     )
+    sale_order_id = fields.Many2one(
+        "sale.order", string="Sales Order",
+        related="trip_id.sale_order_id", readonly=True,
+    )
+    partner_id = fields.Many2one(
+        "res.partner", string="Customer",
+        related="trip_id.partner_id", readonly=True,
+    )
     company_id = fields.Many2one(
         "res.company",
         related="trip_id.company_id",
