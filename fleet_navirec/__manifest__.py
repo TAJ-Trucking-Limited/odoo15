@@ -1,11 +1,11 @@
 {
     "name": "TAJ Navirec Fleet Integration",
-    "version": "19.0.1.3.2",
+    "version": "19.0.1.4.0",
     "summary": "Sync Navirec vehicle positions and telematics into Odoo Fleet",
     "category": "Human Resources/Fleet",
     "author": "TAJ Trucking",
     "license": "LGPL-3",
-    "depends": ["fleet", "mail", "report_xlsx"],
+    "depends": ["fleet", "mail", "report_xlsx", "taj_transport_operations"],
     "data": [
         "security/ir.model.access.csv",
         "data/ir_cron_data.xml",

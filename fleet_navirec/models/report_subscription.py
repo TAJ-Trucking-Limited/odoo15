@@ -62,6 +62,9 @@ class FleetNavirecReportSubscription(models.Model):
 
     field_vehicle = fields.Boolean(string="Vehicle", default=True)
     field_license_plate = fields.Boolean(string="License Plate", default=True)
+    field_trip = fields.Boolean(string="Trip", default=False)
+    field_customer = fields.Boolean(string="Customer", default=False)
+    field_sale_order = fields.Boolean(string="Sales Order", default=False)
     field_status = fields.Boolean(string="Navirec Status", default=True)
     field_location = fields.Boolean(string="Current Position", default=True)
     field_coordinates = fields.Boolean(string="Coordinates", default=False)
@@ -231,8 +234,61 @@ class FleetNavirecReportSubscription(models.Model):
         )
         return utc_value.astimezone(self._timezone_info()).strftime("%Y-%m-%d %H:%M")
 
+    def _prepare_trip_report_values(self):
+        """Read current assignments within the report's company/client scope."""
+        self.ensure_one()
+        if not (
+            self.field_trip or self.field_customer or self.field_sale_order
+        ) or not self.vehicle_ids:
+            return {}
+
+        # Fleet managers own these reports, but need not be dispatchers. Limit
+        # this privileged read to selected vehicles and the allowed companies.
+        Assignment = self.env["taj.transport.assignment"].sudo()
+        assignments = Assignment.search([
+            ("effective_to", "=", False),
+            ("trip_id.state", "=", "in_progress"),
+            ("company_id", "in", self.env.companies.ids),
+            "|", ("vehicle_id", "in", self.vehicle_ids.ids),
+                 ("trailer_id", "in", self.vehicle_ids.ids),
+        ])
+        Trip = self.env["taj.transport.trip"].sudo()
+        trips_by_vehicle = {
+            vehicle.id: Trip.browse() for vehicle in self.vehicle_ids
+        }
+        for assignment in assignments:
+            for vehicle in (assignment.vehicle_id | assignment.trailer_id):
+                if vehicle.id in trips_by_vehicle:
+                    trips_by_vehicle[vehicle.id] |= assignment.trip_id
+
+        values = {}
+        for vehicle_id, trips in trips_by_vehicle.items():
+            client_trips = trips.filtered(
+                lambda trip: trip.partner_id.id == self.partner_id.id
+            )
+            if not client_trips:
+                continue
+            # Count every visible-company trip before filtering by client:
+            # a second client's allocation also makes this vehicle ambiguous.
+            # Never include that other client's identity or references.
+            if len(trips) > 1:
+                conflict = _("Multiple active trips")
+                values[vehicle_id] = {
+                    "trip": conflict,
+                    "customer": conflict,
+                    "sale_order": conflict,
+                }
+            else:
+                values[vehicle_id] = {
+                    "trip": client_trips.name or "",
+                    "customer": client_trips.partner_id.display_name or "",
+                    "sale_order": client_trips.sale_order_id.name or "",
+                }
+        return values
+
     def _prepare_report_rows(self):
         self.ensure_one()
+        trip_values = self._prepare_trip_report_values()
         rows = []
         for vehicle in self.vehicle_ids.sorted(
             key=lambda record: (
@@ -244,6 +300,7 @@ class FleetNavirecReportSubscription(models.Model):
                 {
                     "vehicle": vehicle.display_name or "",
                     "license_plate": vehicle.license_plate or "",
+                    **trip_values.get(vehicle.id, {}),
                     "status": dict(
                         vehicle._fields["navirec_integration_status"].selection
                     ).get(
@@ -290,6 +347,9 @@ class FleetNavirecReportSubscription(models.Model):
                 _("License Plate"),
             ),
             ("field_status", "status", _("Navirec Status")),
+            ("field_trip", "trip", _("Trip")),
+            ("field_customer", "customer", _("Customer")),
+            ("field_sale_order", "sale_order", _("Sales Order")),
             ("field_location", "location", _("Current Position")),
             ("field_coordinates", "coordinates", _("Coordinates")),
             ("field_last_gps", "last_gps", _("Last GPS")),

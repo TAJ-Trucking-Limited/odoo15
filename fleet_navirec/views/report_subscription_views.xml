@@ -88,6 +88,9 @@
                                 <group>
                                     <field name="field_vehicle"/>
                                     <field name="field_license_plate"/>
+                                    <field name="field_trip"/>
+                                    <field name="field_customer"/>
+                                    <field name="field_sale_order"/>
                                     <field name="field_status" readonly="1"/>
                                     <field name="field_location"/>
                                     <field name="field_coordinates"/>

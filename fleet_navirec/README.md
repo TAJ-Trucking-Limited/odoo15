@@ -96,6 +96,14 @@ When the template is empty, that verified live vehicle route is used automatical
 - UTC `next_send_at` calculation with timezone conversion.
 - Configurable Vehicle, License Plate, Position, Coordinates, Speed,
   Ignition/Movement and Odometer columns.
+- Optional Trip, Customer and Sales Order columns, disabled by default, use the
+  truck or trailer's current open assignment on an In Progress trip. Trip details
+  are limited to the report's exact selected client and the current allowed
+  companies. Draft, Ready, completed and cancelled trips are excluded; no matching
+  trip leaves the new columns blank. If a vehicle has multiple In Progress trips
+  within those companies and at least one matches the selected client, the new
+  columns show `Multiple active trips` without exposing other clients' details.
+  These columns require the Transport Operations module, now a dependency.
 - Navirec Status and Last GPS are mandatory safety columns.
 - At least one identity column and one position representation are required.
 - Missing telemetry renders as Not available; real zero values remain valid.
