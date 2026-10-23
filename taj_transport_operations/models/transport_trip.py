@@ -83,7 +83,7 @@ class TajTransportTrip(models.Model):
     })
     initial_vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck at Trip Creation",
-        readonly=True, copy=False,
+        readonly=True, copy=False, index=True,
         help="Snapshot of the sales line's original truck. Future trip "
              "truck replacements will not update the sales line or invoice.",
     )

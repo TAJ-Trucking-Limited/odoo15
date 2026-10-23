@@ -1,7 +1,7 @@
 # TAJ Transport Operations — Phase 3 (route templates and trip milestones) UAT
 
 **Scope:** branch of this delivery, TAJ Transport Operations version
-`19.0.1.9.3`, including milestone navigation and Sales references.
+`19.0.1.10.0`, including Vehicle Availability and immediate Draft reservations.
 
 **What Phase 3 is:** manual checkpoint planning and recording. A route template
 holds an ordered, editable list of checkpoints; selecting a template on a trip
@@ -230,3 +230,22 @@ by automated tests as well; run them by hand before Staging sign-off.
 - [ ] The Milestones menu and trip smart button open grouped by Trip.
 - [ ] Sales Order and Customer appear on milestone lists and forms, reflect
       their trip's source records, and can be searched.
+
+### 16. Vehicle Availability
+
+- [ ] Vehicle Availability replaces Trailers and lists visible Fleet vehicles
+      of all categories. Vehicles are maintained through Fleet.
+- [ ] Create a Draft trip with an original Sales truck: the truck immediately
+      becomes Assigned without creating a resource assignment.
+- [ ] Assign initial resources: the selected truck and trailer become Assigned.
+      Selecting another truck releases the original reservation.
+- [ ] Mark Ready: resources remain Assigned. Start Trip: they become Busy.
+- [ ] Replace resources: the previous vehicles are released and the replacement
+      resources follow the trip state. Completing or cancelling releases them.
+- [ ] Multiple trips: Busy takes priority over Assigned; closing one trip does
+      not release a vehicle still reserved by another trip.
+- [ ] Availability filters and grouping work. Archived vehicles are hidden by
+      default and available through the Archived filter.
+- [ ] Active Trips and Trips buttons expose only readable trips. Shared
+      vehicles reserved by another company do not appear Standby merely because
+      that company's trip details are hidden.

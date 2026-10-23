@@ -370,6 +370,36 @@ default. The trip's Milestones smart button uses the same default grouping.
 Milestone lists and forms show the linked Sales Order and Customer as
 read-only references, and both are available in the milestone search.
 
+## Vehicle Availability (19.0.1.10.0)
+
+**Vehicle Availability** replaces the Trailers menu. It lists all Fleet vehicles
+visible to the user, including trucks and trailers. Archived vehicles are hidden
+by default and available through the Archived filter. Fleet remains the place
+to create and maintain vehicles; the availability list and form are read-only.
+
+Availability is calculated automatically:
+
+- **Assigned:** a Draft trip reserves its original Sales truck immediately.
+  Once initial resources are recorded, only the explicitly selected truck and
+  trailer are reserved. Current assignments on Draft or Ready trips are Assigned.
+- **Busy:** a current resource assignment belongs to an In Progress trip.
+- **Standby:** no active reservation or assignment remains.
+
+Busy takes priority over Assigned when the same vehicle has several trips.
+Replacement releases the previous resources; completion and cancellation release
+the trip's resources. Another active trip can keep the vehicle Assigned or Busy.
+Future-dated initial assignments reserve resources as Assigned.
+
+Active Trips lists only trips readable in the user's selected companies and
+opens them through the Trips button. Shared vehicles still report their actual
+availability when a reservation belongs to another company, without revealing
+that company's trip details. The optional Fleet Driver column is the vehicle's
+default driver; trip-specific driver overrides remain on each trip.
+
+The status supports filters and grouping. It does not enforce double-booking
+prevention across trips. Fleet status, categories, drivers, Sales snapshots,
+assignment history and Navirec data are unchanged.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -384,7 +414,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.9.3`
+it automatically during Git deployment. The manifest version is `19.0.1.10.0`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
@@ -443,7 +473,7 @@ choose **Assign Initial Resources**, verify the original Sales truck is
 suggested, and select a driver/contact or trailer. Save and reopen:
 the Current Assignment and one historical row should be visible, including
 its effective time and recording user. The button should disappear once
-assigned. Create trailers in **Fleet** or **Transport Operations > Trailers** with an
+assigned. Create trailers in **Fleet** with an
 existing Fleet role. Choose a model and vehicle category of **Trailer**;
 Dispatchers and Transport Managers without Fleet rights have read-only access.
 
@@ -500,7 +530,7 @@ recategorized automatically. Unclassified original Sales trucks remain historica
 snapshots, but cannot become new truck assignments until a Fleet administrator
 sets the vehicle's Truck category.
 
-The Trailer menu uses a Fleet form with plate, model, company, status and notes.
+The Vehicle Availability menu shows Fleet vehicles and calculated trip availability.
 The standard Fleet form also hides engine/seating/hitch details for trailers.
 No new `vehicle_type` value or separate driver master is introduced.
 

@@ -34,12 +34,12 @@ class TajTransportAssignment(models.Model):
     )
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck", check_company=True, copy=False,
-        ondelete="restrict",
+        ondelete="restrict", index=True,
         domain=lambda self: self.env["fleet.vehicle"]._transport_resource_domain("truck"),
     )
     trailer_id = fields.Many2one(
         "fleet.vehicle", string="Trailer", ondelete="restrict",
-        check_company=True, copy=False,
+        check_company=True, copy=False, index=True,
         domain=lambda self: self.env["fleet.vehicle"]._transport_resource_domain("trailer"),
     )
     driver_id = fields.Many2one(
