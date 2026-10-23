@@ -170,6 +170,20 @@ class TajTransportTrip(models.Model):
         help="Optional loading, storage, security or handling instructions.",
     )
 
+    # Delivery paperwork may arrive after completion. Keep it separate from
+    # operational fields, which are locked when a trip is closed.
+    pod_file = fields.Binary(
+        string="Proof of Delivery", attachment=True, copy=False,
+        help="Optional proof of delivery document or image for this trip.",
+    )
+    pod_filename = fields.Char(
+        string="POD Filename", copy=False, tracking=True,
+    )
+    pod_notes = fields.Text(
+        string="Delivery Notes", copy=False, tracking=True,
+        help="Optional notes accompanying the proof of delivery.",
+    )
+
     # Dispatcher-entered route and timing: no route template or GPS automation
     # is introduced here (those are separate future phases).
     origin_location = fields.Char(

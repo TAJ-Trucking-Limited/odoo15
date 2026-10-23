@@ -1,7 +1,7 @@
 # TAJ Transport Operations — Phase 3 (route templates and trip milestones) UAT
 
 **Scope:** branch of this delivery, TAJ Transport Operations version
-`19.0.1.9.1`, including Arrival → Departure and day/hour checkpoint offsets.
+`19.0.1.9.2`, including Arrival → Departure, day/hour offsets and Proof of Delivery.
 
 **What Phase 3 is:** manual checkpoint planning and recording. A route template
 holds an ordered, editable list of checkpoints; selecting a template on a trip
@@ -213,3 +213,13 @@ by automated tests as well; run them by hand before Staging sign-off.
       alone is open, and skipped checkpoints are excluded from the total.
 - [ ] Clearing a departure through Edit lowers progress and preserves all
       historical confirmation evidence.
+
+### 14. Proof of Delivery
+
+- [ ] The trip's Proof of Delivery tab accepts a document or image and optional
+      Delivery Notes. Both can be left empty without blocking completion.
+- [ ] Save and reopen: the file, original filename and notes remain available.
+- [ ] Upload or replace the POD and edit notes on a completed trip. The
+      operational fields remain locked; filename and note changes appear in
+      Chatter.
+- [ ] File access follows the trip's permissions and company visibility.

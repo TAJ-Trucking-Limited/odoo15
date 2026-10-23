@@ -277,6 +277,13 @@
                                 </list>
                             </field>
                         </page>
+                        <page string="Proof of Delivery" name="proof_of_delivery">
+                            <group>
+                                <field name="pod_file" filename="pod_filename"/>
+                                <field name="pod_filename" invisible="1"/>
+                                <field name="pod_notes" placeholder="Optional delivery notes"/>
+                            </group>
+                        </page>
                         <page string="Lifecycle" name="trip_lifecycle">
                             <group>
                                 <group string="Operational Milestones">

@@ -354,6 +354,15 @@ Hours remain the stored duration used to generate trip checkpoints. Days
 are another way to edit that duration, so existing offsets need no migration
 and previously generated trip checkpoints keep their snapshots.
 
+## Proof of Delivery (19.0.1.9.2)
+
+Trips have a **Proof of Delivery** tab with one optional document/image upload
+and optional Delivery Notes. The file keeps its original filename and is
+stored as an attachment on the trip, using the trip's access permissions.
+Transport users can upload or replace the file and edit notes after completion
+so delivery paperwork can be recorded when it arrives. Filename and note
+changes are tracked in Chatter. POD is optional and never blocks completion.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -368,7 +377,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.9.1`
+it automatically during Git deployment. The manifest version is `19.0.1.9.2`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
