@@ -406,8 +406,8 @@ assignment history and Navirec data are unchanged.
 ## Empty-field counters on trip tabs (19.0.1.10.2)
 
 Trip tab labels show the number of empty visible fields, such as `Cargo (3)`.
-The count updates from the form's current values, including unsaved changes;
-when no fields are empty the original tab name is shown without a counter.
+The count updates from the form's current values, including unsaved changes.
+From version 19.0.1.11.0, tabs with no empty fields show `(0)` too.
 Optional and read-only data fields count too. Hidden fields and fields inside
 hidden groups are excluded. Numeric zero and unchecked booleans count as filled;
 whitespace-only text counts as empty. Each field counts once per tab.
@@ -421,6 +421,30 @@ Cancelled. Cancellation user/reason fields count only when visible.
 
 The custom form renderer/compiler is registered only for the trip form;
 other Odoo forms and stored trip data are unchanged.
+
+## Fill Empty Fields wizard (19.0.1.11.0)
+
+The trip header's **Fill Empty Fields** button opens only missing editable
+Commercial, Cargo, Route & Timing and Proof of Delivery fields, grouped by tab.
+Fields stay visible while filling the dialog. Entries may be left blank; Save
+fills the supplied values using the regular trip write, validation and Chatter
+tracking. Existing values are not cleared or overwritten. A route template
+suggests missing origin/destination and uses the existing checkpoint generation
+rules. Route templates are offered only while Draft. Closed trips offer only
+missing Proof of Delivery fields, respecting the operational lock.
+
+Missing read-only Sales fields are listed with **Save & Open Sales Order**.
+Resources and Milestones list their missing fields with links to the existing
+assignment/replacement and Add Checkpoint wizards where applicable. Those
+navigation buttons first save supplied trip values. Sales data, resource history
+and lifecycle timestamps are never edited through this wizard. Lifecycle gaps
+are listed only for applicable states.
+
+Saving locks and re-reads the trip. If a supplied field was filled by another
+user, or is no longer editable, the save is rejected and the user reopens the
+wizard. The wizard uses the caller's trip access and allowed-company rules;
+it does not elevate permissions. POD files and their filenames can be supplied
+here, including after completion/cancellation.
 
 ## Scope intentionally deferred
 
@@ -436,7 +460,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.10.2`
+it automatically during Git deployment. The manifest version is `19.0.1.11.0`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.0`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.

@@ -1,6 +1,6 @@
 {
     "name": "TAJ Transport Operations",
-    "version": "19.0.1.10.2",
+    "version": "19.0.1.11.0",
     "summary": "Transport trip records linked one-to-one to sales order lines",
     "category": "Operations/Transport",
     "author": "TAJ Trucking",
@@ -31,6 +31,7 @@
         "wizard/trip_milestone_wizard_views.xml",
         "views/sale_order_views.xml",
         "wizard/create_trips_wizard_views.xml",
+        "wizard/fill_empty_fields_wizard_views.xml",
     ],
     "installable": True,
     "application": True,

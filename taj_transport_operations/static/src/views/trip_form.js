@@ -84,7 +84,7 @@ class TripFormRenderer extends FormRenderer {
                 emptyFields.add(spec.name);
             }
         }
-        return emptyFields.size ? `${title} (${emptyFields.size})` : title;
+        return `${title} (${emptyFields.size})`;
     }
 
     isTripFieldEmpty(type, value) {

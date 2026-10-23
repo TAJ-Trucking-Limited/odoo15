@@ -35,6 +35,11 @@
         <field name="arch" type="xml">
             <form string="Transport Trip" delete="0" js_class="taj_transport_trip_form">
                 <header>
+                    <button string="Fill Empty Fields"
+                            name="action_open_fill_empty_fields_wizard"
+                            type="object" class="btn-secondary"
+                            groups="taj_transport_operations.group_transport_user"
+                            invisible="not id"/>
                     <button string="Mark Ready" name="action_mark_ready"
                             type="object" class="btn-primary"
                             invisible="state != 'draft'"/>

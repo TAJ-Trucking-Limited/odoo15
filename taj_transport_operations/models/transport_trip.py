@@ -318,6 +318,17 @@ class TajTransportTrip(models.Model):
             )
             trip.current_assignment_id = current[:1]
 
+    def action_open_fill_empty_fields_wizard(self):
+        self.ensure_one()
+        self.check_access("write")
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Fill Empty Trip Fields"),
+            "res_model": "taj.transport.fill.empty.fields.wizard",
+            "view_mode": "form", "target": "new",
+            "context": {"default_trip_id": self.id},
+        }
+
     def action_open_initial_assignment_wizard(self):
         self.ensure_one()
         if self.state != "draft":

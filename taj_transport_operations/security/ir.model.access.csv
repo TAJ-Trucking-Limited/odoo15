@@ -1,6 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_taj_transport_trip_user,taj.transport.trip.user,model_taj_transport_trip,taj_transport_operations.group_transport_user,1,1,1,0
 access_taj_transport_trip_wizard_user,taj.transport.trip.create.wizard.user,model_taj_transport_trip_create_wizard,taj_transport_operations.group_transport_user,1,1,1,0
+access_taj_transport_fill_empty_wizard_user,taj.transport.fill.empty.fields.wizard.user,model_taj_transport_fill_empty_fields_wizard,taj_transport_operations.group_transport_user,1,1,1,0
 access_taj_transport_assignment_user,taj.transport.assignment.user,model_taj_transport_assignment,taj_transport_operations.group_transport_user,1,0,1,0
 access_taj_transport_initial_wizard_user,taj.transport.initial.assignment.wizard.user,model_taj_transport_initial_assignment_wizard,taj_transport_operations.group_transport_user,1,1,1,0
 access_taj_transport_fleet_vehicle_read,taj.transport.fleet.vehicle.read,fleet.model_fleet_vehicle,taj_transport_operations.group_transport_user,1,0,0,0
