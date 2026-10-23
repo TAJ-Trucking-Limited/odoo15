@@ -1,11 +1,16 @@
 {
     "name": "TAJ Transport Operations",
-    "version": "19.0.1.10.0",
+    "version": "19.0.1.10.2",
     "summary": "Transport trip records linked one-to-one to sales order lines",
     "category": "Operations/Transport",
     "author": "TAJ Trucking",
     "license": "LGPL-3",
-    "depends": ["sale_management", "move_invoice_line", "fleet", "mail"],
+    "depends": ["sale_management", "move_invoice_line", "fleet", "mail", "web"],
+    "assets": {
+        "web.assets_backend": [
+            "taj_transport_operations/static/src/views/trip_form.js",
+        ],
+    },
     "data": [
         "security/transport_security.xml",
         "security/ir.model.access.csv",

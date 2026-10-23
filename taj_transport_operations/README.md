@@ -12,6 +12,9 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 - Sales Order > **Create Trips** opens a selection wizard. Truck-assigned lines
   without trips are suggested; an operator may add other actual transport
   lines. The button **does not** create trips automatically on confirmation.
+- If no product line has a vehicle, the **Create Trips** dialog shows a yellow
+  warning. The operator can select transport lines manually or cancel and assign
+  a vehicle on the order. This warning does not block Draft trip creation.
 - The **Trip** button on each confirmed product line opens an existing trip or
   creates exactly one when explicitly clicked.
 - Sales Order **Trips** smart button opens all linked trips.
@@ -400,6 +403,25 @@ The status supports filters and grouping. It does not enforce double-booking
 prevention across trips. Fleet status, categories, drivers, Sales snapshots,
 assignment history and Navirec data are unchanged.
 
+## Empty-field counters on trip tabs (19.0.1.10.2)
+
+Trip tab labels show the number of empty visible fields, such as `Cargo (3)`.
+The count updates from the form's current values, including unsaved changes;
+when no fields are empty the original tab name is shown without a counter.
+Optional and read-only data fields count too. Hidden fields and fields inside
+hidden groups are excluded. Numeric zero and unchecked booleans count as filled;
+whitespace-only text counts as empty. Each field counts once per tab.
+
+An empty Milestones or Assignment History list counts as one empty field;
+individual cells inside those lists are excluded. The Resources tab follows
+the visible current/last resource group. Lifecycle timestamps count only in
+states where they are applicable: Ready for Ready/In Progress/Completed,
+Started for In Progress/Completed, Completed for Completed, and Cancelled for
+Cancelled. Cancellation user/reason fields count only when visible.
+
+The custom form renderer/compiler is registered only for the trip form;
+other Odoo forms and stored trip data are unchanged.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -414,9 +436,9 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.10.0`
+it automatically during Git deployment. The manifest version is `19.0.1.10.2`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
-`fleet_navirec` version `19.0.1.3.2`). The `19.0.1.8.0` upgrade migrates saved
+`fleet_navirec` version `19.0.1.4.0`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
 
 Check the source checkout without Odoo using:

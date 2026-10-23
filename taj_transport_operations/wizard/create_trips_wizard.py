@@ -10,6 +10,9 @@ class TajTransportTripCreateWizard(models.TransientModel):
     sale_order_id = fields.Many2one(
         "sale.order", required=True, readonly=True,
     )
+    no_vehicle_on_order = fields.Boolean(
+        compute="_compute_no_vehicle_on_order",
+    )
     line_ids = fields.Many2many(
         "sale.order.line", string="Transport Lines",
         domain="[('order_id', '=', sale_order_id), ('display_type', '=', 'product')]",
@@ -26,6 +29,19 @@ class TajTransportTripCreateWizard(models.TransientModel):
     company_id = fields.Many2one(
         "res.company", related="sale_order_id.company_id", readonly=True,
     )
+
+    @api.depends(
+        "sale_order_id.order_line.vehicle_id",
+        "sale_order_id.order_line.product_id",
+        "sale_order_id.order_line.display_type",
+    )
+    def _compute_no_vehicle_on_order(self):
+        for wizard in self:
+            wizard.no_vehicle_on_order = bool(wizard.sale_order_id) and not any(
+                line.vehicle_id
+                for line in wizard.sale_order_id.order_line
+                if line.display_type in (False, "product") and line.product_id
+            )
 
     @api.model
     def default_get(self, fields_list):

@@ -61,7 +61,7 @@ def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
     # Phase 2 behaviour is retained by the route/checkpoint and transporter
     # catalog releases, which this gate still verifies.
-    if manifest["version"] != "19.0.1.10.0":
+    if manifest["version"] != "19.0.1.10.2":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))

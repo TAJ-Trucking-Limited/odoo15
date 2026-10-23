@@ -5,6 +5,14 @@
         <field name="model">taj.transport.trip.create.wizard</field>
         <field name="arch" type="xml">
             <form string="Create Transport Trips">
+                <field name="no_vehicle_on_order" invisible="1"/>
+                <div class="alert alert-warning" role="alert"
+                     invisible="not no_vehicle_on_order">
+                    <strong>No vehicle assigned.</strong>
+                    None of this sales order's product lines has a vehicle.
+                    Select transport lines manually to continue, or cancel
+                    and assign a vehicle on the sales order.
+                </div>
                 <group>
                     <field name="sale_order_id" readonly="1"/>
                     <field name="line_ids" widget="many2many_tags"

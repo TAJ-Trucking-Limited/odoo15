@@ -33,7 +33,7 @@
         <field name="name">taj.transport.trip.form</field>
         <field name="model">taj.transport.trip</field>
         <field name="arch" type="xml">
-            <form string="Transport Trip" delete="0">
+            <form string="Transport Trip" delete="0" js_class="taj_transport_trip_form">
                 <header>
                     <button string="Mark Ready" name="action_mark_ready"
                             type="object" class="btn-primary"
