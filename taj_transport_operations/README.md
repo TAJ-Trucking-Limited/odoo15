@@ -113,9 +113,18 @@ Resources**, available only while the Draft trip has no active assignment.
   Contacts (`res.partner`), with both trucks and trailers stored in Fleet.
   Stable Truck and Trailer category XML IDs distinguish resource types. We do not create a second driver
   master or modify the driver's default assignment on the Fleet vehicle.
-- Existing Draft trips stay unassigned until the dispatcher explicitly
-  records an initial assignment; the initial Sales truck is *suggested* in
-  the wizard, but never silently assigned to a trip.
+- From `19.0.1.11.1`, creating a trip automatically records its initial truck
+  and driver when the original Sales truck is active, categorized as Truck,
+  and has an active compatible Fleet driver. Both resources must belong to
+  the trip company or be shared. This is an actual audited assignment, so the
+  current truck and driver are immediately visible in Resources.
+- If these defaults are incomplete or invalid, the trip remains Draft with
+  manual initial assignment available. Existing Draft trips are not bulk
+  changed: **Apply Fleet Defaults** applies the valid truck/driver pair to a
+  Draft trip without assignment history. Assign Initial Resources remains an
+  alternative for choosing resources manually. Existing assignments and Fleet
+  drivers are never overwritten; use Replace Resources for subsequent changes,
+  including adding a trailer to an automatic initial assignment.
 - In `19.0.1.8.2`, the initial assignment wizard also suggests the selected
   truck's Fleet driver, including when opened with the initial Sales truck.
   Changing the truck refreshes the suggestion; the Dispatcher can override or
@@ -460,9 +469,9 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.11.0`
+it automatically during Git deployment. The manifest version is `19.0.1.11.1`
 (Phase 3 added route templates and trip milestones; Navirec compatibility:
-`fleet_navirec` version `19.0.1.4.0`). The `19.0.1.8.0` upgrade migrates saved
+`fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
 
 Check the source checkout without Odoo using:

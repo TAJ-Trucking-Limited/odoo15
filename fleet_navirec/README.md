@@ -98,12 +98,20 @@ When the template is empty, that verified live vehicle route is used automatical
   Ignition/Movement and Odometer columns.
 - Optional Trip, Customer and Sales Order columns, disabled by default, use the
   truck or trailer's current open assignment on an In Progress trip. Trip details
-  are limited to the report's exact selected client and the current allowed
-  companies. Draft, Ready, completed and cancelled trips are excluded; no matching
+  use **Trip Details Scope** to select either the client's commercial company
+  (including its contact/address records) or **Internal fleet (all selected
+  vehicles)**. The default is Selected client, preserving customer-report
+  filtering. Internal fleet includes each selected vehicle's current trip
+  regardless of customer and is intended for internal recipients. Both scopes
+  remain limited to current allowed companies. Draft, Ready, completed and
+  cancelled trips are excluded; no matching
   trip leaves the new columns blank. If a vehicle has multiple In Progress trips
-  within those companies and at least one matches the selected client, the new
+  within those companies and at least one matches the selected scope, the new
   columns show `Multiple active trips` without exposing other clients' details.
   These columns require the Transport Operations module, now a dependency.
+- Upgrade Navirec to `19.0.1.4.1` and set Trip Details Scope to Internal fleet
+  on existing internal all-truck reports. Existing reports remain client-scoped
+  until explicitly changed; Preview, email and Excel use the same scope.
 - Navirec Status and Last GPS are mandatory safety columns.
 - At least one identity column and one position representation are required.
 - Missing telemetry renders as Not available; real zero values remain valid.

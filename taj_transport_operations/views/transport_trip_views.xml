@@ -251,6 +251,10 @@
                                     <field name="last_co_driver_id" readonly="1"/>
                                 </group>
                                 <group string="Resource Actions">
+                                    <button string="Apply Fleet Defaults"
+                                            name="action_apply_initial_fleet_defaults"
+                                            type="object" class="btn-secondary"
+                                            invisible="current_assignment_id or not initial_vehicle_id or state != 'draft'"/>
                                     <button string="Assign Initial Resources"
                                             name="action_open_initial_assignment_wizard"
                                             type="object" class="btn-primary"

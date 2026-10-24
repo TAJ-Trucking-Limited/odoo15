@@ -349,8 +349,53 @@ class TajTransportTrip(models.Model):
             "context": {
                 "default_trip_id": self.id,
                 "default_vehicle_id": self.initial_vehicle_id.id or False,
+                "default_driver_id": self.initial_vehicle_id.driver_id.id or False,
             },
         }
+
+    def _assign_initial_fleet_defaults(self, required=False):
+        """Create an audited assignment, never merely display a Fleet driver."""
+        category = self.env.ref("taj_transport_operations.fleet_category_truck")
+        for trip in self.sorted("id"):
+            trip._lock_for_transition()
+            trip.invalidate_recordset(["assignment_ids", "initial_vehicle_id"])
+            if trip.state != "draft" or trip.assignment_ids:
+                if required:
+                    raise UserError(_(
+                        "Fleet defaults can only be applied to a Draft trip "
+                        "without assignment history. Use Replace Resources "
+                        "for an existing assignment."
+                    ))
+                continue
+            vehicle = trip.initial_vehicle_id
+            driver = vehicle.driver_id
+            if (
+                not vehicle or not vehicle.active or vehicle.category_id != category
+                or (vehicle.company_id and vehicle.company_id != trip.company_id)
+                or not driver or not driver.active
+                or (driver.company_id and driver.company_id != trip.company_id)
+            ):
+                if required:
+                    raise UserError(_(
+                        "The original Sales truck needs to be active, categorized "
+                        "as Truck, and have an active Fleet driver. Both must "
+                        "belong to this trip's company or be shared. Otherwise, "
+                        "use Assign Initial Resources to select them manually."
+                    ))
+                continue
+            self.env["taj.transport.assignment"].create({
+                "trip_id": trip.id,
+                "vehicle_id": vehicle.id,
+                "driver_id": driver.id,
+                "effective_from": fields.Datetime.now(),
+                "reason": _("Initial truck and driver from Fleet defaults"),
+            })
+            trip.message_post(body=_("Initial truck and driver assigned from Fleet defaults."))
+
+    def action_apply_initial_fleet_defaults(self):
+        self.ensure_one()
+        self._assign_initial_fleet_defaults(required=True)
+        return True
 
     def action_open_replace_assignment_wizard(self):
         self.ensure_one()
@@ -532,7 +577,9 @@ class TajTransportTrip(models.Model):
                 or _("New")
             )
             new_vals_list.append(vals)
-        return super().create(new_vals_list)
+        trips = super().create(new_vals_list)
+        trips._assign_initial_fleet_defaults()
+        return trips
 
     def write(self, vals):
         vals = self._sync_cargo_type_values(vals)

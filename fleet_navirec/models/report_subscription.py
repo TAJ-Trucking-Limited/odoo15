@@ -34,6 +34,16 @@ class FleetNavirecReportSubscription(models.Model):
     )
     email_to = fields.Char(required=True)
     email_cc = fields.Char()
+    trip_details_scope = fields.Selection(
+        [
+            ("client", "Selected client"),
+            ("fleet", "Internal fleet (all selected vehicles)"),
+        ],
+        string="Trip Details Scope", required=True, default="client",
+        help="Selected client includes its company/contact addresses. "
+             "Internal fleet shows the current trip of every selected vehicle, "
+             "regardless of customer; use it for internal recipients.",
+    )
     timezone = fields.Char(
         required=True,
         default=lambda self: self.env.user.tz or "UTC",
@@ -235,7 +245,7 @@ class FleetNavirecReportSubscription(models.Model):
         return utc_value.astimezone(self._timezone_info()).strftime("%Y-%m-%d %H:%M")
 
     def _prepare_trip_report_values(self):
-        """Read current assignments within the report's company/client scope."""
+        """Read current assignments within the chosen company/client scope."""
         self.ensure_one()
         if not (
             self.field_trip or self.field_customer or self.field_sale_order
@@ -262,11 +272,12 @@ class FleetNavirecReportSubscription(models.Model):
                     trips_by_vehicle[vehicle.id] |= assignment.trip_id
 
         values = {}
+        client_company_id = self.partner_id.commercial_partner_id.id
         for vehicle_id, trips in trips_by_vehicle.items():
-            client_trips = trips.filtered(
-                lambda trip: trip.partner_id.id == self.partner_id.id
+            matching_trips = trips if self.trip_details_scope == "fleet" else trips.filtered(
+                lambda trip: trip.partner_id.commercial_partner_id.id == client_company_id
             )
-            if not client_trips:
+            if not matching_trips:
                 continue
             # Count every visible-company trip before filtering by client:
             # a second client's allocation also makes this vehicle ambiguous.
@@ -280,9 +291,9 @@ class FleetNavirecReportSubscription(models.Model):
                 }
             else:
                 values[vehicle_id] = {
-                    "trip": client_trips.name or "",
-                    "customer": client_trips.partner_id.display_name or "",
-                    "sale_order": client_trips.sale_order_id.name or "",
+                    "trip": matching_trips.name or "",
+                    "customer": matching_trips.partner_id.display_name or "",
+                    "sale_order": matching_trips.sale_order_id.name or "",
                 }
         return values
 

@@ -48,6 +48,7 @@
                         <group string="Client &amp; Recipients">
                             <field name="active"/>
                             <field name="partner_id"/>
+                            <field name="trip_details_scope"/>
                             <field name="email_to"
                                 placeholder="ops@example.com"/>
                             <field name="email_cc"
