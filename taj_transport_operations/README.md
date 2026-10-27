@@ -12,11 +12,18 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 - Sales Order > **Create Trips** opens a selection wizard. Truck-assigned lines
   without trips are suggested; an operator may add other actual transport
   lines. The button **does not** create trips automatically on confirmation.
+- Each **new** trip from Create Trips needs a route template linked to that
+  line's product (`product_tmpl_id` on the template). Exactly one active
+  same-company match is auto-selected; several matches require a per-line
+  choice; none yields a clear error before any trip is created. Existing trips
+  are opened unchanged. Standalone / API trip creation may still omit a
+  template, and unlinked legacy templates remain selectable on the trip form.
 - If no product line has a vehicle, the **Create Trips** dialog shows a yellow
   warning. The operator can select transport lines manually or cancel and assign
   a vehicle on the order. This warning does not block Draft trip creation.
 - The **Trip** button on each confirmed product line opens an existing trip or
-  creates exactly one when explicitly clicked.
+  creates exactly one when explicitly clicked (unique product-linked template,
+  or a chooser when several match).
 - Sales Order **Trips** smart button opens all linked trips.
 - Standalone **Transport Operations > Trips** menu lists and creates trips.
 - The original truck is snapshotted when the trip is created, and never
@@ -48,6 +55,14 @@ Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
 - Transport / booking reference.
 - Cargo type and actual cargo description.
 - Special handling instructions.
+
+**Sales order cargo defaults (19.0.1.12.0):** optional `cargo_type_id` and
+`special_handling_instructions` on the sales order are visible to Sales users
+(cargo catalog is read-only for them). Every newly created trip snapshots both
+values from its sales order across the wizard, line Trip button and ORM create
+paths; explicit create values win. Later order edits do not update existing
+trips. An archived sales cargo type refuses creation with a clear error and
+creates no partial batch.
 
 Changes to dispatcher-maintained fields are tracked in the trip Chatter via
 Odoo's standard `mail.thread` tracking (including the responsible user and
@@ -253,7 +268,16 @@ an optional type, a planned offset in
 hours and optional coordinates kept for a later phase. Templates are managed at
 **Transport Operations > Configuration > Route Templates** and are read-only for
 Dispatchers. A template name is unique per company; the same name in another
-company is allowed.
+company is allowed. From `19.0.1.12.0` an optional **Sales Product** link
+(`product_tmpl_id`) matches templates to sales lines for Create Trips / Trip
+buttons; several active templates may share one product, and unlinked legacy
+templates stay valid. On create with an explicit template, non-empty template
+origin/destination take precedence over provided or product-name values; blank
+template fields still use the product-name fallback. On a Draft route change,
+non-empty template locations overwrite the trip; blank template fields and
+clearing the template keep existing locations. The same Draft overwrite applies
+when **Fill Empty Fields** assigns a different template (other wizard fields
+remain fill-empty-only).
 
 **Checkpoint types (Transport Manager):** `taj.transport.milestone.type` is a
 small editable catalog at **Transport Operations > Configuration > Checkpoint
@@ -437,9 +461,10 @@ The trip header's **Fill Empty Fields** button opens only missing editable
 Commercial, Cargo, Route & Timing and Proof of Delivery fields, grouped by tab.
 Fields stay visible while filling the dialog. Entries may be left blank; Save
 fills the supplied values using the regular trip write, validation and Chatter
-tracking. Existing values are not cleared or overwritten. A route template
-suggests missing origin/destination and uses the existing checkpoint generation
-rules. Route templates are offered only while Draft. Closed trips offer only
+tracking. Existing values are not cleared or overwritten, except that choosing
+a different Draft route template replaces each origin/destination when the
+template has a nonempty value (checkpoint generation uses the usual rules).
+Route templates are offered only while Draft. Closed trips offer only
 missing Proof of Delivery fields, respecting the operational lock.
 
 Missing read-only Sales fields are listed with **Save & Open Sales Order**.
@@ -469,8 +494,9 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.11.1`
-(Phase 3 added route templates and trip milestones; Navirec compatibility:
+it automatically during Git deployment. The manifest version is `19.0.1.12.0`
+(product-linked route templates for Sales trip creation, sales cargo
+snapshots; Phase 3 route templates/milestones retained; Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
 

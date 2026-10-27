@@ -495,6 +495,95 @@ class TajTransportTrip(models.Model):
             vals["destination_location"] = destination
         return vals
 
+    @api.model
+    def _apply_explicit_route_locations(self, vals):
+        """Non-empty template locations win over create vals and product names.
+
+        Blank template fields leave the caller's values alone so the product-
+        name fallback can still fill them. Template-less creates are untouched.
+        """
+        route_id = vals.get("route_id")
+        if not route_id:
+            return vals
+        route = self.env["taj.transport.route"].browse(route_id).exists()
+        if not route:
+            return vals
+        if (route.origin_location or "").strip():
+            vals["origin_location"] = route.origin_location
+        if (route.destination_location or "").strip():
+            vals["destination_location"] = route.destination_location
+        return vals
+
+    @api.model
+    def _default_cargo_from_sale_order(self, vals, line):
+        """Snapshot cargo defaults from the sales order; explicit vals win."""
+        order = line.order_id
+        if "cargo_type_id" not in vals and "cargo_type" not in vals:
+            cargo_type = order.cargo_type_id
+            if cargo_type:
+                if not cargo_type.active:
+                    raise ValidationError(_(
+                        "Sales order %(order)s uses archived cargo type "
+                        "%(cargo)s. Choose an active cargo type on the sales "
+                        "order before creating trips."
+                    ) % {
+                        "order": order.display_name,
+                        "cargo": cargo_type.display_name,
+                    })
+                vals["cargo_type_id"] = cargo_type.id
+        if (
+            "special_handling_instructions" not in vals
+            and order.special_handling_instructions
+        ):
+            vals["special_handling_instructions"] = (
+                order.special_handling_instructions
+            )
+        return vals
+
+    @api.model
+    def _require_matching_route_for_sale_line(self, line, route):
+        """Sales-button path: template must match the line product.
+
+        Used by Create Trips and the line Trip button so forged route ids
+        cannot bypass the product link. Standalone / API creates skip this.
+        """
+        route = (
+            route
+            if isinstance(route, models.BaseModel)
+            else self.env["taj.transport.route"].browse(route)
+        ).exists()
+        if not route:
+            raise UserError(_(
+                "Select a route template linked to product %(product)s "
+                "before creating a trip for sales line %(line)s."
+            ) % {
+                "product": line.product_id.display_name,
+                "line": line.display_name,
+            })
+        route.check_access("read")
+        company = line.company_id or line.order_id.company_id
+        if route.company_id != company:
+            raise UserError(_(
+                "The route template %(route)s belongs to another company."
+            ) % {"route": route.display_name})
+        if not route.active:
+            raise UserError(_(
+                "%(route)s is archived. Select an active route template "
+                "linked to product %(product)s."
+            ) % {
+                "route": route.display_name,
+                "product": line.product_id.display_name,
+            })
+        if route.product_tmpl_id != line.product_id.product_tmpl_id:
+            raise UserError(_(
+                "Route template %(route)s is not linked to product "
+                "%(product)s. Choose a matching template for this sales line."
+            ) % {
+                "route": route.display_name,
+                "product": line.product_id.display_name,
+            })
+        return route
+
     @api.onchange("sale_line_id")
     def _onchange_sale_line_suggest_route(self):
         # Standalone trip creation: suggest from the selected product before
@@ -547,36 +636,46 @@ class TajTransportTrip(models.Model):
             vals["cargo_type_id"] = cargo_type.id or False
         return vals
 
+    @api.model
+    def _prepare_trip_create_vals(self, entry):
+        """Validate and default one create dict; raises before any insert."""
+        if not entry.get("sale_line_id"):
+            raise ValidationError(_("A sales order line is required."))
+        line = self.env["sale.order.line"].browse(
+            entry["sale_line_id"]
+        ).exists()
+        self._validate_sale_line(line)
+        vals = dict(entry)
+        vals = self._default_cargo_from_sale_order(vals, line)
+        vals = self._sync_cargo_type_values(vals)
+        # Explicit template locations win; blank template fields keep the
+        # caller's values so the product-name fallback can still apply.
+        vals = self._apply_explicit_route_locations(vals)
+        vals = self._suggest_missing_route_values(vals, line)
+        if vals.get("state", "draft") != "draft":
+            raise ValidationError(_("Transport trips must start in Draft."))
+        if self._workflow_fields.intersection(vals) - {"state"}:
+            raise ValidationError(_(
+                "Workflow timestamps and cancellation metadata are system-managed."
+            ))
+        if vals.get("company_id") and vals["company_id"] != line.company_id.id:
+            raise ValidationError(_("Company must match the sales order."))
+        # Ignore caller supplied values: source assignments are immutable.
+        vals["initial_vehicle_id"] = line.vehicle_id.id or False
+        # Trip references are server-generated, never caller-controlled.
+        vals["name"] = (
+            self.env["ir.sequence"].next_by_code("taj.transport.trip")
+            or _("New")
+        )
+        return vals
+
     @api.model_create_multi
     def create(self, vals_list):
-        new_vals_list = []
-        for entry in vals_list:
-            vals = self._sync_cargo_type_values(entry)
-            if not vals.get("sale_line_id"):
-                raise ValidationError(_("A sales order line is required."))
-            line = self.env["sale.order.line"].browse(
-                vals["sale_line_id"]
-            ).exists()
-            self._validate_sale_line(line)
-            # Creation via Sales button, batch wizard, API or Trip form all
-            # pass through this defaulting logic. Explicit values win.
-            vals = self._suggest_missing_route_values(vals, line)
-            if vals.get("state", "draft") != "draft":
-                raise ValidationError(_("Transport trips must start in Draft."))
-            if self._workflow_fields.intersection(vals) - {"state"}:
-                raise ValidationError(_(
-                    "Workflow timestamps and cancellation metadata are system-managed."
-                ))
-            if vals.get("company_id") and vals["company_id"] != line.company_id.id:
-                raise ValidationError(_("Company must match the sales order."))
-            # Ignore caller supplied values: source assignments are immutable.
-            vals["initial_vehicle_id"] = line.vehicle_id.id or False
-            # Trip references are server-generated, never caller-controlled.
-            vals["name"] = (
-                self.env["ir.sequence"].next_by_code("taj.transport.trip")
-                or _("New")
-            )
-            new_vals_list.append(vals)
+        # Prepare every row first so a refused cargo type / line never leaves
+        # a partial batch of trips behind.
+        new_vals_list = [
+            self._prepare_trip_create_vals(entry) for entry in vals_list
+        ]
         trips = super().create(new_vals_list)
         trips._assign_initial_fleet_defaults()
         return trips

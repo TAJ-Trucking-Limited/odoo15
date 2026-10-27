@@ -101,6 +101,15 @@ class TestTransportTripFoundation(TransactionCase):
             "name": "Internal reminder",
         })
         cls.order.action_confirm()
+        # Sales Create Trips / Trip buttons require a product-linked template.
+        # Direct ORM creates remain valid without one.
+        cls.linked_route = cls.env["taj.transport.route"].create({
+            "name": "Foundation linked route",
+            "company_id": cls.env.company.id,
+            "product_tmpl_id": cls.product.product_tmpl_id.id,
+            "origin_location": "Foundation Origin",
+            "destination_location": "Foundation Destination",
+        })
 
     def test_confirmation_does_not_automatically_create_trips(self):
         self.assertFalse(self.order.transport_trip_ids)
@@ -182,13 +191,20 @@ class TestTransportTripFoundation(TransactionCase):
     def test_wizard_defaults_only_truck_assigned_lines(self):
         defaults = self.env["taj.transport.trip.create.wizard"].with_context(
             default_sale_order_id=self.order.id
-        ).default_get(["sale_order_id", "line_ids"])
+        ).default_get(["sale_order_id", "selection_ids"])
         self.assertEqual(defaults["sale_order_id"], self.order.id)
-        self.assertEqual(
-            defaults["line_ids"], [Command.set(
-                (self.line_1 | self.line_2).ids
-            )],
-        )
+        created = defaults["selection_ids"]
+        self.assertEqual(len(created), 2)
+        sale_line_ids = {
+            command[2]["sale_line_id"]
+            for command in created
+            if command[0] == Command.CREATE
+        }
+        self.assertEqual(sale_line_ids, set((self.line_1 | self.line_2).ids))
+        for command in created:
+            self.assertEqual(
+                command[2].get("route_id"), self.linked_route.id,
+            )
 
     def test_wizard_creates_only_selected_lines_and_reuses_existing(self):
         trip = self.env["taj.transport.trip"].create({
@@ -196,11 +212,17 @@ class TestTransportTripFoundation(TransactionCase):
         })
         wizard = self.env["taj.transport.trip.create.wizard"].create({
             "sale_order_id": self.order.id,
-            "line_ids": [Command.set([
-                self.line_1.id,
-                self.line_2.id,
-                self.line_no_truck.id,
-            ])],
+            "selection_ids": [
+                Command.create({"sale_line_id": self.line_1.id}),
+                Command.create({
+                    "sale_line_id": self.line_2.id,
+                    "route_id": self.linked_route.id,
+                }),
+                Command.create({
+                    "sale_line_id": self.line_no_truck.id,
+                    "route_id": self.linked_route.id,
+                }),
+            ],
         })
         result = wizard.action_create_trips()
         self.assertEqual(result["res_model"], "taj.transport.trip")
@@ -229,7 +251,10 @@ class TestTransportTripFoundation(TransactionCase):
         second_order.action_confirm()
         wizard = self.env["taj.transport.trip.create.wizard"].create({
             "sale_order_id": self.order.id,
-            "line_ids": [Command.set([other_line.id])],
+            "selection_ids": [Command.create({
+                "sale_line_id": other_line.id,
+                "route_id": self.linked_route.id,
+            })],
         })
         with self.assertRaises(UserError):
             wizard.action_create_trips()
@@ -1064,20 +1089,31 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.destination_location, "TZ Dar")
 
     def test_sales_buttons_and_batch_wizard_use_same_product_route_defaults(self):
+        # Blank template locations so the product-name fallback still applies
+        # on the Sales Create Trips / Trip paths (template nonempty wins).
+        self.linked_route.write({
+            "origin_location": False,
+            "destination_location": False,
+        })
         self.product.product_tmpl_id.write({
             "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
         })
         action = self.line_1.action_open_or_create_transport_trip()
         trip = self.env["taj.transport.trip"].browse(action["res_id"])
+        self.assertEqual(trip.route_id, self.linked_route)
         self.assertEqual(trip.origin_location, "DRC kasumbalesa")
         self.assertEqual(trip.destination_location, "TZ Dar")
 
         wizard = self.env["taj.transport.trip.create.wizard"].create({
             "sale_order_id": self.order.id,
-            "line_ids": [Command.set([self.line_2.id])],
+            "selection_ids": [Command.create({
+                "sale_line_id": self.line_2.id,
+                "route_id": self.linked_route.id,
+            })],
         })
         action = wizard.action_create_trips()
         created = self.env["taj.transport.trip"].browse(action["res_id"])
+        self.assertEqual(created.route_id, self.linked_route)
         self.assertEqual(created.origin_location, "DRC kasumbalesa")
         self.assertEqual(created.destination_location, "TZ Dar")
         self.assertEqual(len(self.order.transport_trip_ids), 2)

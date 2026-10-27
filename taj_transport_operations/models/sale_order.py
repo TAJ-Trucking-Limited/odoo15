@@ -13,6 +13,19 @@ class SaleOrder(models.Model):
         compute="_compute_transport_trip_count",
         string="Transport Trips",
     )
+    cargo_type_id = fields.Many2one(
+        "taj.transport.cargo.type",
+        string="Cargo Type",
+        help="Optional cargo classification copied as a snapshot onto each "
+        "new transport trip created from this order. Later changes here do "
+        "not update existing trips.",
+    )
+    special_handling_instructions = fields.Text(
+        string="Special Handling Instructions",
+        help="Optional handling notes copied as a snapshot onto each new "
+        "transport trip created from this order. Later changes here do not "
+        "update existing trips.",
+    )
 
     @api.depends("transport_trip_ids")
     def _compute_transport_trip_count(self):

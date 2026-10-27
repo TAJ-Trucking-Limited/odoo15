@@ -6,6 +6,7 @@
         <field name="arch" type="xml">
             <form string="Create Transport Trips">
                 <field name="no_vehicle_on_order" invisible="1"/>
+                <field name="company_id" invisible="1"/>
                 <div class="alert alert-warning" role="alert"
                      invisible="not no_vehicle_on_order">
                     <strong>No vehicle assigned.</strong>
@@ -15,11 +16,23 @@
                 </div>
                 <group>
                     <field name="sale_order_id" readonly="1"/>
-                    <field name="line_ids" widget="many2many_tags"
-                           options="{'no_create': True, 'no_create_edit': True}"/>
-                    <field name="route_id"
-                           options="{'no_create': True, 'no_create_edit': True}"/>
                 </group>
+                <field name="selection_ids">
+                    <list editable="bottom">
+                        <field name="sale_order_id" column_invisible="1"/>
+                        <field name="sale_line_id"
+                               options="{'no_create': True, 'no_create_edit': True}"/>
+                        <field name="product_id" optional="show"/>
+                        <field name="product_tmpl_id" column_invisible="1"/>
+                        <field name="company_id" column_invisible="1"/>
+                        <field name="existing_trip_id" optional="show"/>
+                        <field name="needs_route" column_invisible="1"/>
+                        <field name="matching_route_count" optional="hide"/>
+                        <field name="route_id"
+                               options="{'no_create': True, 'no_create_edit': True}"
+                               readonly="not needs_route"/>
+                    </list>
+                </field>
                 <p class="text-muted">
                     Only select actual transport/freight lines. Truck-assigned
                     lines without trips are suggested by default. You can
@@ -27,9 +40,10 @@
                     Existing trips will be reused; no duplicate trips created.
                 </p>
                 <p class="text-muted">
-                    The optional route template applies to the trips created by
-                    this dialog and copies its checkpoints into each one. Leave
-                    it empty to keep the per-trip choice.
+                    Each new trip needs a route template linked to that line's
+                    product. When exactly one active template matches, it is
+                    selected automatically. When several match, choose one per
+                    line. Unlinked legacy templates are not offered here.
                 </p>
                 <footer>
                     <button name="action_create_trips" type="object"

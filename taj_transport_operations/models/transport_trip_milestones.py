@@ -550,26 +550,50 @@ class TajTransportTrip(models.Model):
     # ------------------------------------------------------------------
     # create / write integration
     # ------------------------------------------------------------------
+    def _location_updates_for_new_route(self, new_route):
+        """Draft route change: copy only non-empty template locations.
+
+        Same route is a no-op (including non-draft trips). Clearing the
+        template retains existing locations. Applies to every entry point
+        that writes ``route_id``, including Fill Empty Fields.
+        """
+        self.ensure_one()
+        new_route = self._route_from_value(new_route)
+        current_id = self.route_id.id if self.route_id else False
+        new_id = new_route.id if new_route else False
+        if current_id == new_id:
+            return {}
+        if self.state != "draft":
+            return {}
+        if not new_route:
+            return {}
+        updates = {}
+        if (new_route.origin_location or "").strip():
+            updates["origin_location"] = new_route.origin_location
+        if (new_route.destination_location or "").strip():
+            updates["destination_location"] = new_route.destination_location
+        return updates
+
     @api.onchange("route_id")
     def _onchange_route_id_suggest_locations(self):
-        """Suggest the template's planned origin/destination when empty.
+        """Mirror Draft write on genuine template changes and new records.
 
-        A form-level suggestion only: it never overwrites a location that was
-        already entered (including the Sales product suggestion) and it never
-        writes back to Sales.
+        Re-selecting the same template on a persisted trip is a no-op.
+        Non-Draft trips never rewrite locations from this onchange. Blank
+        template fields keep the form value. Never writes back to Sales.
         """
         for trip in self:
             if not trip.route_id:
                 continue
-            if (
-                not (trip.origin_location or "").strip()
-                and trip.route_id.origin_location
-            ):
+            origin = trip._origin
+            if origin.ids:
+                if origin.state != "draft":
+                    continue
+                if origin.route_id.id == trip.route_id.id:
+                    continue
+            if (trip.route_id.origin_location or "").strip():
                 trip.origin_location = trip.route_id.origin_location
-            if (
-                not (trip.destination_location or "").strip()
-                and trip.route_id.destination_location
-            ):
+            if (trip.route_id.destination_location or "").strip():
                 trip.destination_location = trip.route_id.destination_location
 
     @api.model_create_multi
@@ -592,10 +616,24 @@ class TajTransportTrip(models.Model):
             # Validated before writing so a refused template change leaves
             # the trip, its checkpoints and their history untouched.
             self._check_route_change_allowed(vals["route_id"])
-        result = super().write(vals)
-        if route_selected:
-            self._sync_milestones_with_route(vals["route_id"])
-        return result
+            # Multi-record writes may need different location updates per trip
+            # (each keeps its own filled blanks). Group by the location delta.
+            new_route_id = vals["route_id"]
+            groups = {}
+            for trip in self:
+                loc_key = frozenset(
+                    trip._location_updates_for_new_route(new_route_id).items()
+                )
+                groups.setdefault(loc_key, self.browse())
+                groups[loc_key] |= trip
+            result = True
+            for loc_items, trips in groups.items():
+                trip_vals = dict(vals)
+                trip_vals.update(dict(loc_items))
+                result = super(TajTransportTrip, trips).write(trip_vals) and result
+                trips._sync_milestones_with_route(new_route_id)
+            return result
+        return super().write(vals)
 
     def _check_system_field_values(self, vals_list):
         """Refuse hand-written values for the generation marker.

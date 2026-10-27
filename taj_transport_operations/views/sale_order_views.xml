@@ -19,6 +19,12 @@
                            string="Trips"/>
                 </button>
             </xpath>
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="cargo_type_id"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
+                <field name="special_handling_instructions"
+                       placeholder="Optional loading, storage or handling notes"/>
+            </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <button name="action_open_or_create_transport_trip"
                         type="object" string="Trip" icon="fa-truck"

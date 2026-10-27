@@ -36,6 +36,13 @@
                        invisible="'route_id' not in empty_field_names and 'origin_location' not in empty_field_names and 'destination_location' not in empty_field_names and 'route_notes' not in empty_field_names and 'planned_departure_at' not in empty_field_names and 'planned_arrival_at' not in empty_field_names and 'actual_departure_at' not in empty_field_names and 'actual_arrival_at' not in empty_field_names">
                     <field name="route_id" invisible="'route_id' not in empty_field_names"
                            options="{'no_create': True, 'no_create_edit': True}"/>
+                    <p class="text-muted"
+                       invisible="'route_id' not in empty_field_names">
+                        Choosing a different route template generates
+                        checkpoints and replaces each existing origin or
+                        destination when that template has a value. Other
+                        fields in this dialog still fill empty values only.
+                    </p>
                     <field name="origin_location" invisible="'origin_location' not in empty_field_names"/>
                     <field name="destination_location" invisible="'destination_location' not in empty_field_names"/>
                     <field name="route_notes" invisible="'route_notes' not in empty_field_names"/>

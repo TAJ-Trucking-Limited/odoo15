@@ -40,11 +40,24 @@ class TajTransportRoute(models.Model):
         help="Route templates are reusable inside their own company. They "
         "are hidden from users who cannot see this company.",
     )
+    product_tmpl_id = fields.Many2one(
+        "product.template",
+        string="Sales Product",
+        index=True,
+        check_company=True,
+        ondelete="restrict",
+        help="Optional link used by Sales Create Trips / Trip buttons to "
+        "match this template to a sales line's product. Several active "
+        "templates may share the same product. Leave empty for standalone "
+        "or legacy templates that are chosen only on the trip form.",
+    )
     origin_location = fields.Char(
         string="Planned Origin",
-        help="Optional planning default suggested on new trips. It never "
-        "overwrites an origin that was already entered (including the "
-        "origin suggested from the Sales product name).",
+        help="Optional planning default. On trip create with this template, "
+        "a non-empty value takes precedence over provided or product-name "
+        "locations. On a Draft trip route change, a non-empty value "
+        "overwrites the trip location; a blank template field keeps the "
+        "existing trip location.",
     )
     destination_location = fields.Char(string="Planned Destination")
     notes = fields.Text(string="Route Notes")
@@ -63,6 +76,26 @@ class TajTransportRoute(models.Model):
     def _compute_line_count(self):
         for route in self:
             route.line_count = len(route.line_ids)
+
+    @api.model
+    def _matching_for_sale_line(self, sale_line):
+        """Active, same-company templates linked to the line's product.
+
+        No uniqueness: zero, one or many matches are all valid outcomes.
+        Record rules and the caller's read rights apply; unreadable rows
+        are dropped so Sales buttons never auto-pick a hidden template.
+        """
+        if not sale_line or not sale_line.product_id:
+            return self.browse()
+        company = sale_line.company_id or sale_line.order_id.company_id
+        routes = self.search(
+            [
+                ("product_tmpl_id", "=", sale_line.product_id.product_tmpl_id.id),
+                ("company_id", "=", company.id),
+                ("active", "=", True),
+            ]
+        )
+        return routes._filtered_access("read")
 
 
 class TajTransportRouteLine(models.Model):

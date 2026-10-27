@@ -359,6 +359,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             )
 
     def test_create_trips_wizard_applies_the_selected_template(self):
+        line = self._sale_line("WIZARD")
         route = self._route(
             "Wizard route",
             [
@@ -366,12 +367,14 @@ class TestRouteTemplates(TajTransportPhase3Case):
                 {"name": "W2"},
             ],
         )
-        line = self._sale_line("WIZARD")
+        route.write({"product_tmpl_id": line.product_id.product_tmpl_id.id})
         wizard = self.env["taj.transport.trip.create.wizard"].create(
             {
                 "sale_order_id": line.order_id.id,
-                "line_ids": [Command.set(line.ids)],
-                "route_id": route.id,
+                "selection_ids": [Command.create({
+                    "sale_line_id": line.id,
+                    "route_id": route.id,
+                })],
             }
         )
         wizard.action_create_trips()
@@ -511,7 +514,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             "Archiving a template never rewrites generated checkpoints.",
         )
 
-    def test_route_selection_only_suggests_missing_locations(self):
+    def test_route_selection_overwrites_with_nonempty_template_locations(self):
         route = self._route(
             "Suggestion route",
             [{"name": "S1"}],
@@ -535,8 +538,74 @@ class TestRouteTemplates(TajTransportPhase3Case):
             }
         )
         filled_trip._onchange_route_id_suggest_locations()
-        self.assertEqual(filled_trip.origin_location, "Mwanza")
+        self.assertEqual(filled_trip.origin_location, "Dar es Salaam")
         self.assertEqual(filled_trip.destination_location, "Lusaka")
+        blank_origin_route = self._route(
+            "Blank origin route",
+            [{"name": "B1"}],
+            origin_location=False,
+            destination_location="Ndola",
+        )
+        keep_origin = self.env["taj.transport.trip"].new(
+            {
+                "sale_line_id": self._sale_line("SUGGEST3").id,
+                "route_id": blank_origin_route.id,
+                "origin_location": "Mwanza",
+            }
+        )
+        keep_origin._onchange_route_id_suggest_locations()
+        self.assertEqual(keep_origin.origin_location, "Mwanza")
+        self.assertEqual(keep_origin.destination_location, "Ndola")
+
+        persisted = self._trip(route, tag="ONCHANGE")
+        persisted.write({"origin_location": "Custom kept"})
+        same_route = self.env["taj.transport.trip"].new(
+            {
+                "sale_line_id": persisted.sale_line_id.id,
+                "route_id": route.id,
+                "origin_location": "Custom kept",
+                "destination_location": persisted.destination_location,
+                "state": "draft",
+            },
+            origin=persisted,
+        )
+        same_route._onchange_route_id_suggest_locations()
+        self.assertEqual(same_route.origin_location, "Custom kept")
+
+        other = self._route(
+            "Other onchange route",
+            [{"name": "O1"}],
+            origin_location="Other origin",
+            destination_location="Other dest",
+        )
+        changed = self.env["taj.transport.trip"].new(
+            {
+                "sale_line_id": persisted.sale_line_id.id,
+                "route_id": other.id,
+                "origin_location": "Custom kept",
+                "destination_location": "Custom dest",
+                "state": "draft",
+            },
+            origin=persisted,
+        )
+        changed._onchange_route_id_suggest_locations()
+        self.assertEqual(changed.origin_location, "Other origin")
+        self.assertEqual(changed.destination_location, "Other dest")
+
+        ready = self._ready_trip(route, tag="ONCHGREADY")
+        ready.write({"origin_location": "Ready origin"})
+        non_draft = self.env["taj.transport.trip"].new(
+            {
+                "sale_line_id": ready.sale_line_id.id,
+                "route_id": other.id,
+                "origin_location": "Ready origin",
+                "destination_location": ready.destination_location,
+                "state": "ready",
+            },
+            origin=ready,
+        )
+        non_draft._onchange_route_id_suggest_locations()
+        self.assertEqual(non_draft.origin_location, "Ready origin")
 
     # ------------------------------------------------------------------
     # Phase 2 upgrade path and company isolation

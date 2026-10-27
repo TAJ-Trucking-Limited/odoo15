@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trip_route_chooser_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.trip.route.chooser.wizard.form</field>
+        <field name="model">taj.transport.trip.route.chooser.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Choose Route Template">
+                <field name="company_id" invisible="1"/>
+                <field name="product_tmpl_id" invisible="1"/>
+                <group>
+                    <field name="sale_line_id" readonly="1"/>
+                    <field name="route_id"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                </group>
+                <p class="text-muted">
+                    Several active route templates are linked to this sales
+                    line's product. Choose which template to copy onto the
+                    new trip.
+                </p>
+                <footer>
+                    <button name="action_create_trip" type="object"
+                            string="Create Trip" class="btn-primary"/>
+                    <button special="cancel" string="Cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

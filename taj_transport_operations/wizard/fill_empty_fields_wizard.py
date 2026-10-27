@@ -122,6 +122,9 @@ class TajTransportFillEmptyFieldsWizard(models.TransientModel):
 
     @api.onchange("route_id")
     def _onchange_route_id(self):
+        # Preview template locations into wizard fields that were empty on the
+        # trip. Filled trip locations are not edited here; on save a genuine
+        # Draft route change still overwrites them via the trip write path.
         for wizard in self:
             for name in ("origin_location", "destination_location"):
                 if (
@@ -138,7 +141,8 @@ class TajTransportFillEmptyFieldsWizard(models.TransientModel):
             raise UserError(_("The trip no longer exists."))
         trip._lock_for_transition()
         # Re-read after locking: another form may have filled a field or ended
-        # the trip while this wizard was open. Never overwrite that newer data.
+        # the trip while this wizard was open. Never overwrite that newer data
+        # for ordinary fill-empty fields.
         trip.invalidate_recordset(list(self._editable_trip_fields))
         current_empty = set(self._editable_empty_names(trip.with_context(bin_size=True)))
         vals = {}
@@ -154,6 +158,15 @@ class TajTransportFillEmptyFieldsWizard(models.TransientModel):
         if "pod_file" in vals:
             vals["pod_file"] = self.with_context(bin_size=False).pod_file
             vals["pod_filename"] = self.pod_filename or False
+        if "route_id" in vals:
+            # Backend Draft route-change location copy wins over onchange
+            # suggestions for nonempty template fields. Keep wizard values
+            # only where the template left that location blank.
+            route = trip._route_from_value(vals["route_id"])
+            if route and (route.origin_location or "").strip():
+                vals.pop("origin_location", None)
+            if route and (route.destination_location or "").strip():
+                vals.pop("destination_location", None)
         if vals:
             trip.write(vals)
         return trip
