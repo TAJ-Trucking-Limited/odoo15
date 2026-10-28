@@ -401,8 +401,17 @@ changes are tracked in Chatter. POD is optional and never blocks completion.
 
 ## Milestone navigation and Sales references (19.0.1.9.3)
 
-The Milestones menu follows Trips directly and opens grouped by Trip by
-default. The trip's Milestones smart button uses the same default grouping.
+The Milestones menu follows Trips directly and opens grouped by Truck, then
+Trip. The trip's Milestones smart button uses the same grouping. Finished
+milestones use the truck assigned at their recorded departure time; skipped
+milestones use the truck assigned at the skip event time. At an exact truck
+replacement time, the replacement truck takes precedence. Correcting a
+departure time updates the grouping from assignment history without editing
+that history. Missing historical assignments appear under **Unassigned**.
+Unfinished milestones follow the assigned truck, retain the last truck after
+trip closure, and use the original Sales truck before any assignment exists.
+A driver-only assignment stays Unassigned. Archived trucks remain visible in
+historical groups. All three milestone menus allow Trip and Truck grouping.
 Milestone lists and forms show the linked Sales Order and Customer as
 read-only references, and both are available in the milestone search.
 

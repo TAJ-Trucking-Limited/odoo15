@@ -13,6 +13,7 @@ environment, and checkpoint notes are closed once the trip is terminal.
 
 from datetime import timedelta
 
+from freezegun import freeze_time
 from lxml import etree
 
 from odoo import fields
@@ -705,6 +706,121 @@ class TestTripMilestones(TajTransportPhase3Case):
         )
         self.assertTrue(search.xpath("//filter[@name='group_state']"))
         self.assertTrue(search.xpath("//filter[@name='open']"))
+
+    def _replace_grouping_truck(self, trip, effective_from):
+        truck = self.env["fleet.vehicle"].create({
+            "model_id": self.truck_model.id,
+            "license_plate": "MILESTONE-GROUP-REPLACEMENT",
+        })
+        self.env["taj.transport.replace.assignment.wizard"].create({
+            "trip_id": trip.id,
+            "expected_assignment_id": trip.current_assignment_id.id,
+            "vehicle_id": truck.id,
+            "driver_id": self.driver.id,
+            "effective_from": effective_from,
+            "reason": "Replace truck during checkpoint operations",
+        }).action_replace_resources()
+        return truck
+
+    def test_truck_grouping_keeps_completed_work_under_its_departure_truck(self):
+        trip = self._checkpoint_trip("TRUCKGROUP")
+        loading = self._milestone(trip, "Loading")
+        now = fields.Datetime.now()
+        self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        self._record(loading, "departure", event_at=now - timedelta(hours=2))
+        truck = self._replace_grouping_truck(trip, now - timedelta(hours=1))
+        self.assertEqual(loading.vehicle_id, self.truck)
+        self.assertEqual(self._milestone(trip, "Offloading").vehicle_id, truck)
+        groups = self.env["taj.transport.milestone"]._read_group(
+            [("trip_id", "=", trip.id)], ["vehicle_id", "trip_id"], ["__count"],
+        )
+        self.assertEqual(
+            {(vehicle.id, parent.id): count for vehicle, parent, count in groups},
+            {(self.truck.id, trip.id): 1, (truck.id, trip.id): 2},
+        )
+
+    def test_departure_correction_reassigns_truck_at_replacement_boundary(self):
+        trip = self._checkpoint_trip("TRUCKCORRECTION")
+        loading = self._milestone(trip, "Loading")
+        now = fields.Datetime.now()
+        self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        self._record(loading, "departure", event_at=now - timedelta(hours=2))
+        boundary = now - timedelta(hours=1)
+        truck = self._replace_grouping_truck(trip, boundary)
+        history = [(row.id, row.effective_from, row.effective_to)
+                   for row in trip.assignment_ids]
+        self._manager_milestone(loading)._correct_timestamp(
+            "actual_departure_at", boundary, "Correct departure to swap time",
+        )
+        self.assertEqual(loading.vehicle_id, truck)
+        self._manager_milestone(loading)._correct_timestamp(
+            "actual_departure_at", now - timedelta(hours=2),
+            "Restore departure before replacement",
+        )
+        self.assertEqual(loading.vehicle_id, self.truck)
+        self._manager_milestone(loading)._correct_timestamp(
+            "actual_departure_at", False, "Reopen the checkpoint",
+        )
+        self.assertEqual(loading.state, "arrived")
+        self.assertEqual(loading.vehicle_id, truck)
+        self.assertEqual(history, [(row.id, row.effective_from, row.effective_to)
+                                   for row in trip.assignment_ids])
+
+    def test_historical_truck_is_unassigned_when_event_precedes_history(self):
+        trip = self._checkpoint_trip("UNKNOWNTRUCK")
+        loading = self._milestone(trip, "Loading")
+        now = fields.Datetime.now()
+        self._record(loading, "arrival", event_at=now - timedelta(hours=6))
+        self._record(loading, "departure", event_at=now - timedelta(hours=5))
+        self.assertFalse(loading.vehicle_id)
+        self.assertEqual(self._milestone(trip, "Offloading").vehicle_id, self.truck)
+
+    def test_draft_truck_fallback_does_not_override_driver_only_assignment(self):
+        route = self._route("Unassigned checkpoint grouping")
+        line = self._sale_line("TRUCKFALLBACK", vehicle_id=self.truck.id)
+        trip = self._trip(route, line=line)
+        self.assertFalse(trip.assignment_ids)
+        self.assertEqual(trip.milestone_ids.mapped("vehicle_id"), self.truck)
+        self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id,
+            "driver_id": self.driver.id,
+        })
+        self.assertFalse(trip.milestone_ids.mapped("vehicle_id"))
+        unassigned = self._trip(route, tag="NOTRUCK")
+        self.assertFalse(unassigned.milestone_ids.mapped("vehicle_id"))
+
+    def test_closed_trip_keeps_truck_at_final_boundary_and_after_archiving(self):
+        trip = self._checkpoint_trip("CLOSEDTRUCK", state="in_progress")
+        loading = self._milestone(trip, "Loading")
+        arrival = fields.Datetime.now() - timedelta(minutes=30)
+        self._record(loading, "arrival", event_at=arrival - timedelta(minutes=10))
+        self._record(loading, "departure", event_at=arrival)
+        trip.write({"actual_arrival_at": arrival})
+        trip.action_complete_trip()
+        self.assertEqual(trip.milestone_ids.mapped("vehicle_id"), self.truck)
+        self.truck.active = False
+        self.assertEqual(loading.vehicle_id, self.truck)
+
+    def test_skipped_milestone_keeps_truck_at_skip_time(self):
+        trip = self._checkpoint_trip("SKIPPEDTRUCK")
+        loading = self._milestone(trip, "Loading")
+        now = fields.Datetime.now()
+        with freeze_time(now - timedelta(hours=2)):
+            self._record(loading, "skip", reason="Loading not applicable")
+        truck = self._replace_grouping_truck(trip, now - timedelta(hours=1))
+        self.assertEqual(loading.vehicle_id, self.truck)
+        self.assertEqual(self._milestone(trip, "Offloading").vehicle_id, truck)
+
+    def test_cancelling_trip_keeps_historical_and_last_truck_groups(self):
+        trip = self._checkpoint_trip("CANCELLEDTRUCK")
+        loading = self._milestone(trip, "Loading")
+        now = fields.Datetime.now()
+        self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        self._record(loading, "departure", event_at=now - timedelta(hours=2))
+        truck = self._replace_grouping_truck(trip, now - timedelta(hours=1))
+        self._cancel_trip(trip)
+        self.assertEqual(loading.vehicle_id, self.truck)
+        self.assertEqual(self._milestone(trip, "Offloading").vehicle_id, truck)
 
     # ------------------------------------------------------------------
     # E. Independent review regressions: forged context, forged values and

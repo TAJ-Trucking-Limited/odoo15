@@ -544,7 +544,9 @@ class TajTransportTrip(models.Model):
             "taj_transport_operations.action_transport_milestone"
         ).read()[0]
         action["domain"] = [("trip_id", "=", self.id)]
-        action["context"] = {"search_default_group_trip": 1}
+        action["context"] = {
+            "search_default_group_vehicle": 1, "search_default_group_trip": 2,
+        }
         return action
 
     # ------------------------------------------------------------------

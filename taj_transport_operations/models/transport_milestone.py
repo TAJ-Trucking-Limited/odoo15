@@ -88,6 +88,17 @@ class TajTransportMilestone(models.Model):
         readonly=True,
         index=True,
     )
+    vehicle_id = fields.Many2one(
+        "fleet.vehicle", string="Truck",
+        compute="_compute_vehicle_id", store=True, readonly=True,
+        index=True, check_company=True,
+        falsy_value_label="Unassigned",
+        help="Finished checkpoints use the truck assigned at departure or "
+        "skip time. Unfinished checkpoints follow the assigned truck, or the "
+        "last truck after trip closure. Before any assignment exists, "
+        "unfinished checkpoints use the original Sales truck. Missing "
+        "historical assignments appear as Unassigned.",
+    )
     route_id = fields.Many2one(
         "taj.transport.route",
         string="Generated From Route",
@@ -250,6 +261,50 @@ class TajTransportMilestone(models.Model):
                 raise ValidationError(
                     _("This trip already has a milestone with this name.")
                 )
+
+    @api.depends(
+        "state", "actual_departure_at",
+        "event_ids.event_type", "event_ids.occurred_at",
+        "trip_id.initial_vehicle_id",
+        "trip_id.assignment_ids",
+        "trip_id.assignment_ids.vehicle_id",
+        "trip_id.assignment_ids.effective_from",
+        "trip_id.assignment_ids.effective_to",
+    )
+    def _compute_vehicle_id(self):
+        """Attribute finished work by event time and open work by trip resources."""
+        history = {}
+        for trip in self.mapped("trip_id"):
+            history[trip.id] = trip.assignment_ids.sorted(
+                key=lambda assignment: (assignment.effective_from, assignment.id),
+                reverse=True,
+            )
+        for milestone in self:
+            trip = milestone.trip_id
+            assignments = history.get(trip.id, self.env["taj.transport.assignment"])
+            event_at = milestone.actual_departure_at
+            finished = milestone.state in ("departed", "completed", "skipped")
+            if milestone.state == "skipped":
+                skipped = milestone.event_ids.filtered(
+                    lambda event: event.event_type == "skipped"
+                )[:1]
+                event_at = skipped.occurred_at
+            if event_at:
+                # Newest start wins at a replacement boundary. Include the
+                # final end so departure at trip completion keeps its truck.
+                assignment = assignments.filtered(
+                    lambda row: row.effective_from <= event_at
+                    and (not row.effective_to or event_at <= row.effective_to)
+                )[:1]
+                milestone.vehicle_id = assignment.vehicle_id
+            elif finished:
+                # Historical work without an event time cannot be attributed.
+                milestone.vehicle_id = False
+            elif assignments:
+                current = assignments.filtered(lambda row: not row.effective_to)
+                milestone.vehicle_id = (current[:1] or assignments[:1]).vehicle_id
+            else:
+                milestone.vehicle_id = trip.initial_vehicle_id
 
     @api.depends("trip_id.name", "name")
     def _compute_display_name(self):
