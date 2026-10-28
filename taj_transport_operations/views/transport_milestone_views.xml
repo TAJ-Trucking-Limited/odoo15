@@ -144,6 +144,13 @@
                 <filter name="my_trips" string="My Trips"
                         domain="[('trip_id.create_uid', '=', uid)]"/>
                 <separator/>
+                <filter name="remaining_active_trips" string="Remaining on Active Trips"
+                        domain="[('trip_id.state', 'in', ['ready', 'in_progress']), ('state', 'not in', ['completed', 'departed', 'skipped'])]"/>
+                <filter name="finished_milestones" string="Completed / Skipped"
+                        domain="[('state', 'in', ['completed', 'departed', 'skipped'])]"/>
+                <filter name="draft_trip_milestones" string="Draft Trips"
+                        domain="[('trip_id.state', '=', 'draft'), ('state', 'not in', ['completed', 'departed', 'skipped'])]"/>
+                <separator/>
                 <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
                 <filter name="arrived" string="Arrived" domain="[('state', '=', 'arrived')]"/>
                 <filter name="departed" string="Departed" domain="[('state', '=', 'departed')]"/>
@@ -174,8 +181,59 @@
         </field>
     </record>
 
+    <record id="action_transport_milestone_remaining" model="ir.actions.act_window">
+        <field name="name">Remaining Milestones</field>
+        <field name="res_model">taj.transport.milestone</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_transport_milestone_search"/>
+        <field name="context">{'search_default_group_trip': 1, 'search_default_remaining_active_trips': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No remaining milestones on active trips.</p>
+            <p>This list shows unfinished checkpoints on Ready and In Progress
+               trips. Clear the filter to see milestones across all trips.</p>
+        </field>
+    </record>
+
+    <record id="action_transport_milestone_finished" model="ir.actions.act_window">
+        <field name="name">Completed / Skipped Milestones</field>
+        <field name="res_model">taj.transport.milestone</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_transport_milestone_search"/>
+        <field name="context">{'search_default_group_trip': 1, 'search_default_finished_milestones': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No completed or skipped milestones yet.</p>
+            <p>Completed checkpoints and skipped checkpoints keep their own
+               status labels. Clear the filter to see all milestones.</p>
+        </field>
+    </record>
+
+    <record id="action_transport_milestone_draft" model="ir.actions.act_window">
+        <field name="name">Draft Trip Milestones</field>
+        <field name="res_model">taj.transport.milestone</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_transport_milestone_search"/>
+        <field name="context">{'search_default_group_trip': 1, 'search_default_draft_trip_milestones': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No planned milestones on Draft trips.</p>
+            <p>These checkpoints belong to trips still in Draft. Clear the
+               filter to see milestones across all trips.</p>
+        </field>
+    </record>
+
     <menuitem id="menu_transport_milestones" name="Milestones"
               parent="menu_transport_operations"
               action="action_transport_milestone" sequence="15"
+              groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_milestones_remaining" name="Remaining"
+              parent="menu_transport_milestones"
+              action="action_transport_milestone_remaining" sequence="10"
+              groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_milestones_finished" name="Completed / Skipped"
+              parent="menu_transport_milestones"
+              action="action_transport_milestone_finished" sequence="20"
+              groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_milestones_draft" name="Draft Trips"
+              parent="menu_transport_milestones"
+              action="action_transport_milestone_draft" sequence="30"
               groups="taj_transport_operations.group_transport_user"/>
 </odoo>

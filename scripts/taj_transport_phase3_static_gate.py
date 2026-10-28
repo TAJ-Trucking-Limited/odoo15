@@ -23,7 +23,7 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "taj_transport_operations"
-EXPECTED_VERSION = "19.0.1.12.0"
+EXPECTED_VERSION = "19.0.1.12.1"
 
 # Comodel of the one2many fields that embed an inline list in a parent view.
 EMBEDDED_VIEWS = {
