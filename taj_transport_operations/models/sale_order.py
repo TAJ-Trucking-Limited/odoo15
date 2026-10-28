@@ -13,6 +13,15 @@ class SaleOrder(models.Model):
         compute="_compute_transport_trip_count",
         string="Transport Trips",
     )
+    trip_file_ids = fields.One2many(
+        "taj.transport.trip.file", "sale_order_id", string="Trip Files",
+        readonly=True, copy=False,
+        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user",
+    )
+    trip_file_count = fields.Integer(
+        string="Trip Files", compute="_compute_trip_file_count",
+        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user",
+    )
     cargo_type_id = fields.Many2one(
         "taj.transport.cargo.type",
         string="Cargo Type",
@@ -31,6 +40,25 @@ class SaleOrder(models.Model):
     def _compute_transport_trip_count(self):
         for order in self:
             order.transport_trip_count = len(order.transport_trip_ids)
+
+    @api.depends("trip_file_ids")
+    def _compute_trip_file_count(self):
+        for order in self:
+            order.trip_file_count = len(order.trip_file_ids)
+
+    def _action_confirm(self):
+        result = super()._action_confirm()
+        self.env["taj.transport.trip.file"]._ensure_for_sale_lines(self.order_line)
+        return result
+
+    def action_view_trip_files(self):
+        self.ensure_one()
+        self.check_access("read")
+        action = self.env.ref(
+            "taj_transport_operations.action_transport_trip_file"
+        ).read()[0]
+        action["domain"] = [("sale_order_id", "=", self.id)]
+        return action
 
     def action_view_transport_trips(self):
         self.ensure_one()

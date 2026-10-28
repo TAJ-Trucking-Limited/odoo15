@@ -37,6 +37,30 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   deletion rights on trips in this batch.
 - No migration, backfill, or bulk creation of historical trips.
 
+## Trip Files (19.0.1.13.0)
+
+Confirming a sales order generates one **Trip File** per product/service line,
+including lines without a truck or a route template. Sections and notes are
+excluded, and quantity does not multiply files. Each file receives a generated
+`TF/<year>/<sequence>` reference, the sales order and source sales line, and a
+copy of that line's Container Number. Bill of Lading starts blank and can be
+entered later. The matching trip is linked automatically when it is created.
+
+Open files from **Transport Operations > Trip Files** or the sales order's
+**Trip Files** smart button. Sales users can edit Bill of Lading for the orders
+they can access; transport users can work with files in their allowed
+companies. The Trip link is visible to transport users. Files cannot be
+created or deleted manually through these roles, and their generated identity
+and source links cannot be edited.
+
+Reconfirmation reuses files and preserves their references and Bill of Lading.
+Cancellation retains files. New lines added to a confirmed order receive files;
+duplicating an order creates fresh files only when the copy is confirmed.
+Container Number is a snapshot: later changes on the source line do not replace
+it. Sales lines referenced by a file cannot be deleted. Installing the feature
+does not bulk-create historical files; creating a trip for an older order
+creates the missing file for that line only. Confirmation does not create trips.
+
 ## Phase 2 / Batch 2: Commercial and Cargo Details
 
 Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
@@ -503,9 +527,9 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.12.0`
-(product-linked route templates for Sales trip creation, sales cargo
-snapshots; Phase 3 route templates/milestones retained; Navirec compatibility:
+it automatically during Git deployment. The manifest version is `19.0.1.13.0`
+(automatic Trip Files, product-linked route templates for Sales trip creation,
+sales cargo snapshots and historical truck grouping; Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
 

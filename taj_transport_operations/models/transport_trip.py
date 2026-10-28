@@ -678,6 +678,9 @@ class TajTransportTrip(models.Model):
         ]
         trips = super().create(new_vals_list)
         trips._assign_initial_fleet_defaults()
+        # Older confirmed orders receive a file only for the line used here.
+        # The file's stored trip link then follows the same immutable line.
+        self.env["taj.transport.trip.file"]._ensure_for_sale_lines(trips.sale_line_id)
         return trips
 
     def write(self, vals):

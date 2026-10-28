@@ -12,6 +12,11 @@
                         invisible="state not in ['sale', 'done']"/>
             </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_trip_files" type="object"
+                        class="oe_stat_button" icon="fa-folder-open"
+                        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user">
+                    <field name="trip_file_count" widget="statinfo" string="Trip Files"/>
+                </button>
                 <button name="action_view_transport_trips" type="object"
                         class="oe_stat_button" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user">

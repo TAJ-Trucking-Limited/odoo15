@@ -1,4 +1,4 @@
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -9,6 +9,13 @@ class SaleOrderLine(models.Model):
         "taj.transport.trip", "sale_line_id",
         string="Transport Trip", readonly=True,
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        confirmed = lines.filtered(lambda line: line.order_id.state in ("sale", "done"))
+        self.env["taj.transport.trip.file"]._ensure_for_sale_lines(confirmed)
+        return lines
 
     def action_open_or_create_transport_trip(self):
         self.ensure_one()

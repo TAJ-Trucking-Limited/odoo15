@@ -1,6 +1,7 @@
 from . import transport_cargo_type
 from . import transport_transporter
 from . import transport_trip
+from . import transport_trip_file
 from . import transport_milestone_type
 from . import transport_route
 from . import transport_milestone

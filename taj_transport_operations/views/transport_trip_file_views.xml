@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_trip_file_list" model="ir.ui.view">
+        <field name="name">taj.transport.trip.file.list</field>
+        <field name="model">taj.transport.trip.file</field>
+        <field name="arch" type="xml">
+            <list string="Trip Files" create="0" delete="0">
+                <field name="name"/>
+                <field name="bill_of_lading"/>
+                <field name="container_number"/>
+                <field name="trip_id" groups="taj_transport_operations.group_transport_user"/>
+                <field name="sale_order_id"/>
+                <field name="sale_line_id" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_transport_trip_file_form" model="ir.ui.view">
+        <field name="name">taj.transport.trip.file.form</field>
+        <field name="model">taj.transport.trip.file</field>
+        <field name="arch" type="xml">
+            <form string="Trip File" create="0" delete="0" duplicate="0">
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Shipment">
+                            <field name="bill_of_lading" placeholder="Enter the Bill of Lading when available"/>
+                            <field name="container_number"/>
+                        </group>
+                        <group string="Source">
+                            <field name="sale_order_id"/>
+                            <field name="sale_line_id"/>
+                            <field name="trip_id" groups="taj_transport_operations.group_transport_user"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <p class="text-muted">
+                        This file was generated for a confirmed sales line.
+                        The trip is linked automatically when it is created.
+                        Container Number keeps the value copied when the file
+                        was created. Bill of Lading can be filled in later.
+                    </p>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_transport_trip_file_search" model="ir.ui.view">
+        <field name="name">taj.transport.trip.file.search</field>
+        <field name="model">taj.transport.trip.file</field>
+        <field name="arch" type="xml">
+            <search string="Trip Files">
+                <field name="name"/>
+                <field name="bill_of_lading"/>
+                <field name="container_number"/>
+                <field name="sale_order_id"/>
+                <field name="trip_id" groups="taj_transport_operations.group_transport_user"/>
+                <filter name="missing_bill_of_lading" string="Missing Bill of Lading"
+                        domain="[('bill_of_lading', '=', False)]"/>
+                <filter name="awaiting_trip" string="Awaiting Trip"
+                        domain="[('trip_id', '=', False)]"
+                        groups="taj_transport_operations.group_transport_user"/>
+                <group>
+                    <filter name="by_sale_order" string="Sales Order"
+                            context="{'group_by': 'sale_order_id'}"/>
+                    <filter name="by_company" string="Company"
+                            context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_transport_trip_file" model="ir.actions.act_window">
+        <field name="name">Trip Files</field>
+        <field name="res_model">taj.transport.trip.file</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No Trip Files yet.</p>
+            <p>Confirm a sales order to generate a file for each product/service
+               line. Its trip will be linked when created.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_transport_trip_files" name="Trip Files"
+              parent="menu_transport_operations" action="action_transport_trip_file"
+              sequence="12" groups="taj_transport_operations.group_transport_user"/>
+</odoo>
