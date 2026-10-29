@@ -552,7 +552,7 @@ TAJ_PREP_APPLY=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.s
 The default is 10 confirmed orders with one line, trip and automatically linked
 Trip File each: 3 Draft, 3 Ready, 2 In Progress and 2 Completed trips. Existing
 master data is reused; schedules and checkpoint events are UAT examples. The
-script needs 10 free existing trucks with distinct Fleet drivers. When no
+script needs 10 free existing vehicles and distinct existing driver contacts. When no
 active template is linked to a selected product, it derives origin/destination
 using the existing product-name parser and creates a template with Loading
 and Delivery endpoint checkpoints. The preview shows these proposed templates;
@@ -568,6 +568,16 @@ Sources may be existing quotations or confirmed orders, with product or
 service lines; Container Number is optional and is never invented. Inventory
 procurement is disabled on these UAT orders. The script prints source and
 Fleet diagnostics when existing data cannot support the requested preparation.
+The preview also shows proposed Fleet setup. Uncategorised vehicles already
+referenced by Sales may be categorised as Truck, and empty Fleet Driver fields
+may be filled from existing person contacts identified through Fleet/history,
+Driver contact jobs/tags or HR Driver work contacts. Existing Fleet drivers,
+other vehicle categories and active-trip allocations are preserved. New
+pairings are UAT setup, not verified operational assignments. The final manifest
+includes original category/driver IDs; Fleet setup rolls back with the rest
+of the run on failure. No vehicle models or people are created or reclassified.
+If existing driver contacts are not labelled, pass their actual Contact IDs
+with `TAJ_PREP_DRIVER_IDS=101,102,...` (replace these examples with real IDs).
 
 Check the source checkout without Odoo using:
 

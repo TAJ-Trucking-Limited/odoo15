@@ -3,7 +3,8 @@
 # bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
 # TAJ_PREP_APPLY=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
 # Optional: TAJ_PREP_COUNT (>=10), TAJ_PREP_COMPANY_ID, TAJ_PREP_PREFIX,
-# TAJ_PREP_DATABASE (optional exact database guard; defaults to PGDATABASE).
+# TAJ_PREP_DATABASE (exact database guard; defaults to PGDATABASE),
+# TAJ_PREP_DRIVER_IDS (comma-separated existing person Contact IDs).
 set -euo pipefail
 
 command -v odoo-bin >/dev/null || { echo 'Run this in the Odoo.sh shell.' >&2; exit 1; }
@@ -173,12 +174,39 @@ def prepare(shell_env):
 
     category = data.ref("taj_transport_operations.fleet_category_truck")
     vehicles = data["fleet.vehicle"].search([
-        ("active", "=", True), ("category_id", "=", category.id),
+        ("active", "=", True),
         ("company_id", "in", [False, company.id]),
-        ("driver_id", "!=", False), ("driver_id.active", "=", True),
         ("license_plate", "!=", False),
-        ("driver_id.company_id", "in", [False, company.id]),
     ], order="license_plate, id")
+
+    Partners = data["res.partner"]
+    driver_domain = [("active", "=", True), ("is_company", "=", False),
+                     ("company_id", "in", [False, company.id])]
+    explicit_driver_ids = os.environ.get("TAJ_PREP_DRIVER_IDS", "").strip()
+    if explicit_driver_ids:
+        requested_ids = {int(value.strip()) for value in explicit_driver_ids.split(",")}
+        driver_pool = Partners.search(driver_domain + [("id", "in", sorted(requested_ids))])
+        if set(driver_pool.ids) != requested_ids:
+            raise RuntimeError("TAJ_PREP_DRIVER_IDS must contain existing active person contacts in this company or shared.")
+    else:
+        driver_pool = vehicles.driver_id
+        driver_pool |= data["fleet.vehicle.assignation.log"].search([
+            ("vehicle_id", "in", vehicles.ids),
+        ]).driver_id
+        driver_pool |= Partners.search(driver_domain + [
+            "|", ("function", "ilike", "driver"), ("category_id.name", "ilike", "driver"),
+        ])
+        if "hr.employee" in data.registry:
+            employees = data["hr.employee"].search([
+                ("active", "=", True), ("company_id", "=", company.id),
+                "|", ("job_title", "ilike", "driver"), ("job_id.name", "ilike", "driver"),
+            ])
+            # Read existing work contacts only: never create contacts for HR.
+            driver_pool |= employees.work_contact_id
+        driver_pool &= Partners.search(driver_domain + [("id", "in", driver_pool.ids)])
+    driver_pool = driver_pool.filtered(
+        lambda person: not (person.name or "").upper().startswith("UAT-")
+    ).sorted("id")
 
     def occupied_resources():
         # Check across companies, including Draft reservations. Do not move
@@ -196,13 +224,37 @@ def prepare(shell_env):
     busy_vehicles, busy_drivers = occupied_resources()
     trucks = []
     selected_drivers = set()
-    for vehicle in vehicles:
-        if vehicle.id in busy_vehicles or vehicle.driver_id.id in busy_drivers | selected_drivers:
+    drivers_by_vehicle = {}
+    fleet_before = {}
+    sales_vehicle_ids = set(source_lines.vehicle_id.ids)
+    trailer_history_ids = set(data["taj.transport.assignment"].sudo().search([
+        ("trailer_id", "in", vehicles.ids),
+    ]).trailer_id.ids)
+    # Preserve configured trucks/drivers first. Only uncategorized vehicles
+    # already referenced by Sales may be newly categorized as Trucks.
+    for vehicle in sorted(vehicles, key=lambda v: (not bool(v.driver_id), v.category_id != category, v.id)):
+        if vehicle.id in busy_vehicles or vehicle.id in trailer_history_ids:
             continue
         if (vehicle.license_plate or "").upper().startswith("UAT-"):
             continue
+        if vehicle.category_id and vehicle.category_id != category:
+            continue
+        if not vehicle.category_id and (
+                vehicle.id not in sales_vehicle_ids
+                or (vehicle.model_id.category_id and vehicle.model_id.category_id != category)):
+            continue
+        if vehicle.driver_id:
+            driver = vehicle.driver_id
+            if driver not in driver_pool or driver.id in busy_drivers | selected_drivers:
+                continue
+        else:
+            driver = driver_pool.filtered(lambda person: person.id not in busy_drivers | selected_drivers)[:1]
+            if not driver:
+                continue
         trucks.append(vehicle)
-        selected_drivers.add(vehicle.driver_id.id)
+        selected_drivers.add(driver.id)
+        drivers_by_vehicle[vehicle.id] = driver
+        fleet_before[vehicle.id] = {"category_id": vehicle.category_id.id, "driver_id": vehicle.driver_id.id}
         if len(trucks) == count:
             break
     if len(trucks) < count:
@@ -212,15 +264,28 @@ def prepare(shell_env):
         print("FLEET INVENTORY " + json.dumps({
             "active_vehicles": len(fleet), "truck_category_id": category.id,
             "correctly_categorized_trucks": len(fleet.filtered(lambda v: v.category_id == category)),
-            "trucks_with_eligible_fleet_drivers": len(vehicles),
+            "recognized_existing_driver_contacts": len(driver_pool),
+            "sales_referenced_vehicles": len(sales_vehicle_ids),
             "available_trucks_with_distinct_drivers": len(trucks),
             "examples": [{"truck": v.license_plate, "category": v.category_id.display_name or None,
                           "driver": v.driver_id.display_name or None} for v in fleet[:12]],
+            "driver_examples": [{"id": p.id, "name": p.display_name} for p in driver_pool[:12]],
         }, ensure_ascii=False))
         raise RuntimeError(
-            "Need %s available existing trucks with distinct active Fleet drivers; found %s. "
-            "No trucks/drivers will be created or taken from active trips." % (count, len(trucks))
+            "Need %s available existing Sales trucks and distinct active driver contacts; found %s pairings. "
+            "Driver contacts are read from Fleet/history, Driver jobs/tags and HR Driver work contacts. "
+            "If driver roles are not labeled, set TAJ_PREP_DRIVER_IDS to actual existing Contact IDs. "
+            "No vehicles or people will be created or taken from active trips." % (count, len(trucks))
         )
+
+    fleet_changes = [
+        {"truck_id": truck.id, "truck": truck.license_plate,
+         "before": fleet_before[truck.id], "category_id": category.id, "category": category.name,
+         "driver_id": drivers_by_vehicle[truck.id].id,
+         "driver": drivers_by_vehicle[truck.id].display_name,
+         "pairing": "existing Fleet driver" if truck.driver_id else "UAT pairing of existing records"}
+        for truck in trucks
+    ]
 
     states = ("draft", "ready", "in_progress", "completed")
     plan = []
@@ -248,12 +313,14 @@ def prepare(shell_env):
          "special_handling": source.order_id.special_handling_instructions or None,
          "route": route["name"], "create_route": route["record"] is None,
          "origin": route["origin"], "destination": route["destination"], "truck": truck.license_plate,
-         "truck_id": truck.id, "driver": truck.driver_id.display_name, "driver_id": truck.driver_id.id}
+         "truck_id": truck.id, "driver": drivers_by_vehicle[truck.id].display_name,
+         "driver_id": drivers_by_vehicle[truck.id].id}
         for index, (source, route, truck, state) in enumerate(plan, 1)
     ]
     print(json.dumps({"database": expected, "company": company.display_name,
                       "prefix": prefix, "mode": "APPLY" if apply else "PREVIEW ONLY",
-                      "states": dict(Counter(row[3] for row in plan)), "orders": preview},
+                      "states": dict(Counter(row[3] for row in plan)),
+                      "fleet_configuration": fleet_changes, "orders": preview},
                      indent=2, ensure_ascii=False))
     print("Real master data and historical prices/container details are reused in NEW UAT transactions.")
     print("Missing route templates will be created only for selected products, using their existing route names.")
@@ -261,6 +328,8 @@ def prepare(shell_env):
     print("Schedules and lifecycle/checkpoint events are generated UAT examples, not real shipment history.")
     print("Bill of Lading stays empty. Missing optional cargo descriptions/handling notes stay empty.")
     print("Blank source containers stay blank. Inventory procurement is disabled for these UAT orders.")
+    print("Selected existing Sales vehicles may be categorized as Trucks and given existing driver contacts for UAT.")
+    print("These proposed pairings are UAT setup, not verified real-world truck-driver assignments.")
     if not apply:
         print("No records created. Review, then rerun with TAJ_PREP_APPLY=YES.")
         return None
@@ -279,6 +348,31 @@ def prepare(shell_env):
         for model in master_models
     }
     source_stamps = {line.id: (line.write_date, line.order_id.write_date) for line in sources}
+
+    selected_fleet = data["fleet.vehicle"].browse([truck.id for truck in trucks])
+    selected_fleet.flush_recordset(["category_id", "driver_id", "active", "company_id", "model_id"])
+    data.cr.execute("SELECT id FROM fleet_vehicle WHERE id = ANY(%s) ORDER BY id FOR UPDATE", (selected_fleet.ids,))
+    selected_fleet.invalidate_recordset(["category_id", "driver_id", "active", "company_id", "model_id"])
+    busy_vehicles, busy_drivers = occupied_resources()
+    for truck in trucks:
+        before, driver = fleet_before[truck.id], drivers_by_vehicle[truck.id]
+        driver.invalidate_recordset(["active", "company_id", "is_company"])
+        truck.model_id.invalidate_recordset(["category_id"])
+        if (not truck.active or (truck.company_id and truck.company_id != company)
+                or truck.category_id.id != before["category_id"] or truck.driver_id.id != before["driver_id"]
+                or not driver.active or driver.is_company or (driver.company_id and driver.company_id != company)
+                or (not truck.category_id and truck.model_id.category_id and truck.model_id.category_id != category)
+                or truck.id in busy_vehicles or driver.id in busy_drivers):
+            raise RuntimeError("Fleet configuration or availability changed; rerun the preview.")
+        changes = {}
+        if truck.category_id != category:
+            changes["category_id"] = category.id
+        if truck.driver_id != driver:
+            changes["driver_id"] = driver.id
+        if changes:
+            truck.write(changes)
+        if truck.category_id != category or truck.driver_id != driver:
+            raise RuntimeError("Fleet setup did not retain the proposed category/driver; rolling back.")
 
     created_routes = []
     selected_products = {source.product_id.product_tmpl_id.id for source, _, _, _ in plan}
@@ -405,7 +499,8 @@ def prepare(shell_env):
         source.order_id.invalidate_recordset(["write_date"])
         if (source.write_date, source.order_id.write_date) != source_stamps[source.id]:
             raise RuntimeError("An original sales record changed; rolling back.")
-    return {"database": expected, "prefix": prefix, "created_routes": created_routes, "orders": results}
+    return {"database": expected, "prefix": prefix, "fleet_configuration": fleet_changes,
+            "created_routes": created_routes, "orders": results}
 
 
 try:
