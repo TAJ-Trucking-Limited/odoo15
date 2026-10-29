@@ -464,9 +464,11 @@ def prepare(shell_env):
         if len(trip) != 1 or not trip.current_assignment_id:
             raise RuntimeError("Expected one trip with its normal Fleet assignment.")
         now = fields.Datetime.now()
+        planned_departure = now + timedelta(hours=1) if target in ("draft", "ready") else now - timedelta(hours=1)
+        duration_hours = max(48.0, max(trip.milestone_ids.mapped("planned_offset_hours"), default=0.0))
         trip.write({
-            "planned_departure_at": now + timedelta(hours=1) if target in ("draft", "ready") else now - timedelta(hours=1),
-            "planned_arrival_at": now + timedelta(days=2),
+            "planned_departure_at": planned_departure,
+            "planned_arrival_at": planned_departure + timedelta(hours=duration_hours),
             "route_notes": "UAT preparation: " + prefix,
         })
         if target != "draft":

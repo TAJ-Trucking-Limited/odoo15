@@ -19,13 +19,13 @@ from odoo import Command
 
 SOURCE = "TAJ TRACKING REPORTS 31-08-2026 (1).xlsx | Transit - Going Cargo | row 14"
 CHECKPOINTS = [
-    ("Loading at Dar es Salaam", "Arrival at site, loading and departure: 12 August 2026."),
-    ("Tunduma", "Arrival: 15 August 2026. Departure: 19 August 2026."),
-    ("Nakonde", "Arrival: 19 August 2026. Departure: 21 August 2026."),
-    ("Kasumbalesa Zambia", "Arrival: 22 August 2026. No departure date column in this report row."),
-    ("Kasumbalesa DRC", "Arrival: 23 August 2026. No departure date column in this report row."),
-    ("Whiskey", "Arrival: 28 August 2026. Departure: 29 August 2026."),
-    ("Delivery at Lubumbashi", "Destination arrival and offloading: 29 August 2026."),
+    ("Loading at Dar es Salaam", 0, "Arrival at site, loading and departure: 12 August 2026."),
+    ("Tunduma", 3, "Arrival: 15 August 2026. Departure: 19 August 2026."),
+    ("Nakonde", 7, "Arrival: 19 August 2026. Departure: 21 August 2026."),
+    ("Kasumbalesa Zambia", 10, "Arrival: 22 August 2026. No departure date column in this report row."),
+    ("Kasumbalesa DRC", 11, "Arrival: 23 August 2026. No departure date column in this report row."),
+    ("Whiskey", 16, "Arrival: 28 August 2026. Departure: 29 August 2026."),
+    ("Delivery at Lubumbashi", 17, "Destination arrival and offloading: 29 August 2026."),
 ]
 
 
@@ -52,7 +52,7 @@ def add_route(shell_env):
         raise RuntimeError("Select one matching active template with TAJ_REPORT_ROUTE_ID.")
     route = routes
     lines = route.line_ids.sorted(lambda line: (line.sequence, line.id))
-    expected_names = [name for name, _ in CHECKPOINTS]
+    expected_names = [name for name, _, _ in CHECKPOINTS]
     if not lines:
         existing = {}
     elif len(lines) == 2 and lines[0].name.startswith("Loading at ") and lines[1].name.startswith("Delivery at "):
@@ -66,14 +66,17 @@ def add_route(shell_env):
         "name": "DAR - LUBUMBASHI (Tracking report row 14)",
         "origin_location": "Dar es Salaam", "destination_location": "Lubumbashi",
         "notes": SOURCE + "\nEndpoint and border sequence from the report. "
-                 "Dates in checkpoint notes are historical actuals, not planned offsets or new trip events.",
+                 "Sample planned arrival offsets use elapsed days from 12 August 2026. "
+                 "Historical dates remain reference notes and are not new trip events.",
     }
     print(json.dumps({"database": database, "company": company.name,
                       "product_template_id": product.id, "product": product.display_name,
                       "existing_route_id": route.id or None, "source": SOURCE,
                       "template": route_values,
                       "checkpoints": [{"sequence": (index + 1) * 10, "name": name,
-                                       "historical_reference": note} for index, (name, note) in enumerate(CHECKPOINTS)],
+                                       "planned_offset_days": days, "planned_offset_hours": days * 24,
+                                       "historical_reference": note}
+                                      for index, (name, days, note) in enumerate(CHECKPOINTS)],
                       "existing_trip_snapshots": "preserved"}, indent=2, ensure_ascii=False))
     if os.environ.get("TAJ_REPORT_APPLY") != "YES":
         print("PREVIEW ONLY. To save, rerun with TAJ_REPORT_APPLY=YES on the same command line.")
@@ -84,12 +87,12 @@ def add_route(shell_env):
         raise RuntimeError("Another report route import is running.")
     if route:
         data.cr.execute("SELECT id FROM taj_transport_route WHERE id = %s FOR UPDATE", (route.id,))
-        before = [(line.id, line.sequence, line.name, line.notes) for line in lines]
+        before = [(line.id, line.sequence, line.name, line.notes, line.planned_offset_hours) for line in lines]
         route.invalidate_recordset()
         lines.invalidate_recordset()
         if not route.active or route.company_id != company or route.product_tmpl_id != product:
             raise RuntimeError("Template company, product or active status changed; rerun the preview.")
-        if before != [(line.id, line.sequence, line.name, line.notes)
+        if before != [(line.id, line.sequence, line.name, line.notes, line.planned_offset_hours)
                       for line in route.line_ids.sorted(lambda line: (line.sequence, line.id))]:
             raise RuntimeError("Template checkpoints changed during preparation; rerun the preview.")
     elif data["taj.transport.route"].search_count(domain):
@@ -100,13 +103,14 @@ def add_route(shell_env):
     def snapshots():
         milestones = trips.milestone_ids.sorted("id")
         milestones.invalidate_recordset()
-        return [(m.id, m.name, m.sequence, m.state, m.actual_arrival_at,
+        return [(m.id, m.name, m.sequence, m.state, m.planned_offset_hours, m.planned_arrival_at, m.actual_arrival_at,
                  m.actual_departure_at, m.template_line_id.id) for m in milestones]
 
     before_snapshots = snapshots()
     commands = []
-    for index, (name, note) in enumerate(CHECKPOINTS, 1):
+    for index, (name, days, note) in enumerate(CHECKPOINTS, 1):
         values = {"name": name, "sequence": index * 10,
+                  "planned_offset_hours": days * 24,
                   "notes": "Historical report example only. " + note}
         line = existing.get(name)
         if line:
@@ -128,10 +132,13 @@ def add_route(shell_env):
     data.flush_all()
     if route.line_ids.sorted(lambda line: (line.sequence, line.id)).mapped("name") != expected_names:
         raise RuntimeError("Route checkpoint verification failed; rolling back.")
+    if route.line_ids.sorted(lambda line: (line.sequence, line.id)).mapped("planned_offset_hours") != [days * 24 for _, days, _ in CHECKPOINTS]:
+        raise RuntimeError("Route offset verification failed; rolling back.")
     if snapshots() != before_snapshots:
         raise RuntimeError("Existing trip milestones changed unexpectedly; rolling back.")
     return {"route_id": route.id, "route": route.name, "product_template_id": product.id,
             "checkpoints": route.line_ids.sorted(lambda line: (line.sequence, line.id)).mapped("name"),
+            "planned_offset_days": [days for _, days, _ in CHECKPOINTS],
             "existing_trips_preserved": trips.ids, "new_trips_inherit_full_route": True}
 
 

@@ -610,8 +610,12 @@ TAJ_REPORT_APPLY=YES bash ~/src/user/scripts/taj_transport_add_report_route.sh
 It uses the prepared dataset's existing product template 3174 and expands its
 two endpoint checkpoints into Dar loading site, Tunduma, Nakonde, Kasumbalesa
 Zambia, Kasumbalesa DRC, Whiskey and Lubumbashi delivery. Existing endpoint
-record IDs are retained. Historical August 2026 dates are reference notes;
-they are not inserted as planned timings or actual events on new trips.
+record IDs are retained. Historical August 2026 dates remain reference notes.
+Sample planned arrival offsets are cumulative from the report's departure:
+0, 3, 7, 10, 11, 16 and 17 days (0, 72, 168, 240, 264, 384 and 408 hours).
+These are inferred from this one reported trip, with day-level precision.
+Absolute August dates are not inserted as actual events on new trips. The
+dataset generator places planned trip arrival at or after the last checkpoint.
 Existing trip milestone snapshots are checked and preserved; new trips get
 all seven checkpoints. Repeating the add-on does not duplicate checkpoints.
 For another dataset, select existing records with `TAJ_REPORT_COMPANY_ID`,
