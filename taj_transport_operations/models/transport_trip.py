@@ -531,6 +531,8 @@ class TajTransportTrip(models.Model):
                         "cargo": cargo_type.display_name,
                     })
                 vals["cargo_type_id"] = cargo_type.id
+        if "cargo_description" not in vals and order.cargo_description:
+            vals["cargo_description"] = order.cargo_description
         if (
             "special_handling_instructions" not in vals
             and order.special_handling_instructions

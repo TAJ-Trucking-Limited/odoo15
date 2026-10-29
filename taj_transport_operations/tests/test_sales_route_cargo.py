@@ -24,6 +24,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         cls.order = cls.env["sale.order"].create({
             "partner_id": cls.customer.id,
             "cargo_type_id": cls.cargo.id,
+            "cargo_description": "Palletized machinery",
             "special_handling_instructions": "Keep upright",
         })
         cls.line_a = cls.env["sale.order.line"].create({
@@ -69,23 +70,39 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertFalse(trip.route_id)
         self.assertEqual(trip.cargo_type_id, self.cargo)
         self.assertEqual(trip.cargo_type, self.cargo.name)
+        self.assertEqual(trip.cargo_description, "Palletized machinery")
         self.assertEqual(trip.special_handling_instructions, "Keep upright")
         self.order.write({
+            "cargo_description": "Boxed spare parts",
             "special_handling_instructions": "Changed later",
             "cargo_type_id": False,
         })
         self.assertEqual(trip.special_handling_instructions, "Keep upright")
         self.assertEqual(trip.cargo_type_id, self.cargo)
+        self.assertEqual(trip.cargo_description, "Palletized machinery")
+        later_trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_b.id,
+        })
+        self.assertEqual(later_trip.cargo_description, "Boxed spare parts")
 
     def test_explicit_cargo_vals_win_over_sales_order_defaults(self):
         other = self.env.ref("taj_transport_operations.cargo_type_fragile")
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_a.id,
             "cargo_type_id": other.id,
+            "cargo_description": "Trip-specific goods",
             "special_handling_instructions": "Caller wins",
         })
         self.assertEqual(trip.cargo_type_id, other)
+        self.assertEqual(trip.cargo_description, "Trip-specific goods")
         self.assertEqual(trip.special_handling_instructions, "Caller wins")
+
+    def test_explicit_blank_cargo_description_is_not_replaced(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_a.id,
+            "cargo_description": False,
+        })
+        self.assertFalse(trip.cargo_description)
 
     def test_archived_sales_cargo_blocks_batch_before_any_create(self):
         self.cargo.active = False
@@ -203,6 +220,8 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         wizard.action_create_trips()
         self.assertEqual(self.line_a.transport_trip_ids.route_id, self.route_a)
         self.assertEqual(self.line_b.transport_trip_ids.route_id, self.route_b1)
+        for trip in self.line_a.transport_trip_ids | self.line_b.transport_trip_ids:
+            self.assertEqual(trip.cargo_description, "Palletized machinery")
         self.assertEqual(
             self.line_a.transport_trip_ids.cargo_type_id, self.cargo
         )
@@ -230,6 +249,9 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
     def test_line_button_unique_ambiguous_and_missing(self):
         action = self.line_a.action_open_or_create_transport_trip()
         self.assertEqual(action["res_model"], "taj.transport.trip")
+        self.assertEqual(
+            self.line_a.transport_trip_ids.cargo_description, "Palletized machinery"
+        )
         self.assertEqual(
             self.line_a.transport_trip_ids.route_id, self.route_a
         )

@@ -29,6 +29,12 @@ class SaleOrder(models.Model):
         "new transport trip created from this order. Later changes here do "
         "not update existing trips.",
     )
+    cargo_description = fields.Text(
+        string="Cargo Description",
+        help="Optional description copied as a snapshot onto each new "
+        "transport trip created from this order. Later changes here do not "
+        "update existing trips.",
+    )
     special_handling_instructions = fields.Text(
         string="Special Handling Instructions",
         help="Optional handling notes copied as a snapshot onto each new "

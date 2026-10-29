@@ -27,6 +27,8 @@
             <xpath expr="//field[@name='payment_term_id']" position="after">
                 <field name="cargo_type_id"
                        options="{'no_create': True, 'no_create_edit': True}"/>
+                <field name="cargo_description"
+                       placeholder="Optional description of the goods to transport"/>
                 <field name="special_handling_instructions"
                        placeholder="Optional loading, storage or handling notes"/>
             </xpath>

@@ -80,13 +80,15 @@ Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
 - Cargo type and actual cargo description.
 - Special handling instructions.
 
-**Sales order cargo defaults (19.0.1.12.0):** optional `cargo_type_id` and
-`special_handling_instructions` on the sales order are visible to Sales users
-(cargo catalog is read-only for them). Every newly created trip snapshots both
-values from its sales order across the wizard, line Trip button and ORM create
+**Sales order cargo defaults (19.0.1.12.0; description added in 19.0.1.13.1):**
+optional Cargo Type, Cargo Description and Special Handling Instructions on
+the sales order are visible to Sales users (cargo catalog is read-only for
+them). Every newly created trip snapshots these three values from its sales
+order across the wizard, line Trip button and ORM create
 paths; explicit create values win. Later order edits do not update existing
-trips. An archived sales cargo type refuses creation with a clear error and
-creates no partial batch.
+trips. Cargo Description fills the trip's Operational Cargo Description; a
+blank order description leaves the trip description empty. An archived sales
+cargo type refuses creation with a clear error and creates no partial batch.
 
 Changes to dispatcher-maintained fields are tracked in the trip Chatter via
 Odoo's standard `mail.thread` tracking (including the responsible user and
@@ -527,11 +529,33 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.13.0`
+it automatically during Git deployment. The manifest version is `19.0.1.13.1`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots and historical truck grouping; Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
+
+To prepare transactions using existing master data in a neutralized
+`19_upgrade` staging database, run the preview in the Odoo.sh shell:
+
+```bash
+bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
+```
+
+After reviewing the selected customers, historical service lines, route
+templates, trucks and drivers, create the records with:
+
+```bash
+TAJ_PREP_APPLY=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
+```
+
+The default is 10 confirmed orders with one line, trip and automatically linked
+Trip File each: 3 Draft, 3 Ready, 2 In Progress and 2 Completed trips. Existing
+master data is reused; schedules and checkpoint events are UAT examples. The
+script needs 10 free existing trucks with distinct Fleet drivers and suitable
+product-linked route templates. Missing data stops the run. A used reference
+prefix is refused; any failure before commit rolls back the preparation.
+Use `TAJ_PREP_COUNT` for 10–100 orders and `TAJ_PREP_PREFIX` for a fresh dataset.
 
 Check the source checkout without Odoo using:
 
