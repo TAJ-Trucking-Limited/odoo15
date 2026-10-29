@@ -599,6 +599,24 @@ or HR employee, and are listed with their real Contact IDs in the manifest.
 The default 10-trip dataset creates 10 test drivers when no existing drivers
 are available. Contact creation and Fleet setup roll back with the full run.
 
+To add the fuller DAR–LUBUMBASHI route from Excel **Transit - Going Cargo,
+row 14**, preview and apply the independent add-on script:
+
+```bash
+bash ~/src/user/scripts/taj_transport_add_report_route.sh
+TAJ_REPORT_APPLY=YES bash ~/src/user/scripts/taj_transport_add_report_route.sh
+```
+
+It uses the prepared dataset's existing product template 3174 and expands its
+two endpoint checkpoints into Dar loading site, Tunduma, Nakonde, Kasumbalesa
+Zambia, Kasumbalesa DRC, Whiskey and Lubumbashi delivery. Existing endpoint
+record IDs are retained. Historical August 2026 dates are reference notes;
+they are not inserted as planned timings or actual events on new trips.
+Existing trip milestone snapshots are checked and preserved; new trips get
+all seven checkpoints. Repeating the add-on does not duplicate checkpoints.
+For another dataset, select existing records with `TAJ_REPORT_COMPANY_ID`,
+`TAJ_REPORT_PRODUCT_TMPL_ID` and, if needed, `TAJ_REPORT_ROUTE_ID`.
+
 Check the source checkout without Odoo using:
 
 ```sh
