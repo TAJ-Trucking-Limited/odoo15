@@ -552,10 +552,18 @@ TAJ_PREP_APPLY=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.s
 The default is 10 confirmed orders with one line, trip and automatically linked
 Trip File each: 3 Draft, 3 Ready, 2 In Progress and 2 Completed trips. Existing
 master data is reused; schedules and checkpoint events are UAT examples. The
-script needs 10 free existing trucks with distinct Fleet drivers and suitable
-product-linked route templates. Missing data stops the run. A used reference
+script needs 10 free existing trucks with distinct Fleet drivers. When no
+active template is linked to a selected product, it derives origin/destination
+using the existing product-name parser and creates a template with Loading
+and Delivery endpoint checkpoints. The preview shows these proposed templates;
+unclear product names, ambiguous links and incomplete existing templates are
+skipped. Other missing required data stops the run. A used reference
 prefix is refused; any failure before commit rolls back the preparation.
 Use `TAJ_PREP_COUNT` for 10–100 orders and `TAJ_PREP_PREFIX` for a fresh dataset.
+The final manifest lists created routes, order/trip/file references, source
+records, commercial and shipment data, cargo snapshots and milestone events.
+No customers, products, trucks or drivers are created. Missing optional cargo
+or shipment details are left blank, and Bill of Lading remains empty.
 
 Check the source checkout without Odoo using:
 

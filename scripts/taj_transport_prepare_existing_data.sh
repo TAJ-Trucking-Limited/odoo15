@@ -54,8 +54,8 @@ def prepare(shell_env):
     if data["sale.order"].search_count([("client_order_ref", "=like", prefix + "-%")]):
         raise RuntimeError("This prefix already exists. No existing preparation is changed; choose a new prefix.")
 
-    # Only read existing master data. Source lines supply actual customers,
-    # prices, currencies, taxes and shipment details; no invented cargo facts.
+    # Source lines supply actual customers, prices, currencies, taxes and
+    # shipment details. Missing templates use the existing product-route parser.
     routes = data["taj.transport.route"].search([
         ("active", "=", True), ("company_id", "=", company.id),
         ("product_tmpl_id", "!=", False),
@@ -63,23 +63,10 @@ def prepare(shell_env):
     routes_by_product = {}
     for route in routes:
         routes_by_product.setdefault(route.product_tmpl_id.id, []).append(route)
-    unique_routes = {
-        product_id: matches[0] for product_id, matches in routes_by_product.items()
-        if len(matches) == 1
-        and (matches[0].origin_location or "").strip()
-        and (matches[0].destination_location or "").strip()
-        and matches[0].line_ids
-    }
-    if not unique_routes:
-        raise RuntimeError(
-            "No suitable existing route: need one active template for a product, "
-            "with origin, destination and checkpoints. Link/configure an existing "
-            "template first; this script will not create or change templates."
-        )
+    route_plans = {}
     source_lines = data["sale.order.line"].search([
         ("company_id", "=", company.id), ("order_id.state", "in", ["sale", "done"]),
         ("display_type", "in", [False, "product"]), ("is_downpayment", "=", False),
-        ("product_id.product_tmpl_id", "in", list(unique_routes)),
         ("product_id.type", "=", "service"), ("product_id.active", "=", True),
         ("product_id.sale_ok", "=", True), ("product_uom_qty", ">", 0),
         ("price_unit", ">", 0), ("container_num", "!=", False),
@@ -114,6 +101,31 @@ def prepare(shell_env):
         if not order.pricelist_id.active:
             skipped["archived pricelist"] += 1
             continue
+        template_id = product.product_tmpl_id.id
+        if template_id not in route_plans:
+            matches = routes_by_product.get(template_id, [])
+            if len(matches) > 1:
+                skipped["multiple active templates for product"] += 1
+                continue
+            if matches:
+                route = matches[0]
+                if not ((route.origin_location or "").strip()
+                        and (route.destination_location or "").strip() and route.line_ids):
+                    skipped["existing template missing locations/checkpoints"] += 1
+                    continue
+                route_plans[template_id] = {
+                    "record": route, "name": route.name,
+                    "origin": route.origin_location, "destination": route.destination_location,
+                }
+            else:
+                origin, destination = data["taj.transport.trip"]._route_from_sale_line_product(line)
+                if not origin or not destination or origin.casefold() == destination.casefold():
+                    skipped["product name has no clear origin/destination pair"] += 1
+                    continue
+                route_plans[template_id] = {
+                    "record": None, "name": "%s-ROUTE-%s" % (prefix, template_id),
+                    "origin": origin, "destination": destination,
+                }
         # Prefer variety without repeatedly cloning the same customer/product.
         key = (order.partner_id.id, product.id)
         if key not in seen:
@@ -122,7 +134,7 @@ def prepare(shell_env):
     if not sources:
         raise RuntimeError(
             "No suitable real confirmed service lines with container numbers and "
-            "matching templates. Skipped: " + json.dumps(skipped)
+            "a valid template or clearly parseable route product name. Skipped: " + json.dumps(skipped)
         )
 
     category = data.ref("taj_transport_operations.fleet_category_truck")
@@ -169,21 +181,29 @@ def prepare(shell_env):
     plan = []
     for index in range(count):
         source = sources[index % len(sources)]
-        route = unique_routes[source.product_id.product_tmpl_id.id]
+        route = route_plans[source.product_id.product_tmpl_id.id]
         truck = trucks[index]
         plan.append((source, route, truck, states[index % len(states)]))
     preview = [
         {"number": index, "target_state": state, "source_order": source.order_id.name,
-         "source_line_id": source.id, "customer": source.order_id.partner_id.display_name,
-         "product": source.product_id.display_name, "quantity": source.product_uom_qty,
+         "source_order_id": source.order_id.id, "source_line_id": source.id,
+         "customer": source.order_id.partner_id.display_name, "customer_id": source.order_id.partner_id.id,
+         "product": source.product_id.display_name, "product_id": source.product_id.id,
+         "quantity": source.product_uom_qty, "uom": source.product_uom_id.display_name,
          "unit_price": source.price_unit, "currency": source.order_id.currency_id.name,
+         "discount": source.discount, "sales_description": source.name,
          "taxes": source.tax_ids.mapped("display_name"), "container": source.container_num,
+         "shipment_reference": source.srn or None, "consignee": source.consignee or None,
+         "size": source.size or None, "weight": source.weight or None,
+         "file_name": source.file_name or None,
+         "payment_terms": source.order_id.payment_term_id.display_name or None,
+         "pricelist": source.order_id.pricelist_id.display_name,
          "cargo_type": source.order_id.cargo_type_id.display_name or None,
          "cargo_description": source.order_id.cargo_description if "cargo_description" in source.order_id._fields else None,
          "special_handling": source.order_id.special_handling_instructions or None,
-         "route": route.name, "origin": route.origin_location,
-         "destination": route.destination_location, "truck": truck.license_plate,
-         "driver": truck.driver_id.display_name}
+         "route": route["name"], "create_route": route["record"] is None,
+         "origin": route["origin"], "destination": route["destination"], "truck": truck.license_plate,
+         "truck_id": truck.id, "driver": truck.driver_id.display_name, "driver_id": truck.driver_id.id}
         for index, (source, route, truck, state) in enumerate(plan, 1)
     ]
     print(json.dumps({"database": expected, "company": company.display_name,
@@ -191,6 +211,8 @@ def prepare(shell_env):
                       "states": dict(Counter(row[3] for row in plan)), "orders": preview},
                      indent=2, ensure_ascii=False))
     print("Real master data and historical prices/container details are reused in NEW UAT transactions.")
+    print("Missing route templates will be created only for selected products, using their existing route names.")
+    print("New templates have two endpoint checkpoints: Loading at origin and Delivery at destination.")
     print("Schedules and lifecycle/checkpoint events are generated UAT examples, not real shipment history.")
     print("Bill of Lading stays empty. Missing optional cargo descriptions/handling notes stay empty.")
     if not apply:
@@ -212,8 +234,36 @@ def prepare(shell_env):
     }
     source_stamps = {line.id: (line.write_date, line.order_id.write_date) for line in sources}
 
+    created_routes = []
+    selected_products = {source.product_id.product_tmpl_id.id for source, _, _, _ in plan}
+    for template_id in sorted(selected_products):
+        route_plan = route_plans[template_id]
+        if route_plan["record"] is not None:
+            continue
+        if data["taj.transport.route"].search_count([
+                ("active", "=", True), ("company_id", "=", company.id),
+                ("product_tmpl_id", "=", template_id)]):
+            raise RuntimeError("A route was linked to a selected product during preparation; rerun the preview.")
+        route = data["taj.transport.route"].create({
+            "name": route_plan["name"], "company_id": company.id,
+            "product_tmpl_id": template_id,
+            "origin_location": route_plan["origin"],
+            "destination_location": route_plan["destination"],
+            "notes": "UAT endpoint template derived from existing product %s. %s" % (template_id, prefix),
+            "line_ids": [
+                Command.create({"name": "Loading at " + route_plan["origin"], "sequence": 10}),
+                Command.create({"name": "Delivery at " + route_plan["destination"], "sequence": 20}),
+            ],
+        })
+        route_plan["record"] = route
+        created_routes.append({"id": route.id, "name": route.name,
+                               "product_template_id": template_id,
+                               "origin": route.origin_location, "destination": route.destination_location,
+                               "checkpoints": route.line_ids.mapped("name")})
+
     results = []
-    for index, (source, route, truck, target) in enumerate(plan, 1):
+    for index, (source, route_plan, truck, target) in enumerate(plan, 1):
+        route = route_plan["record"]
         busy_vehicles, busy_drivers = occupied_resources()
         if truck.id in busy_vehicles or truck.driver_id.id in busy_drivers:
             raise RuntimeError("A selected truck/driver became occupied. Rerun the preview.")
@@ -277,23 +327,37 @@ def prepare(shell_env):
                 or set(line.tax_ids.ids) != set(source.tax_ids.ids)
                 or order.currency_id != source.order_id.currency_id):
             raise RuntimeError("Copied commercial/shipment data does not match its real source.")
-        results.append({"order": order.name, "order_id": order.id,
-                        "customer": order.partner_id.display_name,
+        if (trip.cargo_type_id != order.cargo_type_id
+                or trip.special_handling_instructions != order.special_handling_instructions
+                or ("cargo_description" in order._fields and trip.cargo_description != order.cargo_description)):
+            raise RuntimeError("Trip cargo snapshots do not match the new sales order.")
+        results.append({**preview[index - 1], "order": order.name, "order_id": order.id,
+                        "sales_line_id": line.id, "customer_reference": order.client_order_ref,
+                        "company": company.display_name, "total": order.amount_total,
                         "trip": trip.name, "trip_id": trip.id, "state": trip.state,
                         "file": trip_file.name, "file_id": trip_file.id,
-                        "truck": truck.license_plate, "route": route.name,
-                        "container": trip_file.container_number,
+                        "bill_of_lading": trip_file.bill_of_lading or None,
+                        "route_id": route.id,
+                        "planned_departure": trip.planned_departure_at,
+                        "planned_arrival": trip.planned_arrival_at,
+                        "actual_departure": trip.actual_departure_at or None,
+                        "actual_arrival": trip.actual_arrival_at or None,
                         "milestones_done": trip.milestone_done_count,
-                        "milestones_open": trip.milestone_open_count})
+                        "milestones_open": trip.milestone_open_count,
+                        "milestones": [{"id": m.id, "name": m.name, "state": m.state,
+                                        "arrival": m.actual_arrival_at or None,
+                                        "departure": m.actual_departure_at or None}
+                                       for m in trip.milestone_ids.sorted(lambda m: (m.sequence, m.id))]})
     for model, before in master_counts.items():
-        if data[model].with_context(active_test=False).search_count([]) != before:
+        expected_new = len(created_routes) * {"taj.transport.route": 1, "taj.transport.route.line": 2}.get(model, 0)
+        if data[model].with_context(active_test=False).search_count([]) != before + expected_new:
             raise RuntimeError("A workflow changed master record counts for %s; rolling back." % model)
     for source in sources:
         source.invalidate_recordset(["write_date"])
         source.order_id.invalidate_recordset(["write_date"])
         if (source.write_date, source.order_id.write_date) != source_stamps[source.id]:
             raise RuntimeError("An original sales record changed; rolling back.")
-    return results
+    return {"database": expected, "prefix": prefix, "created_routes": created_routes, "orders": results}
 
 
 try:
@@ -302,8 +366,9 @@ try:
         env.cr.rollback()
     else:
         env.cr.commit()
-        print("SAVED %s sales orders, trips and Trip Files. Save this manifest:" % len(result))
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print("SAVED %s sales orders, trips and Trip Files; %s new route templates. Save this manifest:"
+              % (len(result["orders"]), len(result["created_routes"])))
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 except BaseException:
     env.cr.rollback()
     print("FAILED: no preparation records from this run were committed.")
