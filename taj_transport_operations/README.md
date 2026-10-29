@@ -562,7 +562,8 @@ prefix is refused; any failure before commit rolls back the preparation.
 Use `TAJ_PREP_COUNT` for 10–100 orders and `TAJ_PREP_PREFIX` for a fresh dataset.
 The final manifest lists created routes, order/trip/file references, source
 records, commercial and shipment data, cargo snapshots and milestone events.
-No customers, products, trucks or drivers are created. Missing optional cargo
+No customers, products or trucks are created. Drivers are reused unless UAT
+driver creation is explicitly enabled below. Missing optional cargo
 or shipment details are left blank, and Bill of Lading remains empty.
 Sources may be existing quotations or confirmed orders, with product or
 service lines; Container Number is optional and is never invented. Inventory
@@ -575,9 +576,28 @@ Driver contact jobs/tags or HR Driver work contacts. Existing Fleet drivers,
 other vehicle categories and active-trip allocations are preserved. New
 pairings are UAT setup, not verified operational assignments. The final manifest
 includes original category/driver IDs; Fleet setup rolls back with the rest
-of the run on failure. No vehicle models or people are created or reclassified.
+of the run on failure. No vehicle models or existing contact roles are changed.
 If existing driver contacts are not labelled, pass their actual Contact IDs
 with `TAJ_PREP_DRIVER_IDS=101,102,...` (replace these examples with real IDs).
+
+When the staging copy has no driver contacts, explicitly enable creation of
+clearly labelled synthetic UAT drivers for the shortfall. Preview first:
+
+```bash
+TAJ_PREP_CREATE_UAT_DRIVERS=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
+```
+
+Then create the reviewed dataset with both options:
+
+```bash
+TAJ_PREP_CREATE_UAT_DRIVERS=YES TAJ_PREP_APPLY=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
+```
+
+The new contacts are named `<prefix> UAT Driver 01`, etc., with a test-only job
+title and comment. They are created only during apply, with no login, email
+or HR employee, and are listed with their real Contact IDs in the manifest.
+The default 10-trip dataset creates 10 test drivers when no existing drivers
+are available. Contact creation and Fleet setup roll back with the full run.
 
 Check the source checkout without Odoo using:
 

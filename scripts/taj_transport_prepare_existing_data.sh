@@ -4,7 +4,8 @@
 # TAJ_PREP_APPLY=YES bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
 # Optional: TAJ_PREP_COUNT (>=10), TAJ_PREP_COMPANY_ID, TAJ_PREP_PREFIX,
 # TAJ_PREP_DATABASE (exact database guard; defaults to PGDATABASE),
-# TAJ_PREP_DRIVER_IDS (comma-separated existing person Contact IDs).
+# TAJ_PREP_DRIVER_IDS (comma-separated existing person Contact IDs),
+# TAJ_PREP_CREATE_UAT_DRIVERS=YES (create clearly labeled test drivers if needed).
 set -euo pipefail
 
 command -v odoo-bin >/dev/null || { echo 'Run this in the Odoo.sh shell.' >&2; exit 1; }
@@ -30,6 +31,7 @@ def prepare(shell_env):
     if str(neutralized).lower() not in ("true", "1"):
         raise RuntimeError("This script requires a neutralized staging database.")
     apply = os.environ.get("TAJ_PREP_APPLY") == "YES"
+    create_uat_drivers = os.environ.get("TAJ_PREP_CREATE_UAT_DRIVERS") == "YES"
     count = int(os.environ.get("TAJ_PREP_COUNT", "10"))
     if not 10 <= count <= 100:
         raise RuntimeError("TAJ_PREP_COUNT must be between 10 and 100 sales orders.")
@@ -183,6 +185,8 @@ def prepare(shell_env):
     driver_domain = [("active", "=", True), ("is_company", "=", False),
                      ("company_id", "in", [False, company.id])]
     explicit_driver_ids = os.environ.get("TAJ_PREP_DRIVER_IDS", "").strip()
+    if explicit_driver_ids and create_uat_drivers:
+        raise RuntimeError("Choose explicit existing driver IDs or UAT driver creation, not both.")
     if explicit_driver_ids:
         requested_ids = {int(value.strip()) for value in explicit_driver_ids.split(",")}
         driver_pool = Partners.search(driver_domain + [("id", "in", sorted(requested_ids))])
@@ -205,7 +209,7 @@ def prepare(shell_env):
             driver_pool |= employees.work_contact_id
         driver_pool &= Partners.search(driver_domain + [("id", "in", driver_pool.ids)])
     driver_pool = driver_pool.filtered(
-        lambda person: not (person.name or "").upper().startswith("UAT-")
+        lambda person: not (person.name or "").upper().startswith(("UAT-", "REAL-UAT-"))
     ).sorted("id")
 
     def occupied_resources():
@@ -225,6 +229,7 @@ def prepare(shell_env):
     trucks = []
     selected_drivers = set()
     drivers_by_vehicle = {}
+    new_driver_values = {}
     fleet_before = {}
     sales_vehicle_ids = set(source_lines.vehicle_id.ids)
     trailer_history_ids = set(data["taj.transport.assignment"].sudo().search([
@@ -249,10 +254,20 @@ def prepare(shell_env):
                 continue
         else:
             driver = driver_pool.filtered(lambda person: person.id not in busy_drivers | selected_drivers)[:1]
-            if not driver:
+            if not driver and not create_uat_drivers:
                 continue
+            if not driver:
+                number = len(new_driver_values) + 1
+                new_driver_values[vehicle.id] = {
+                    "name": "%s UAT Driver %02d" % (prefix, number),
+                    "ref": "%s-DRIVER-%02d" % (prefix, number),
+                    "function": "UAT Driver (test only)", "company_id": company.id,
+                    "is_company": False, "type": "contact", "active": True,
+                    "comment": "Synthetic driver for staging UAT only. " + prefix,
+                }
         trucks.append(vehicle)
-        selected_drivers.add(driver.id)
+        if driver:
+            selected_drivers.add(driver.id)
         drivers_by_vehicle[vehicle.id] = driver
         fleet_before[vehicle.id] = {"category_id": vehicle.category_id.id, "driver_id": vehicle.driver_id.id}
         if len(trucks) == count:
@@ -265,6 +280,7 @@ def prepare(shell_env):
             "active_vehicles": len(fleet), "truck_category_id": category.id,
             "correctly_categorized_trucks": len(fleet.filtered(lambda v: v.category_id == category)),
             "recognized_existing_driver_contacts": len(driver_pool),
+            "planned_new_uat_drivers": len(new_driver_values),
             "sales_referenced_vehicles": len(sales_vehicle_ids),
             "available_trucks_with_distinct_drivers": len(trucks),
             "examples": [{"truck": v.license_plate, "category": v.category_id.display_name or None,
@@ -275,15 +291,22 @@ def prepare(shell_env):
             "Need %s available existing Sales trucks and distinct active driver contacts; found %s pairings. "
             "Driver contacts are read from Fleet/history, Driver jobs/tags and HR Driver work contacts. "
             "If driver roles are not labeled, set TAJ_PREP_DRIVER_IDS to actual existing Contact IDs. "
-            "No vehicles or people will be created or taken from active trips." % (count, len(trucks))
+            "Or set TAJ_PREP_CREATE_UAT_DRIVERS=YES to allow clearly labeled test contacts. "
+            "Occupied resources and other vehicle categories are never taken over." % (count, len(trucks))
         )
+
+    if new_driver_values and Partners.with_context(active_test=False).search_count([
+            ("name", "in", [values["name"] for values in new_driver_values.values()])]):
+        raise RuntimeError("UAT driver names already exist for this prefix; choose a new TAJ_PREP_PREFIX.")
 
     fleet_changes = [
         {"truck_id": truck.id, "truck": truck.license_plate,
          "before": fleet_before[truck.id], "category_id": category.id, "category": category.name,
          "driver_id": drivers_by_vehicle[truck.id].id,
-         "driver": drivers_by_vehicle[truck.id].display_name,
-         "pairing": "existing Fleet driver" if truck.driver_id else "UAT pairing of existing records"}
+         "driver": drivers_by_vehicle[truck.id].display_name if drivers_by_vehicle[truck.id]
+                   else new_driver_values[truck.id]["name"],
+         "create_uat_driver": truck.id in new_driver_values,
+         "pairing": "existing Fleet driver" if truck.driver_id else "UAT pairing"}
         for truck in trucks
     ]
 
@@ -313,14 +336,17 @@ def prepare(shell_env):
          "special_handling": source.order_id.special_handling_instructions or None,
          "route": route["name"], "create_route": route["record"] is None,
          "origin": route["origin"], "destination": route["destination"], "truck": truck.license_plate,
-         "truck_id": truck.id, "driver": drivers_by_vehicle[truck.id].display_name,
+         "truck_id": truck.id,
+         "driver": drivers_by_vehicle[truck.id].display_name if drivers_by_vehicle[truck.id]
+                   else new_driver_values[truck.id]["name"],
          "driver_id": drivers_by_vehicle[truck.id].id}
         for index, (source, route, truck, state) in enumerate(plan, 1)
     ]
     print(json.dumps({"database": expected, "company": company.display_name,
                       "prefix": prefix, "mode": "APPLY" if apply else "PREVIEW ONLY",
                       "states": dict(Counter(row[3] for row in plan)),
-                      "fleet_configuration": fleet_changes, "orders": preview},
+                      "fleet_configuration": fleet_changes,
+                      "new_uat_driver_contacts": list(new_driver_values.values()), "orders": preview},
                      indent=2, ensure_ascii=False))
     print("Real master data and historical prices/container details are reused in NEW UAT transactions.")
     print("Missing route templates will be created only for selected products, using their existing route names.")
@@ -328,7 +354,8 @@ def prepare(shell_env):
     print("Schedules and lifecycle/checkpoint events are generated UAT examples, not real shipment history.")
     print("Bill of Lading stays empty. Missing optional cargo descriptions/handling notes stay empty.")
     print("Blank source containers stay blank. Inventory procurement is disabled for these UAT orders.")
-    print("Selected existing Sales vehicles may be categorized as Trucks and given existing driver contacts for UAT.")
+    print("Selected existing Sales vehicles may be categorized as Trucks and paired with drivers for UAT.")
+    print("New clearly labeled UAT driver contacts planned:", len(new_driver_values))
     print("These proposed pairings are UAT setup, not verified real-world truck-driver assignments.")
     if not apply:
         print("No records created. Review, then rerun with TAJ_PREP_APPLY=YES.")
@@ -348,6 +375,16 @@ def prepare(shell_env):
         for model in master_models
     }
     source_stamps = {line.id: (line.write_date, line.order_id.write_date) for line in sources}
+
+    created_drivers = []
+    for truck_id, values in new_driver_values.items():
+        if Partners.with_context(active_test=False).search_count([("name", "=", values["name"])]):
+            raise RuntimeError("A planned UAT driver name was created by another run; rerun with a new prefix.")
+        driver = Partners.create(values)
+        drivers_by_vehicle[truck_id] = driver
+        created_drivers.append({"id": driver.id, "name": driver.name, "reference": driver.ref})
+    for row in fleet_changes + preview:
+        row["driver_id"] = drivers_by_vehicle[row["truck_id"]].id
 
     selected_fleet = data["fleet.vehicle"].browse([truck.id for truck in trucks])
     selected_fleet.flush_recordset(["category_id", "driver_id", "active", "company_id", "model_id"])
@@ -492,6 +529,8 @@ def prepare(shell_env):
                                        for m in trip.milestone_ids.sorted(lambda m: (m.sequence, m.id))]})
     for model, before in master_counts.items():
         expected_new = len(created_routes) * {"taj.transport.route": 1, "taj.transport.route.line": 2}.get(model, 0)
+        if model == "res.partner":
+            expected_new += len(created_drivers)
         if data[model].with_context(active_test=False).search_count([]) != before + expected_new:
             raise RuntimeError("A workflow changed master record counts for %s; rolling back." % model)
     for source in sources:
@@ -500,7 +539,7 @@ def prepare(shell_env):
         if (source.write_date, source.order_id.write_date) != source_stamps[source.id]:
             raise RuntimeError("An original sales record changed; rolling back.")
     return {"database": expected, "prefix": prefix, "fleet_configuration": fleet_changes,
-            "created_routes": created_routes, "orders": results}
+            "created_driver_contacts": created_drivers, "created_routes": created_routes, "orders": results}
 
 
 try:
@@ -509,8 +548,8 @@ try:
         env.cr.rollback()
     else:
         env.cr.commit()
-        print("SAVED %s sales orders, trips and Trip Files; %s new route templates. Save this manifest:"
-              % (len(result["orders"]), len(result["created_routes"])))
+        print("SAVED %s sales orders, trips and Trip Files; %s route templates; %s UAT drivers. Save this manifest:"
+              % (len(result["orders"]), len(result["created_routes"]), len(result["created_driver_contacts"])))
         print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 except BaseException:
     env.cr.rollback()
