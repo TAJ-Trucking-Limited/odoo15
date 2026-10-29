@@ -45,7 +45,8 @@ def prepare(shell_env):
     context = dict(shell_env.context, allowed_company_ids=company.ids,
                    active_test=True, tracking_disable=True, mail_notrack=True,
                    mail_create_nolog=True, mail_create_nosubscribe=True,
-                   mail_auto_subscribe_no_notify=True, mail_notify_force_send=False)
+                   mail_auto_subscribe_no_notify=True, mail_notify_force_send=False,
+                   skip_procurement=True)
     data = company.sudo().with_context(context).with_company(company).env
     module = data["ir.module.module"].search([("name", "=", "taj_transport_operations")])
     version = tuple(int(n) for n in (module.latest_version or "0").split("."))
@@ -64,28 +65,43 @@ def prepare(shell_env):
     for route in routes:
         routes_by_product.setdefault(route.product_tmpl_id.id, []).append(route)
     route_plans = {}
+    # ponytail: Inspect the latest 5,000 source lines; raise this limit if the
+    # inventory shows suitable route products exist only in older orders.
     source_lines = data["sale.order.line"].search([
-        ("company_id", "=", company.id), ("order_id.state", "in", ["sale", "done"]),
-        ("display_type", "in", [False, "product"]), ("is_downpayment", "=", False),
-        ("product_id.type", "=", "service"), ("product_id.active", "=", True),
-        ("product_id.sale_ok", "=", True), ("product_uom_qty", ">", 0),
-        ("price_unit", ">", 0), ("container_num", "!=", False),
-        ("order_id.partner_id.active", "=", True),
-        ("order_id.client_order_ref", "not ilike", "REAL-UAT-"),
-        ("order_id.client_order_ref", "not ilike", "UAT-"),
+        ("company_id", "=", company.id),
+        ("order_id.state", "in", ["draft", "sent", "sale", "done"]),
+        ("display_type", "in", [False, "product"]), ("product_id", "!=", False),
     ], order="id desc", limit=5000)
     sources = []
     seen = set()
     skipped = Counter()
     for line in source_lines:
         order, product = line.order_id, line.product_id
-        if (product.name or "").upper().startswith("UAT-") or (order.partner_id.name or "").upper().startswith("UAT-"):
+        if ((product.name or "").upper().startswith("UAT-")
+                or (order.partner_id.name or "").upper().startswith("UAT-")
+                or (order.client_order_ref or "").upper().startswith(("UAT-", "REAL-UAT-"))):
             skipped["previous UAT master data"] += 1
             continue
-        if "service_tracking" in product._fields and product.service_tracking != "no":
+        if line.is_downpayment or line.is_expense:
+            skipped["down payment or expense line"] += 1
+            continue
+        if not product.active or not product.sale_ok:
+            skipped["archived or non-saleable product"] += 1
+            continue
+        if product.company_id and product.company_id != company:
+            skipped["product belongs to another company"] += 1
+            continue
+        if line.product_uom_qty <= 0 or line.price_unit < 0:
+            skipped["non-positive quantity or negative price"] += 1
+            continue
+        if not order.partner_id.active:
+            skipped["archived customer"] += 1
+            continue
+        if (product.type == "service" and "service_tracking" in product._fields
+                and product.service_tracking != "no"):
             skipped["service would generate projects/tasks"] += 1
             continue
-        if "service_to_purchase" in product._fields and product.service_to_purchase:
+        if product.type == "service" and "service_to_purchase" in product._fields and product.service_to_purchase:
             skipped["service would generate purchase orders"] += 1
             continue
         if any(tax and not tax.active for tax in line.tax_ids):
@@ -94,9 +110,8 @@ def prepare(shell_env):
         if order.cargo_type_id and not order.cargo_type_id.active:
             skipped["archived cargo type"] += 1
             continue
-        if not (line.container_num or "").strip():
-            continue
         if order.partner_id.company_id and order.partner_id.company_id != company:
+            skipped["customer belongs to another company"] += 1
             continue
         if not order.pricelist_id.active:
             skipped["archived pricelist"] += 1
@@ -131,10 +146,29 @@ def prepare(shell_env):
         if key not in seen:
             seen.add(key)
             sources.append(line)
+    print("SOURCE INVENTORY " + json.dumps({
+        "company_id": company.id, "company": company.name,
+        "scanned_product_lines": len(source_lines), "eligible_customer_product_pairs": len(sources),
+        "product_types": dict(Counter(line.product_id.type for line in source_lines)),
+        "lines_with_container": sum(bool((line.container_num or "").strip()) for line in source_lines),
+        "skipped": dict(skipped),
+    }, ensure_ascii=False))
     if not sources:
+        print("SOURCE EXAMPLES " + json.dumps([
+            {"line_id": line.id, "order": line.order_id.name, "state": line.order_id.state,
+             "product": line.product_id.product_tmpl_id.name, "type": line.product_id.type,
+             "quantity": line.product_uom_qty, "price": line.price_unit,
+             "container": line.container_num or None}
+            for line in source_lines[:12]
+        ], ensure_ascii=False))
+        print("COMPANY INVENTORY " + json.dumps([
+            {"id": c.id, "company": c.name,
+             "orders": data["sale.order"].search_count([("company_id", "=", c.id)])}
+            for c in companies.search([])
+        ], ensure_ascii=False))
         raise RuntimeError(
-            "No suitable real confirmed service lines with container numbers and "
-            "a valid template or clearly parseable route product name. Skipped: " + json.dumps(skipped)
+            "No suitable source lines. See SOURCE INVENTORY, SOURCE EXAMPLES and COMPANY INVENTORY above. "
+            "Source quotations and product lines are accepted; Container Number is optional."
         )
 
     category = data.ref("taj_transport_operations.fleet_category_truck")
@@ -172,6 +206,17 @@ def prepare(shell_env):
         if len(trucks) == count:
             break
     if len(trucks) < count:
+        fleet = data["fleet.vehicle"].search([
+            ("active", "=", True), ("company_id", "in", [False, company.id]),
+        ])
+        print("FLEET INVENTORY " + json.dumps({
+            "active_vehicles": len(fleet), "truck_category_id": category.id,
+            "correctly_categorized_trucks": len(fleet.filtered(lambda v: v.category_id == category)),
+            "trucks_with_eligible_fleet_drivers": len(vehicles),
+            "available_trucks_with_distinct_drivers": len(trucks),
+            "examples": [{"truck": v.license_plate, "category": v.category_id.display_name or None,
+                          "driver": v.driver_id.display_name or None} for v in fleet[:12]],
+        }, ensure_ascii=False))
         raise RuntimeError(
             "Need %s available existing trucks with distinct active Fleet drivers; found %s. "
             "No trucks/drivers will be created or taken from active trips." % (count, len(trucks))
@@ -215,6 +260,7 @@ def prepare(shell_env):
     print("New templates have two endpoint checkpoints: Loading at origin and Delivery at destination.")
     print("Schedules and lifecycle/checkpoint events are generated UAT examples, not real shipment history.")
     print("Bill of Lading stays empty. Missing optional cargo descriptions/handling notes stay empty.")
+    print("Blank source containers stay blank. Inventory procurement is disabled for these UAT orders.")
     if not apply:
         print("No records created. Review, then rerun with TAJ_PREP_APPLY=YES.")
         return None
@@ -327,6 +373,8 @@ def prepare(shell_env):
                 or set(line.tax_ids.ids) != set(source.tax_ids.ids)
                 or order.currency_id != source.order_id.currency_id):
             raise RuntimeError("Copied commercial/shipment data does not match its real source.")
+        if "picking_ids" in order._fields and order.picking_ids:
+            raise RuntimeError("Unexpected inventory transfer created; rolling back.")
         if (trip.cargo_type_id != order.cargo_type_id
                 or trip.special_handling_instructions != order.special_handling_instructions
                 or ("cargo_description" in order._fields and trip.cargo_description != order.cargo_description)):

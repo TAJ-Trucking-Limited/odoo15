@@ -542,7 +542,7 @@ To prepare transactions using existing master data in a neutralized
 bash ~/src/user/scripts/taj_transport_prepare_existing_data.sh
 ```
 
-After reviewing the selected customers, historical service lines, route
+After reviewing the selected customers, source sales lines, route
 templates, trucks and drivers, create the records with:
 
 ```bash
@@ -564,6 +564,10 @@ The final manifest lists created routes, order/trip/file references, source
 records, commercial and shipment data, cargo snapshots and milestone events.
 No customers, products, trucks or drivers are created. Missing optional cargo
 or shipment details are left blank, and Bill of Lading remains empty.
+Sources may be existing quotations or confirmed orders, with product or
+service lines; Container Number is optional and is never invented. Inventory
+procurement is disabled on these UAT orders. The script prints source and
+Fleet diagnostics when existing data cannot support the requested preparation.
 
 Check the source checkout without Odoo using:
 
