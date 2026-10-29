@@ -22,25 +22,6 @@ class SaleOrder(models.Model):
         string="Trip Files", compute="_compute_trip_file_count",
         groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user",
     )
-    cargo_type_id = fields.Many2one(
-        "taj.transport.cargo.type",
-        string="Cargo Type",
-        help="Optional cargo classification copied as a snapshot onto each "
-        "new transport trip created from this order. Later changes here do "
-        "not update existing trips.",
-    )
-    cargo_description = fields.Text(
-        string="Cargo Description",
-        help="Optional description copied as a snapshot onto each new "
-        "transport trip created from this order. Later changes here do not "
-        "update existing trips.",
-    )
-    special_handling_instructions = fields.Text(
-        string="Special Handling Instructions",
-        help="Optional handling notes copied as a snapshot onto each new "
-        "transport trip created from this order. Later changes here do not "
-        "update existing trips.",
-    )
 
     @api.depends("transport_trip_ids")
     def _compute_transport_trip_count(self):

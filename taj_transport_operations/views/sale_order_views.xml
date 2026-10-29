@@ -24,12 +24,25 @@
                            string="Trips"/>
                 </button>
             </xpath>
-            <xpath expr="//field[@name='payment_term_id']" position="after">
+            <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+                <group string="Cargo Details" invisible="display_type not in [False, 'product']">
+                    <field name="cargo_type_id"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="cargo_description"
+                           placeholder="Optional description of the goods to transport"/>
+                    <field name="special_handling_instructions"
+                           placeholder="Optional loading, storage or handling notes"/>
+                </group>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
                 <field name="cargo_type_id"
-                       options="{'no_create': True, 'no_create_edit': True}"/>
-                <field name="cargo_description"
+                       options="{'no_create': True, 'no_create_edit': True}"
+                       optional="show" invisible="display_type not in [False, 'product']"/>
+                <field name="cargo_description" optional="show"
+                       invisible="display_type not in [False, 'product']"
                        placeholder="Optional description of the goods to transport"/>
-                <field name="special_handling_instructions"
+                <field name="special_handling_instructions" optional="show"
+                       invisible="display_type not in [False, 'product']"
                        placeholder="Optional loading, storage or handling notes"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">

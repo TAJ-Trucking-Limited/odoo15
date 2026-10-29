@@ -66,10 +66,12 @@ class TestTripMilestones(TajTransportPhase3Case):
         border = self._milestone(trip, "Kasumbalesa border")
         offloading = self._milestone(trip, "Offloading")
         now = fields.Datetime.now()
-        self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        action = self._record(loading, "arrival", event_at=now - timedelta(hours=3))
+        self.assertEqual(action, {"type": "ir.actions.act_window_close"})
         self.assertEqual(loading.state, "arrived")
         self.assertEqual(loading.arrived_by_id, self.env.user)
-        self._record(loading, "departure", event_at=now - timedelta(hours=2, minutes=30))
+        action = self._record(loading, "departure", event_at=now - timedelta(hours=2, minutes=30))
+        self.assertEqual(action, {"type": "ir.actions.act_window_close"})
         self.assertEqual(loading.state, "departed")
         self.assertFalse(loading.confirmed_at)
         self._record(border, "arrival", event_at=now - timedelta(hours=2))
@@ -223,9 +225,8 @@ class TestTripMilestones(TajTransportPhase3Case):
             )
         self.assertEqual(offloading.state, "pending")
         reason = "Customer collected the goods directly at the border"
-        self.assertTrue(
-            self._manager_milestone(offloading)._skip_checkpoint(reason),
-        )
+        action = self._record(offloading, "skip", user=self.manager, reason=reason)
+        self.assertEqual(action, {"type": "ir.actions.act_window_close"})
         offloading.invalidate_recordset()
         self.assertEqual(offloading.state, "skipped")
         self.assertEqual(trip.milestone_count, 3)
@@ -396,7 +397,8 @@ class TestTripMilestones(TajTransportPhase3Case):
             recorded,
             delta=timedelta(seconds=1),
         )
-        wizard.action_apply_correction()
+        action = wizard.action_apply_correction()
+        self.assertEqual(action, {"type": "ir.actions.act_window_close"})
         border.invalidate_recordset()
         self.assertAlmostEqual(
             border.actual_arrival_at,

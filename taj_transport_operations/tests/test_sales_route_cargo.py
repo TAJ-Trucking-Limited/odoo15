@@ -21,23 +21,27 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "list_price": 120,
         })
         cls.cargo = cls.env.ref("taj_transport_operations.cargo_type_general")
+        cls.fragile = cls.env.ref("taj_transport_operations.cargo_type_fragile")
         cls.order = cls.env["sale.order"].create({
             "partner_id": cls.customer.id,
-            "cargo_type_id": cls.cargo.id,
-            "cargo_description": "Palletized machinery",
-            "special_handling_instructions": "Keep upright",
         })
         cls.line_a = cls.env["sale.order.line"].create({
             "order_id": cls.order.id,
             "product_id": cls.product_a.id,
             "product_uom_qty": 1,
             "price_unit": 100,
+            "cargo_type_id": cls.cargo.id,
+            "cargo_description": "Palletized machinery",
+            "special_handling_instructions": "Keep upright",
         })
         cls.line_b = cls.env["sale.order.line"].create({
             "order_id": cls.order.id,
             "product_id": cls.product_b.id,
             "product_uom_qty": 1,
             "price_unit": 120,
+            "cargo_type_id": cls.fragile.id,
+            "cargo_description": "Glass panels",
+            "special_handling_instructions": "Do not stack",
         })
         cls.order.action_confirm()
         cls.route_a = cls.env["taj.transport.route"].create({
@@ -72,7 +76,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertEqual(trip.cargo_type, self.cargo.name)
         self.assertEqual(trip.cargo_description, "Palletized machinery")
         self.assertEqual(trip.special_handling_instructions, "Keep upright")
-        self.order.write({
+        self.line_a.write({
             "cargo_description": "Boxed spare parts",
             "special_handling_instructions": "Changed later",
             "cargo_type_id": False,
@@ -83,9 +87,11 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         later_trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_b.id,
         })
-        self.assertEqual(later_trip.cargo_description, "Boxed spare parts")
+        self.assertEqual(later_trip.cargo_description, "Glass panels")
+        self.assertEqual(later_trip.cargo_type_id, self.fragile)
+        self.assertEqual(later_trip.special_handling_instructions, "Do not stack")
 
-    def test_explicit_cargo_vals_win_over_sales_order_defaults(self):
+    def test_explicit_cargo_vals_win_over_sales_line_defaults(self):
         other = self.env.ref("taj_transport_operations.cargo_type_fragile")
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_a.id,
@@ -97,15 +103,55 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertEqual(trip.cargo_description, "Trip-specific goods")
         self.assertEqual(trip.special_handling_instructions, "Caller wins")
 
-    def test_explicit_blank_cargo_description_is_not_replaced(self):
+    def test_explicit_blank_cargo_values_are_not_replaced(self):
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_a.id,
             "cargo_description": False,
+            "cargo_type_id": False,
+            "special_handling_instructions": False,
         })
         self.assertFalse(trip.cargo_description)
+        self.assertFalse(trip.cargo_type_id)
+        self.assertFalse(trip.special_handling_instructions)
+
+    def test_blank_line_cargo_does_not_inherit_from_another_line(self):
+        self.line_b.write({
+            "cargo_type_id": False,
+            "cargo_description": False,
+            "special_handling_instructions": False,
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_b.id,
+        })
+        self.assertFalse(trip.cargo_type_id)
+        self.assertFalse(trip.cargo_description)
+        self.assertFalse(trip.special_handling_instructions)
+
+    def test_same_product_lines_keep_separate_cargo(self):
+        other_line = self.env["sale.order.line"].create({
+            "order_id": self.order.id,
+            "product_id": self.product_a.id,
+            "product_uom_qty": 1,
+            "price_unit": 100,
+            "cargo_type_id": self.fragile.id,
+            "cargo_description": "Glass panels",
+            "special_handling_instructions": "Do not stack",
+        })
+        for line in self.line_a | other_line:
+            line.action_open_or_create_transport_trip()
+        self.assertEqual(self.line_a.transport_trip_ids.cargo_type_id, self.cargo)
+        self.assertEqual(other_line.transport_trip_ids.cargo_type_id, self.fragile)
+        self.assertEqual(
+            other_line.transport_trip_ids.cargo_description, "Glass panels"
+        )
+        self.assertEqual(
+            other_line.transport_trip_ids.special_handling_instructions,
+            "Do not stack",
+        )
 
     def test_archived_sales_cargo_blocks_batch_before_any_create(self):
-        self.cargo.active = False
+        # An invalid later line must not leave the valid first trip behind.
+        self.fragile.active = False
         with self.assertRaises(ValidationError):
             self.env["taj.transport.trip"].create([
                 {"sale_line_id": self.line_a.id},
@@ -113,7 +159,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             ])
         self.assertFalse(self.line_a.transport_trip_ids)
         self.assertFalse(self.line_b.transport_trip_ids)
-        self.cargo.active = True
+        self.fragile.active = True
 
     def test_template_locations_win_on_create_blank_falls_back_to_product(self):
         trip = self.env["taj.transport.trip"].create({
@@ -220,11 +266,14 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         wizard.action_create_trips()
         self.assertEqual(self.line_a.transport_trip_ids.route_id, self.route_a)
         self.assertEqual(self.line_b.transport_trip_ids.route_id, self.route_b1)
-        for trip in self.line_a.transport_trip_ids | self.line_b.transport_trip_ids:
-            self.assertEqual(trip.cargo_description, "Palletized machinery")
-        self.assertEqual(
-            self.line_a.transport_trip_ids.cargo_type_id, self.cargo
-        )
+        for line in self.line_a | self.line_b:
+            trip = line.transport_trip_ids
+            self.assertEqual(trip.cargo_description, line.cargo_description)
+            self.assertEqual(trip.cargo_type_id, line.cargo_type_id)
+            self.assertEqual(
+                trip.special_handling_instructions,
+                line.special_handling_instructions,
+            )
 
     def test_wizard_refuses_missing_and_forged_templates_before_create(self):
         with self.assertRaises(UserError):

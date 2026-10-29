@@ -9,6 +9,21 @@ class SaleOrderLine(models.Model):
         "taj.transport.trip", "sale_line_id",
         string="Transport Trip", readonly=True,
     )
+    cargo_type_id = fields.Many2one(
+        "taj.transport.cargo.type", string="Cargo Type",
+        help="Optional cargo classification copied onto the new trip for "
+        "this sales line. Later line edits do not update existing trips.",
+    )
+    cargo_description = fields.Text(
+        string="Cargo Description",
+        help="Optional goods description copied onto the new trip for "
+        "this sales line. Later line edits do not update existing trips.",
+    )
+    special_handling_instructions = fields.Text(
+        string="Special Handling Instructions",
+        help="Optional handling notes copied onto the new trip for "
+        "this sales line. Later line edits do not update existing trips.",
+    )
 
     @api.model_create_multi
     def create(self, vals_list):

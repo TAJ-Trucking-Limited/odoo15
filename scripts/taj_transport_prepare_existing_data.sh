@@ -53,8 +53,9 @@ def prepare(shell_env):
     data = company.sudo().with_context(context).with_company(company).env
     module = data["ir.module.module"].search([("name", "=", "taj_transport_operations")])
     version = tuple(int(n) for n in (module.latest_version or "0").split("."))
-    if module.state != "installed" or version < (19, 0, 1, 13, 0):
-        raise RuntimeError("Install/upgrade TAJ Transport Operations to at least 19.0.1.13.0 first.")
+    if (module.state != "installed" or version < (19, 0, 1, 13, 2)
+            or not {"cargo_type_id", "cargo_description", "special_handling_instructions"}.issubset(data["sale.order.line"]._fields)):
+        raise RuntimeError("Install/upgrade TAJ Transport Operations to at least 19.0.1.13.2 first (sales line cargo fields).")
     if data["sale.order"].search_count([("client_order_ref", "=like", prefix + "-%")]):
         raise RuntimeError("This prefix already exists. No existing preparation is changed; choose a new prefix.")
 
@@ -110,7 +111,7 @@ def prepare(shell_env):
         if any(tax and not tax.active for tax in line.tax_ids):
             skipped["archived sales tax"] += 1
             continue
-        if order.cargo_type_id and not order.cargo_type_id.active:
+        if line.cargo_type_id and not line.cargo_type_id.active:
             skipped["archived cargo type"] += 1
             continue
         if order.partner_id.company_id and order.partner_id.company_id != company:
@@ -331,9 +332,9 @@ def prepare(shell_env):
          "file_name": source.file_name or None,
          "payment_terms": source.order_id.payment_term_id.display_name or None,
          "pricelist": source.order_id.pricelist_id.display_name,
-         "cargo_type": source.order_id.cargo_type_id.display_name or None,
-         "cargo_description": source.order_id.cargo_description if "cargo_description" in source.order_id._fields else None,
-         "special_handling": source.order_id.special_handling_instructions or None,
+         "cargo_type": source.cargo_type_id.display_name or None,
+         "cargo_description": source.cargo_description or None,
+         "special_handling": source.special_handling_instructions or None,
          "route": route["name"], "create_route": route["record"] is None,
          "origin": route["origin"], "destination": route["destination"], "truck": truck.license_plate,
          "truck_id": truck.id,
@@ -508,10 +509,10 @@ def prepare(shell_env):
             raise RuntimeError("Copied commercial/shipment data does not match its real source.")
         if "picking_ids" in order._fields and order.picking_ids:
             raise RuntimeError("Unexpected inventory transfer created; rolling back.")
-        if (trip.cargo_type_id != order.cargo_type_id
-                or trip.special_handling_instructions != order.special_handling_instructions
-                or ("cargo_description" in order._fields and trip.cargo_description != order.cargo_description)):
-            raise RuntimeError("Trip cargo snapshots do not match the new sales order.")
+        if (trip.cargo_type_id != line.cargo_type_id
+                or trip.special_handling_instructions != line.special_handling_instructions
+                or trip.cargo_description != line.cargo_description):
+            raise RuntimeError("Trip cargo snapshots do not match the new sales line.")
         results.append({**preview[index - 1], "order": order.name, "order_id": order.id,
                         "sales_line_id": line.id, "customer_reference": order.client_order_ref,
                         "company": company.display_name, "total": order.amount_total,

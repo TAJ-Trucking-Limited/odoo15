@@ -515,30 +515,30 @@ class TajTransportTrip(models.Model):
         return vals
 
     @api.model
-    def _default_cargo_from_sale_order(self, vals, line):
-        """Snapshot cargo defaults from the sales order; explicit vals win."""
-        order = line.order_id
+    def _default_cargo_from_sale_line(self, vals, line):
+        """Snapshot cargo defaults from the source line; explicit vals win."""
         if "cargo_type_id" not in vals and "cargo_type" not in vals:
-            cargo_type = order.cargo_type_id
+            cargo_type = line.cargo_type_id
             if cargo_type:
                 if not cargo_type.active:
                     raise ValidationError(_(
-                        "Sales order %(order)s uses archived cargo type "
-                        "%(cargo)s. Choose an active cargo type on the sales "
-                        "order before creating trips."
+                        "The %(product)s line on sales order %(order)s uses "
+                        "archived cargo type %(cargo)s. Choose an active cargo "
+                        "type on that line before creating trips."
                     ) % {
-                        "order": order.display_name,
+                        "order": line.order_id.display_name,
+                        "product": line.product_id.display_name,
                         "cargo": cargo_type.display_name,
                     })
                 vals["cargo_type_id"] = cargo_type.id
-        if "cargo_description" not in vals and order.cargo_description:
-            vals["cargo_description"] = order.cargo_description
+        if "cargo_description" not in vals and line.cargo_description:
+            vals["cargo_description"] = line.cargo_description
         if (
             "special_handling_instructions" not in vals
-            and order.special_handling_instructions
+            and line.special_handling_instructions
         ):
             vals["special_handling_instructions"] = (
-                order.special_handling_instructions
+                line.special_handling_instructions
             )
         return vals
 
@@ -648,7 +648,7 @@ class TajTransportTrip(models.Model):
         ).exists()
         self._validate_sale_line(line)
         vals = dict(entry)
-        vals = self._default_cargo_from_sale_order(vals, line)
+        vals = self._default_cargo_from_sale_line(vals, line)
         vals = self._sync_cargo_type_values(vals)
         # Explicit template locations win; blank template fields keep the
         # caller's values so the product-name fallback can still apply.

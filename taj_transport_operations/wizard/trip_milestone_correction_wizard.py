@@ -66,11 +66,4 @@ class TajTransportMilestoneCorrectionWizard(models.TransientModel):
             self.reason,
             self.note,
         )
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Transport Trip"),
-            "res_model": "taj.transport.trip",
-            "res_id": milestone.trip_id.id,
-            "view_mode": "form",
-            "target": "current",
-        }
+        return {"type": "ir.actions.act_window_close"}

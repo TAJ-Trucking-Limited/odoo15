@@ -80,15 +80,19 @@ Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
 - Cargo type and actual cargo description.
 - Special handling instructions.
 
-**Sales order cargo defaults (19.0.1.12.0; description added in 19.0.1.13.1):**
+**Sales line cargo defaults (19.0.1.13.2):**
 optional Cargo Type, Cargo Description and Special Handling Instructions on
-the sales order are visible to Sales users (cargo catalog is read-only for
-them). Every newly created trip snapshots these three values from its sales
-order across the wizard, line Trip button and ORM create
-paths; explicit create values win. Later order edits do not update existing
-trips. Cargo Description fills the trip's Operational Cargo Description; a
-blank order description leaves the trip description empty. An archived sales
+each sales order product/service line are visible in the order line list and
+line form to Sales users (cargo catalog is read-only for them). Every newly
+created trip snapshots these three values from its own source line across
+the wizard, line Trip button and ORM create paths; explicit create values win.
+Different lines on the same order can carry different cargo. Later line edits
+do not update existing trips. Cargo Description fills the trip's Operational Cargo Description; a
+blank line description leaves the trip description empty. An archived sales
 cargo type refuses creation with a clear error and creates no partial batch.
+On upgrade, former order-level cargo values are copied to empty product-line
+fields; sections/notes and existing trip snapshots are preserved. New lines
+start with empty optional cargo fields.
 
 Changes to dispatcher-maintained fields are tracked in the trip Chatter via
 Odoo's standard `mail.thread` tracking (including the responsible user and
@@ -529,11 +533,16 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.13.1`
+it automatically during Git deployment. The manifest version is `19.0.1.13.2`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots and historical truck grouping; Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
+
+**Milestone save navigation (19.0.1.13.2):** saving Arrival, Departure, Skip
+or a timestamp correction closes the dialog and refreshes the view that
+opened it. The global milestone list keeps its filters and grouping; a
+wizard opened from the trip stays on that trip rather than navigating anew.
 
 To prepare transactions using existing master data in a neutralized
 `19_upgrade` staging database, run the preview in the Odoo.sh shell:

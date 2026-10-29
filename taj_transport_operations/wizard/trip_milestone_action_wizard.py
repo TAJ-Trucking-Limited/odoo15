@@ -54,11 +54,5 @@ class TajTransportMilestoneActionWizard(models.TransientModel):
             milestone._skip_checkpoint(self.reason)
         else:
             raise UserError(_("Unsupported checkpoint action."))
-        return {
-            "type": "ir.actions.act_window",
-            "name": _("Transport Trip"),
-            "res_model": "taj.transport.trip",
-            "res_id": milestone.trip_id.id,
-            "view_mode": "form",
-            "target": "current",
-        }
+        # Closing the dialog refreshes its caller while retaining navigation.
+        return {"type": "ir.actions.act_window_close"}
