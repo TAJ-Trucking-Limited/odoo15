@@ -79,7 +79,7 @@
                     <group>
                         <group string="Sales Source">
                             <field name="sale_line_id" required="1" readonly="id"
-                                   domain="[('order_id.state', 'in', ['sale', 'done']), ('display_type', '=', 'product')]"
+                                   domain="[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('vehicle_id', '!=', False)]"
                                    options="{'no_create': True}"/>
                             <field name="sale_order_id" readonly="1"/>
                             <field name="partner_id" readonly="1"/>

@@ -121,6 +121,7 @@ class TajTransportPhase3Case(TransactionCase):
                 "name": "Phase 3 freight %s" % tag,
                 "product_uom_qty": 1,
                 "price_unit": 900,
+                "vehicle_id": self.truck.id,
                 **vals,
             }
         )

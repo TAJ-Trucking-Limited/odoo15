@@ -76,6 +76,24 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                 }
             )
             order = env["sale.order"].create({"partner_id": customer.id})
+            brand = env["fleet.vehicle.model.brand"].create(
+                {"name": "Concurrency brand"},
+            )
+            truck_model = env["fleet.vehicle.model"].create(
+                {
+                    "name": "Concurrency truck model",
+                    "brand_id": brand.id,
+                    "category_id": env.ref(
+                        "taj_transport_operations.fleet_category_truck"
+                    ).id,
+                }
+            )
+            vehicle = env["fleet.vehicle"].create(
+                {
+                    "model_id": truck_model.id,
+                    "license_plate": "CONCURRENCY-01",
+                }
+            )
             lines = env["sale.order.line"].create(
                 [
                     {
@@ -84,6 +102,7 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                         "name": "Concurrency freight %s" % tag,
                         "product_uom_qty": 1,
                         "price_unit": 700,
+                        "vehicle_id": vehicle.id,
                     }
                     for tag in ("planned", "switch")
                 ]
@@ -128,6 +147,9 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                 "route_c": route_c.id,
                 "trip_planned": trip_planned.id,
                 "trip_switch": trip_switch.id,
+                "vehicle": vehicle.id,
+                "truck_model": truck_model.id,
+                "brand": brand.id,
             }
         cls.ids = ids
         cls.addClassCleanup(cls._remove_committed_fixtures, ids)
@@ -157,6 +179,15 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                 (tuple(ids["lines"]),),
             )
             cr.execute("DELETE FROM sale_order WHERE id = %s", (ids["order"],))
+            cr.execute("DELETE FROM fleet_vehicle WHERE id = %s", (ids["vehicle"],))
+            cr.execute(
+                "DELETE FROM fleet_vehicle_model WHERE id = %s",
+                (ids["truck_model"],),
+            )
+            cr.execute(
+                "DELETE FROM fleet_vehicle_model_brand WHERE id = %s",
+                (ids["brand"],),
+            )
             cr.execute(
                 "DELETE FROM taj_transport_route_line WHERE route_id IN %s",
                 (routes,),

@@ -18,8 +18,8 @@ class TajTransportTripCreateWizard(models.TransientModel):
         "wizard_id",
         string="Transport Lines",
         help="Select only transport lines. Lines already assigned to a truck "
-             "are suggested; select lines without a truck manually. Each new "
-             "trip needs a route template linked to that line's product.",
+             "are suggested. Every new trip needs a truck and a route template "
+             "linked to that line's product.",
     )
     company_id = fields.Many2one(
         "res.company", related="sale_order_id.company_id", readonly=True,
@@ -179,7 +179,8 @@ class TajTransportTripCreateWizardLine(models.TransientModel):
         string="Sales Line",
         required=True,
         domain="[('order_id', '=', sale_order_id), "
-               "('display_type', '=', 'product')]",
+               "('display_type', 'in', [False, 'product']), "
+               "('vehicle_id', '!=', False)]",
     )
     company_id = fields.Many2one(
         related="wizard_id.company_id", readonly=True,

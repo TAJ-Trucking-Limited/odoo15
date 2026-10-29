@@ -9,10 +9,10 @@
                 <field name="company_id" invisible="1"/>
                 <div class="alert alert-warning" role="alert"
                      invisible="not no_vehicle_on_order">
-                    <strong>No vehicle assigned.</strong>
-                    None of this sales order's product lines has a vehicle.
-                    Select transport lines manually to continue, or cancel
-                    and assign a vehicle on the sales order.
+                    <strong>No truck assigned.</strong>
+                    None of this sales order's product lines has a truck, so no
+                    transport trip can be created. Cancel and assign a truck on
+                    the sales order lines first.
                 </div>
                 <group>
                     <field name="sale_order_id" readonly="1"/>
@@ -35,8 +35,8 @@
                 </field>
                 <p class="text-muted">
                     Only select actual transport/freight lines. Truck-assigned
-                    lines without trips are suggested by default. You can
-                    also select a transport line without a truck.
+                    lines without trips are suggested by default. A line needs
+                    a truck on the sales order before a trip can be created.
                     Existing trips will be reused; no duplicate trips created.
                 </p>
                 <p class="text-muted">

@@ -161,13 +161,13 @@ class TestTransportTripFoundation(TransactionCase):
                 "sale_line_id": self.note_line.id,
             })
 
-    def test_trip_without_truck_and_quantity_not_one(self):
-        trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_no_truck.id,
-        })
-        self.assertFalse(trip.initial_vehicle_id)
-        self.assertEqual(trip.sale_line_id.product_uom_qty, 3)
-        self.assertEqual(len(self.line_no_truck.transport_trip_ids), 1)
+    def test_trip_requires_truck_on_sale_line(self):
+        with self.assertRaises(ValidationError):
+            self.env["taj.transport.trip"].create({
+                "sale_line_id": self.line_no_truck.id,
+            })
+        self.assertFalse(self.line_no_truck.transport_trip_ids)
+        self.assertEqual(self.line_no_truck.transport_trip_count, 0)
 
     def test_source_and_status_immutable(self):
         trip = self.env["taj.transport.trip"].create({
@@ -218,23 +218,19 @@ class TestTransportTripFoundation(TransactionCase):
                     "sale_line_id": self.line_2.id,
                     "route_id": self.linked_route.id,
                 }),
-                Command.create({
-                    "sale_line_id": self.line_no_truck.id,
-                    "route_id": self.linked_route.id,
-                }),
             ],
         })
         result = wizard.action_create_trips()
         self.assertEqual(result["res_model"], "taj.transport.trip")
         self.assertEqual(
-            len(self.order.transport_trip_ids), 3
+            len(self.order.transport_trip_ids), 2
         )
         self.assertEqual(
             self.line_1.transport_trip_ids, trip
         )
         again = wizard.action_create_trips()
         self.assertEqual(
-            len(self.order.transport_trip_ids), 3
+            len(self.order.transport_trip_ids), 2
         )
         self.assertEqual(again["res_model"], "taj.transport.trip")
 
@@ -358,13 +354,15 @@ class TestTransportTripFoundation(TransactionCase):
                 }).flush_recordset()
 
     def test_batch_four_driver_only_assignment_for_unassigned_draft_trip(self):
+        # A truck without an active Fleet driver leaves the trip unassigned,
+        # so a driver-only initial assignment is still a reachable state.
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_no_truck.id,
+            "sale_line_id": self.line_1.id,
         })
         driver = self.env["res.partner"].create({
             "name": "Driver without truck yet",
         })
-        self.assertFalse(trip.initial_vehicle_id)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
         wizard = self.env["taj.transport.initial.assignment.wizard"].create({
             "trip_id": trip.id,
             "driver_id": driver.id,
@@ -372,7 +370,7 @@ class TestTransportTripFoundation(TransactionCase):
         wizard.action_assign_initial_resources()
         self.assertEqual(trip.current_driver_id, driver)
         self.assertFalse(trip.current_vehicle_id)
-        self.assertFalse(trip.initial_vehicle_id)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
         self.assertEqual(trip.state, "draft")
         self.assertEqual(len(trip.assignment_ids), 1)
 
@@ -1350,7 +1348,7 @@ class TestTransportTripFoundation(TransactionCase):
 
     def test_batch_two_blank_operational_fields_remain_optional(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_no_truck.id,
+            "sale_line_id": self.line_1.id,
         })
         self.assertFalse(trip.transporter_id)
         self.assertFalse(trip.transport_reference)
@@ -1363,8 +1361,8 @@ class TestTransportTripFoundation(TransactionCase):
             trip.cargo_type_id,
             self.env.ref("taj_transport_operations.cargo_type_bulk"),
         )
-        self.assertFalse(trip.initial_vehicle_id)
-        self.assertEqual(trip.sale_line_id.product_uom_qty, 3)
+        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertEqual(trip.sale_line_id.product_uom_qty, 1)
 
     def test_batch_two_form_separates_read_only_sales_and_operations(self):
         from lxml import etree

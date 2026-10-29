@@ -442,6 +442,11 @@ class TajTransportTrip(models.Model):
                 "Only product/service lines can create transport trips, "
                 "not section or note lines."
             ))
+        if not sale_line.vehicle_id:
+            raise ValidationError(_(
+                "Assign a truck on sales line %(line)s before creating a "
+                "transport trip."
+            ) % {"line": sale_line.display_name})
 
     @api.constrains("sale_line_id")
     def _check_sale_line(self):

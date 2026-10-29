@@ -22,6 +22,20 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         })
         cls.cargo = cls.env.ref("taj_transport_operations.cargo_type_general")
         cls.fragile = cls.env.ref("taj_transport_operations.cargo_type_fragile")
+        cls.brand = cls.env["fleet.vehicle.model.brand"].create({
+            "name": "Route cargo brand",
+        })
+        cls.truck_model = cls.env["fleet.vehicle.model"].create({
+            "name": "Route cargo truck model",
+            "brand_id": cls.brand.id,
+            "category_id": cls.env.ref(
+                "taj_transport_operations.fleet_category_truck"
+            ).id,
+        })
+        cls.truck = cls.env["fleet.vehicle"].create({
+            "model_id": cls.truck_model.id,
+            "license_plate": "ROUTE-CARGO-01",
+        })
         cls.order = cls.env["sale.order"].create({
             "partner_id": cls.customer.id,
         })
@@ -30,6 +44,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "product_id": cls.product_a.id,
             "product_uom_qty": 1,
             "price_unit": 100,
+            "vehicle_id": cls.truck.id,
             "cargo_type_id": cls.cargo.id,
             "cargo_description": "Palletized machinery",
             "special_handling_instructions": "Keep upright",
@@ -39,6 +54,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "product_id": cls.product_b.id,
             "product_uom_qty": 1,
             "price_unit": 120,
+            "vehicle_id": cls.truck.id,
             "cargo_type_id": cls.fragile.id,
             "cargo_description": "Glass panels",
             "special_handling_instructions": "Do not stack",
@@ -133,6 +149,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "product_id": self.product_a.id,
             "product_uom_qty": 1,
             "price_unit": 100,
+            "vehicle_id": self.truck.id,
             "cargo_type_id": self.fragile.id,
             "cargo_description": "Glass panels",
             "special_handling_instructions": "Do not stack",
@@ -181,6 +198,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "product_id": self.product_a.id,
             "product_uom_qty": 1,
             "price_unit": 100,
+            "vehicle_id": self.truck.id,
         })
         trip2 = self.env["taj.transport.trip"].create({
             "sale_line_id": line.id,
@@ -322,6 +340,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "product_id": orphan.id,
             "product_uom_qty": 1,
             "price_unit": 50,
+            "vehicle_id": self.truck.id,
         })
         with self.assertRaises(UserError):
             line.action_open_or_create_transport_trip()

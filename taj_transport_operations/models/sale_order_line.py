@@ -9,6 +9,15 @@ class SaleOrderLine(models.Model):
         "taj.transport.trip", "sale_line_id",
         string="Transport Trip", readonly=True,
     )
+    transport_trip_count = fields.Integer(
+        string="Transport Trips", compute="_compute_transport_trip_count",
+    )
+
+    @api.depends("transport_trip_ids")
+    def _compute_transport_trip_count(self):
+        for line in self:
+            line.transport_trip_count = len(line.transport_trip_ids)
+
     cargo_type_id = fields.Many2one(
         "taj.transport.cargo.type", string="Cargo Type",
         help="Optional cargo classification copied onto the new trip for "

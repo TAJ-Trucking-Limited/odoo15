@@ -14,6 +14,20 @@ class TestTripFiles(TransactionCase):
         cls.product = cls.env["product.product"].create({
             "name": "Trip File freight", "type": "service", "list_price": 100,
         })
+        cls.brand = cls.env["fleet.vehicle.model.brand"].create({
+            "name": "Trip File brand",
+        })
+        cls.truck_model = cls.env["fleet.vehicle.model"].create({
+            "name": "Trip File truck model",
+            "brand_id": cls.brand.id,
+            "category_id": cls.env.ref(
+                "taj_transport_operations.fleet_category_truck"
+            ).id,
+        })
+        cls.truck = cls.env["fleet.vehicle"].create({
+            "model_id": cls.truck_model.id,
+            "license_plate": "TRIP-FILE-01",
+        })
 
     def _order(self):
         return self.env["sale.order"].create({
@@ -22,6 +36,7 @@ class TestTripFiles(TransactionCase):
                 Command.create({
                     "product_id": self.product.id, "product_uom_qty": 5,
                     "container_num": "CONT-A", "price_unit": 100,
+                    "vehicle_id": self.truck.id,
                 }),
                 Command.create({
                     "display_type": "line_section", "name": "Shipment notes",
@@ -29,6 +44,7 @@ class TestTripFiles(TransactionCase):
                 Command.create({
                     "product_id": self.product.id, "product_uom_qty": 1,
                     "container_num": "CONT-B", "price_unit": 100,
+                    "vehicle_id": self.truck.id,
                 }),
                 Command.create({"display_type": "line_note", "name": "Keep dry"}),
             ],

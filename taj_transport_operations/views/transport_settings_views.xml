@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_settings_form" model="ir.ui.view">
+        <field name="name">taj.transport.settings.form</field>
+        <field name="model">taj.transport.settings</field>
+        <field name="arch" type="xml">
+            <form string="Transport Operations Settings">
+                <sheet>
+                    <group>
+                        <field name="dispatch_cutoff_date"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_save" type="object" string="Save"
+                            class="btn-primary"/>
+                    <button string="Discard" special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_transport_settings" model="ir.actions.act_window">
+        <field name="name">Settings</field>
+        <field name="res_model">taj.transport.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_transport_settings" name="Settings"
+              parent="menu_transport_configuration"
+              action="action_transport_settings" sequence="50"
+              groups="taj_transport_operations.group_transport_manager"/>
+</odoo>

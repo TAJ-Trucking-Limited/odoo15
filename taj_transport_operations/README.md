@@ -7,11 +7,13 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 
 - Each confirmed **product/service sales order line** can have **one** trip.
 - The relationship is enforced by a **database unique constraint**.
-- A trip starts in `Draft`, including when no truck was specified on the line.
+- A trip requires a **truck on the sales line** (`vehicle_id`). Creating a trip
+  for a truckless line is refused; assign the truck on the Sales order first.
+  The trip starts in `Draft`.
 - Trip reference is generated using `TRIP/<year>/<sequence>`.
 - Sales Order > **Create Trips** opens a selection wizard. Truck-assigned lines
-  without trips are suggested; an operator may add other actual transport
-  lines. The button **does not** create trips automatically on confirmation.
+  without trips are suggested; only trucked lines can be selected. The button
+  **does not** create trips automatically on confirmation.
 - Each **new** trip from Create Trips needs a route template linked to that
   line's product (`product_tmpl_id` on the template). Exactly one active
   same-company match is auto-selected; several matches require a per-line
@@ -19,8 +21,7 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   are opened unchanged. Standalone / API trip creation may still omit a
   template, and unlinked legacy templates remain selectable on the trip form.
 - If no product line has a vehicle, the **Create Trips** dialog shows a yellow
-  warning. The operator can select transport lines manually or cancel and assign
-  a vehicle on the order. This warning does not block Draft trip creation.
+  warning and no line can be selected. Assign a truck on the sales order first.
 - The **Trip** button on each confirmed product line opens an existing trip or
   creates exactly one when explicitly clicked (unique product-linked template,
   or a chooser when several match).
@@ -30,9 +31,10 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   synchronized back to the sales line. Customer and commercial details are
   read-only links to their source records.
 - Access requires the Dispatcher or Transport Manager group (under the
-  Odoo 19 Transport Operations privilege) and appropriate read access to
-  the linked Sales documents. Users in Sales must be assigned the transport
-  group separately. No group is granted automatic Sales edit permissions.
+  Odoo 19 Transport Operations privilege). Dispatchers get read-only access to
+  Sales orders and lines so the dispatch worklists work without Sales rights.
+  Users in Sales must be assigned the transport group separately. No group is
+  granted automatic Sales edit permissions.
 - Trip visibility is limited to allowed companies. No one is granted
   deletion rights on trips in this batch.
 - No migration, backfill, or bulk creation of historical trips.
@@ -519,6 +521,31 @@ wizard. The wizard uses the caller's trip access and allowed-company rules;
 it does not elevate permissions. POD files and their filenames can be supplied
 here, including after completion/cancellation.
 
+## Dispatch worklists (19.0.1.14.0)
+
+Two read-only menus under **Transport Operations** list the confirmed sales
+order lines a dispatcher still has to act on. Both open one row per sales
+**line** (trips live on lines, not orders) and default to grouping by Sales
+Order.
+
+- **Lines Without Trip** — confirmed product/service lines with no trip.
+  Rows whose line has no truck are highlighted in red.
+- **Lines Without Truck** — confirmed product/service lines with no truck.
+  A trip cannot be created for these lines.
+
+Search filters **No Trip**, **Has Trip**, **No Truck** and **Has Truck** combine
+with the menu domain, and rows can be grouped by Sales Order or Customer.
+Cancelled trips still count as a trip record, because a line may only ever have
+one trip.
+
+**Dispatch cutoff (19.0.1.15.0).** Transport Operations > Configuration >
+Settings sets a **Dispatch Cutoff Date**. Both worklists then hide every sales
+order whose **Order Date** is earlier than that date, whatever search filters
+are applied. Leave the field empty to show every confirmed order. The cutoff
+only affects these two worklists: trips, Sales documents, the Create Trips
+wizard and reporting are unchanged. The cutoff is database-wide, not
+per company.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -533,9 +560,11 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.13.2`
+it automatically during Git deployment. The manifest version is `19.0.1.15.0`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
-sales cargo snapshots and historical truck grouping; Navirec compatibility:
+sales cargo snapshots, historical truck grouping, the dispatch worklists and
+their cutoff date;
+Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
 

@@ -49,8 +49,87 @@
                 <button name="action_open_or_create_transport_trip"
                         type="object" string="Trip" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user"
-                        invisible="parent.state not in ['sale', 'done'] or display_type != 'product'"/>
+                        invisible="parent.state not in ['sale', 'done'] or display_type not in [False, 'product'] or not vehicle_id"/>
             </xpath>
         </field>
     </record>
+
+    <record id="view_sale_order_line_dispatch_list" model="ir.ui.view">
+        <field name="name">sale.order.line.dispatch.list</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <list string="Sales Lines" create="0" edit="0" delete="0"
+                  decoration-danger="not vehicle_id">
+                <field name="order_id"/>
+                <field name="order_partner_id" string="Customer"/>
+                <field name="product_id"/>
+                <field name="name" string="Description"/>
+                <field name="product_uom_qty" string="Quantity"/>
+                <field name="vehicle_id"/>
+                <field name="transport_trip_count" string="Trips"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sale_order_line_dispatch_search" model="ir.ui.view">
+        <field name="name">sale.order.line.dispatch.search</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <search string="Sales Lines">
+                <field name="order_id"/>
+                <field name="order_partner_id"/>
+                <field name="product_id"/>
+                <field name="vehicle_id"/>
+                <filter name="no_trip" string="No Trip"
+                        domain="[('transport_trip_ids', '=', False)]"/>
+                <filter name="has_trip" string="Has Trip"
+                        domain="[('transport_trip_ids', '!=', False)]"/>
+                <filter name="no_truck" string="No Truck"
+                        domain="[('vehicle_id', '=', False)]"/>
+                <filter name="has_truck" string="Has Truck"
+                        domain="[('vehicle_id', '!=', False)]"/>
+                <group>
+                    <filter name="group_by_order" string="Sales Order"
+                            context="{'group_by': 'order_id'}"/>
+                    <filter name="group_by_customer" string="Customer"
+                            context="{'group_by': 'order_partner_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_sale_order_line_without_trip" model="ir.actions.act_window">
+        <field name="name">Lines Without Trip</field>
+        <field name="res_model">sale.order.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
+        <field name="search_view_id" ref="view_sale_order_line_dispatch_search"/>
+        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('transport_trip_ids', '=', False)]</field>
+        <field name="context">{'search_default_group_by_order': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a transport trip.</p>
+            <p>Use Create Trips on a confirmed sales order to plan new transport trips.</p>
+        </field>
+    </record>
+
+    <record id="action_sale_order_line_without_truck" model="ir.actions.act_window">
+        <field name="name">Lines Without Truck</field>
+        <field name="res_model">sale.order.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
+        <field name="search_view_id" ref="view_sale_order_line_dispatch_search"/>
+        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('vehicle_id', '=', False)]</field>
+        <field name="context">{'search_default_group_by_order': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a truck.</p>
+            <p>A truck is required on the sales line before a transport trip can be created.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_transport_lines_without_trip" name="Lines Without Trip"
+              parent="menu_transport_operations" action="action_sale_order_line_without_trip"
+              sequence="20" groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_lines_without_truck" name="Lines Without Truck"
+              parent="menu_transport_operations" action="action_sale_order_line_without_truck"
+              sequence="30" groups="taj_transport_operations.group_transport_user"/>
 </odoo>
