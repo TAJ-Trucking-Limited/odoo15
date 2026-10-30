@@ -57,12 +57,11 @@
                         <group string="Schedule">
                             <field name="timezone"
                                 placeholder="Africa/Dar_es_Salaam"/>
-                            <field name="send_time_1"
-                                placeholder="08:00"/>
-                            <field name="send_time_2"
-                                placeholder="13:00"/>
-                            <field name="send_time_3"
-                                placeholder="18:00"/>
+                            <field name="send_time_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="time" placeholder="08:00"/>
+                                </list>
+                            </field>
                             <field name="next_send_at" readonly="1"/>
                             <field name="last_sent_at" readonly="1"/>
                         </group>

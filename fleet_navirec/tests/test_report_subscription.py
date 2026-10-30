@@ -49,18 +49,24 @@ class TestNavirecReportSubscription(TransactionCase):
         )
 
     def _create_subscription(self, **overrides):
+        active = overrides.pop("active", False)
         vals = {
             "name": "Client One Tracking",
             "partner_id": self.client.id,
             "email_to": "ops@example.com",
             "timezone": "Africa/Dar_es_Salaam",
-            "send_time_1": "08:00",
-            "send_time_2": "13:00",
-            "send_time_3": "18:00",
+            "send_time_ids": [
+                Command.create({"time": "08:00"}),
+                Command.create({"time": "13:00"}),
+                Command.create({"time": "18:00"}),
+            ],
             "vehicle_ids": [Command.set([self.vehicle_a.id])],
         }
         vals.update(overrides)
-        return self.env["fleet.navirec.report.subscription"].create(vals)
+        subscription = self.env["fleet.navirec.report.subscription"].create(vals)
+        if active:
+            subscription.active = True
+        return subscription
 
     def test_next_send_uses_client_timezone(self):
         subscription = self._create_subscription()
@@ -85,15 +91,26 @@ class TestNavirecReportSubscription(TransactionCase):
         )
 
     def test_select_all_excludes_trailers_without_devices(self):
-        category = self.env.ref("taj_transport_operations.fleet_category_trailer",
-                                raise_if_not_found=False)
-        category = category or self.env["fleet.vehicle.model.category"].search([
-            ("name", "=ilike", "Trailer"),
-        ], limit=1) or self.env["fleet.vehicle.model.category"].create({"name": "Trailer"})
-        trailer = self.env["fleet.vehicle"].create({
-            "model_id": self.model.id, "category_id": category.id,
-            "license_plate": "REPORT-TRAILER",
-        })
+        category = self.env.ref(
+            "taj_transport_operations.fleet_category_trailer", raise_if_not_found=False
+        )
+        category = (
+            category
+            or self.env["fleet.vehicle.model.category"].search(
+                [
+                    ("name", "=ilike", "Trailer"),
+                ],
+                limit=1,
+            )
+            or self.env["fleet.vehicle.model.category"].create({"name": "Trailer"})
+        )
+        trailer = self.env["fleet.vehicle"].create(
+            {
+                "model_id": self.model.id,
+                "category_id": category.id,
+                "license_plate": "REPORT-TRAILER",
+            }
+        )
         subscription = self._create_subscription()
         subscription.action_select_all_vehicles()
         self.assertIn(self.vehicle_a, subscription.vehicle_ids)
@@ -112,11 +129,47 @@ class TestNavirecReportSubscription(TransactionCase):
         with self.assertRaises(ValidationError):
             subscription.active = True
 
-    def test_three_send_times_must_be_unique(self):
+    def test_duplicate_send_times_are_rejected(self):
         with self.assertRaises(ValidationError):
             self._create_subscription(
-                send_time_2="08:00",
+                send_time_ids=[
+                    Command.create({"time": "08:00"}),
+                    Command.create({"time": "8:00"}),
+                ],
             )
+
+    def test_active_subscription_requires_send_time(self):
+        subscription = self._create_subscription(active=True)
+
+        with self.assertRaises(ValidationError):
+            subscription.write({"send_time_ids": [Command.clear()]})
+
+    def test_any_number_of_send_times_is_supported(self):
+        subscription = self._create_subscription(
+            send_time_ids=[
+                Command.create({"time": "06:00"}),
+                Command.create({"time": "10:00"}),
+                Command.create({"time": "14:00"}),
+                Command.create({"time": "20:00"}),
+            ],
+            active=True,
+        )
+
+        next_send = subscription._get_next_send_at(datetime(2026, 9, 25, 12, 0, 0))
+
+        self.assertEqual(next_send, datetime(2026, 9, 25, 17, 0, 0))
+
+    def test_editing_send_time_refreshes_next_send_at(self):
+        subscription = self._create_subscription(
+            send_time_ids=[Command.create({"time": "08:00"})],
+            active=True,
+        )
+        next_before = subscription.next_send_at
+
+        subscription.send_time_ids.write({"time": "23:00"})
+        subscription.invalidate_recordset()
+
+        self.assertNotEqual(subscription.next_send_at, next_before)
 
     def test_report_only_contains_subscription_vehicles(self):
         self.vehicle_a._write_navirec_state(
@@ -446,9 +499,12 @@ class TestNavirecReportSubscription(TransactionCase):
             mails.append(mail)
             return True
 
-        with patch.object(type(self.env["mail.mail"]), "send", new=fake_send), patch.object(
-            type(self.env["fleet.vehicle"]), "_cron_navirec_sync_states"
-        ) as refresh:
+        with (
+            patch.object(type(self.env["mail.mail"]), "send", new=fake_send),
+            patch.object(
+                type(self.env["fleet.vehicle"]), "_cron_navirec_sync_states"
+            ) as refresh,
+        ):
             self.env["fleet.navirec.report.subscription"]._cron_send_due_reports()
 
         refresh.assert_called_once()

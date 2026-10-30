@@ -92,7 +92,7 @@ When the template is empty, that verified live vehicle route is used automatical
 - Fleet-manager-only per-client tracking subscription model.
 - Explicit vehicle selection prevents cross-client vehicle disclosure.
 - To/CC recipients and IANA timezone per subscription.
-- Exactly three distinct configurable local send times per day.
+- Any number of distinct configurable local send times per day.
 - UTC `next_send_at` calculation with timezone conversion.
 - Configurable Vehicle, License Plate, Position, Coordinates, Speed,
   Ignition/Movement and Odometer columns.
@@ -170,7 +170,7 @@ Fleet -> Configuration -> Settings -> Navirec:
 These are not safe to invent in code and are not Phase-1 connector defects:
 
 - Final client recipient and CC addresses.
-- The three production send times for each client.
+- The production send times for each client.
 - Whether the Client Agreement requires HTML-only, PDF, XLSX or another
   attachment format. Current delivery is HTML email/report preview.
 - The exact Navirec vehicle-specific web route. Configure the deep-link template

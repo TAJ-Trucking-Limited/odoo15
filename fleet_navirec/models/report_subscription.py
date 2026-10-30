@@ -39,30 +39,22 @@ class FleetNavirecReportSubscription(models.Model):
             ("client", "Selected client"),
             ("fleet", "Internal fleet (all selected vehicles)"),
         ],
-        string="Trip Details Scope", required=True, default="client",
+        string="Trip Details Scope",
+        required=True,
+        default="client",
         help="Selected client includes its company/contact addresses. "
-             "Internal fleet shows the current trip of every selected vehicle, "
-             "regardless of customer; use it for internal recipients.",
+        "Internal fleet shows the current trip of every selected vehicle, "
+        "regardless of customer; use it for internal recipients.",
     )
     timezone = fields.Char(
         required=True,
         default=lambda self: self.env.user.tz or "UTC",
-        help="IANA timezone used for the three daily send times.",
+        help="IANA timezone used for the daily send times.",
     )
-    send_time_1 = fields.Char(
-        string="Send Time 1",
-        required=True,
-        help="Local client time in HH:MM format.",
-    )
-    send_time_2 = fields.Char(
-        string="Send Time 2",
-        required=True,
-        help="Local client time in HH:MM format.",
-    )
-    send_time_3 = fields.Char(
-        string="Send Time 3",
-        required=True,
-        help="Local client time in HH:MM format.",
+    send_time_ids = fields.One2many(
+        "fleet.navirec.report.slot",
+        "subscription_id",
+        string="Send Times",
     )
     next_send_at = fields.Datetime(readonly=True, index=True)
     last_attempt_at = fields.Datetime(readonly=True)
@@ -86,9 +78,7 @@ class FleetNavirecReportSubscription(models.Model):
     _schedule_fields = {
         "active",
         "timezone",
-        "send_time_1",
-        "send_time_2",
-        "send_time_3",
+        "send_time_ids",
     }
 
     @staticmethod
@@ -114,9 +104,7 @@ class FleetNavirecReportSubscription(models.Model):
 
     @api.constrains(
         "timezone",
-        "send_time_1",
-        "send_time_2",
-        "send_time_3",
+        "send_time_ids",
         "active",
         "vehicle_ids",
         "field_vehicle",
@@ -129,15 +117,15 @@ class FleetNavirecReportSubscription(models.Model):
     def _check_tracking_configuration(self):
         for subscription in self:
             subscription._timezone_info()
-            times = [
-                subscription.send_time_1,
-                subscription.send_time_2,
-                subscription.send_time_3,
+            parsed = [
+                subscription._parse_send_time(slot.time)
+                for slot in subscription.send_time_ids
             ]
-            parsed = [subscription._parse_send_time(value) for value in times]
-            if len(set(parsed)) != 3:
+            if len(set(parsed)) != len(parsed):
+                raise ValidationError(_("The daily send times must be different."))
+            if subscription.active and not parsed:
                 raise ValidationError(
-                    _("The three daily send times must be different.")
+                    _("Add at least one send time before activating the subscription.")
                 )
             if subscription.active and not subscription.vehicle_ids:
                 raise ValidationError(
@@ -190,12 +178,7 @@ class FleetNavirecReportSubscription(models.Model):
         tzinfo = self._timezone_info()
         local_reference = reference_aware.astimezone(tzinfo)
         schedule = sorted(
-            self._parse_send_time(value)
-            for value in (
-                self.send_time_1,
-                self.send_time_2,
-                self.send_time_3,
-            )
+            self._parse_send_time(slot.time) for slot in self.send_time_ids
         )
 
         for day_offset in (0, 1):
@@ -247,35 +230,43 @@ class FleetNavirecReportSubscription(models.Model):
     def _prepare_trip_report_values(self):
         """Read current assignments within the chosen company/client scope."""
         self.ensure_one()
-        if not (
-            self.field_trip or self.field_customer or self.field_sale_order
-        ) or not self.vehicle_ids:
+        if (
+            not (self.field_trip or self.field_customer or self.field_sale_order)
+            or not self.vehicle_ids
+        ):
             return {}
 
         # Fleet managers own these reports, but need not be dispatchers. Limit
         # this privileged read to selected vehicles and the allowed companies.
         Assignment = self.env["taj.transport.assignment"].sudo()
-        assignments = Assignment.search([
-            ("effective_to", "=", False),
-            ("trip_id.state", "=", "in_progress"),
-            ("company_id", "in", self.env.companies.ids),
-            "|", ("vehicle_id", "in", self.vehicle_ids.ids),
-                 ("trailer_id", "in", self.vehicle_ids.ids),
-        ])
+        assignments = Assignment.search(
+            [
+                ("effective_to", "=", False),
+                ("trip_id.state", "=", "in_progress"),
+                ("company_id", "in", self.env.companies.ids),
+                "|",
+                ("vehicle_id", "in", self.vehicle_ids.ids),
+                ("trailer_id", "in", self.vehicle_ids.ids),
+            ]
+        )
         Trip = self.env["taj.transport.trip"].sudo()
-        trips_by_vehicle = {
-            vehicle.id: Trip.browse() for vehicle in self.vehicle_ids
-        }
+        trips_by_vehicle = {vehicle.id: Trip.browse() for vehicle in self.vehicle_ids}
         for assignment in assignments:
-            for vehicle in (assignment.vehicle_id | assignment.trailer_id):
+            for vehicle in assignment.vehicle_id | assignment.trailer_id:
                 if vehicle.id in trips_by_vehicle:
                     trips_by_vehicle[vehicle.id] |= assignment.trip_id
 
         values = {}
         client_company_id = self.partner_id.commercial_partner_id.id
         for vehicle_id, trips in trips_by_vehicle.items():
-            matching_trips = trips if self.trip_details_scope == "fleet" else trips.filtered(
-                lambda trip: trip.partner_id.commercial_partner_id.id == client_company_id
+            matching_trips = (
+                trips
+                if self.trip_details_scope == "fleet"
+                else trips.filtered(
+                    lambda trip: (
+                        trip.partner_id.commercial_partner_id.id == client_company_id
+                    )
+                )
             )
             if not matching_trips:
                 continue
@@ -414,7 +405,9 @@ class FleetNavirecReportSubscription(models.Model):
     def action_select_all_vehicles(self):
         self.ensure_one()
         fleet = self.env["fleet.vehicle"]
-        vehicles = fleet.search([("active", "=", True)] + fleet._navirec_tracking_domain())
+        vehicles = fleet.search(
+            [("active", "=", True)] + fleet._navirec_tracking_domain()
+        )
         self.vehicle_ids = [(6, 0, vehicles.ids)]
         return True
 
