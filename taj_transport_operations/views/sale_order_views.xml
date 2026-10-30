@@ -84,6 +84,7 @@
                         domain="[('transport_trip_ids', '=', False)]"/>
                 <filter name="has_trip" string="Has Trip"
                         domain="[('transport_trip_ids', '!=', False)]"/>
+                <separator/>
                 <filter name="no_truck" string="No Truck"
                         domain="[('vehicle_id', '=', False)]"/>
                 <filter name="has_truck" string="Has Truck"
@@ -126,10 +127,16 @@
         </field>
     </record>
 
-    <menuitem id="menu_transport_lines_without_trip" name="Lines Without Trip"
-              parent="menu_transport_operations" action="action_sale_order_line_without_trip"
+    <menuitem id="menu_transport_dispatch_lines" name="Dispatch Lines"
+              parent="menu_transport_operations"
+              action="action_sale_order_line_without_trip"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_lines_without_trip" name="Lines Without Trip"
+              parent="menu_transport_dispatch_lines"
+              action="action_sale_order_line_without_trip"
+              sequence="10" groups="taj_transport_operations.group_transport_user"/>
     <menuitem id="menu_transport_lines_without_truck" name="Lines Without Truck"
-              parent="menu_transport_operations" action="action_sale_order_line_without_truck"
-              sequence="30" groups="taj_transport_operations.group_transport_user"/>
+              parent="menu_transport_dispatch_lines"
+              action="action_sale_order_line_without_truck"
+              sequence="20" groups="taj_transport_operations.group_transport_user"/>
 </odoo>

@@ -188,3 +188,20 @@ class TestDispatchReadiness(TransactionCase):
         self.assertEqual(
             lines.mapped("order_id"), self.order | self.other_order
         )
+
+    def test_dispatch_worklists_share_parent_menu(self):
+        parent = self.env.ref(
+            "taj_transport_operations.menu_transport_dispatch_lines"
+        )
+        without_trip = self.env.ref(
+            "taj_transport_operations.menu_transport_lines_without_trip"
+        )
+        without_truck = self.env.ref(
+            "taj_transport_operations.menu_transport_lines_without_truck"
+        )
+        self.assertEqual(without_trip.parent_id, parent)
+        self.assertEqual(without_truck.parent_id, parent)
+        self.assertEqual(
+            parent.parent_id,
+            self.env.ref("taj_transport_operations.menu_transport_operations"),
+        )

@@ -523,10 +523,10 @@ here, including after completion/cancellation.
 
 ## Dispatch worklists (19.0.1.14.0)
 
-Two read-only menus under **Transport Operations** list the confirmed sales
-order lines a dispatcher still has to act on. Both open one row per sales
-**line** (trips live on lines, not orders) and default to grouping by Sales
-Order.
+Under **Transport Operations > Dispatch Lines**, two read-only worklists list the
+confirmed sales order lines a dispatcher still has to act on. Both open one row
+per sales **line** (trips live on lines, not orders) and default to grouping by
+Sales Order.
 
 - **Lines Without Trip** — confirmed product/service lines with no trip.
   Rows whose line has no truck are highlighted in red.
