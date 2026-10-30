@@ -115,7 +115,7 @@
                                 <field name="last_activity_at" readonly="1"/>
                                 <field name="last_inactivity_alert_at" readonly="1"/>
                             </group>
-                            <field name="activity_ids" readonly="1">
+                            <field name="trip_activity_ids" readonly="1">
                                 <list create="0" edit="0" delete="0">
                                     <field name="recorded_at"/>
                                     <field name="user_id"/>

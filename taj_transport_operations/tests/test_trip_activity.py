@@ -14,13 +14,19 @@ from .phase3_case import TajTransportPhase3Case
 class TestTripActivity(TajTransportPhase3Case):
     user_tag = "trip_activity"
 
+    def test_operational_history_preserves_odoo_activity_mixin(self):
+        Trip = self.env["taj.transport.trip"]
+        self.assertEqual(Trip._fields["activity_ids"].comodel_name, "mail.activity")
+        self.assertEqual(Trip._fields["trip_activity_ids"].comodel_name, "taj.transport.trip.activity")
+        self.assertEqual(tuple(Trip._fields["activity_type_id"].related), ("activity_ids", "activity_type_id"))
+
     def test_manual_submission_records_author_and_preserves_list_navigation(self):
         trip = self._started_trip(tag="UPDATE")
         wizard = self.env["taj.transport.trip.activity.wizard"].with_user(self.dispatcher).create({
             "trip_id": trip.id, "description": "  Waiting at border  ",
         })
         self.assertEqual(wizard.action_submit(), {"type": "ir.actions.act_window_close"})
-        activity = trip.activity_ids
+        activity = trip.trip_activity_ids
         self.assertEqual(activity.description, "Waiting at border")
         self.assertEqual(activity.user_id, self.dispatcher)
         self.assertEqual(trip.last_activity_at, activity.recorded_at)
@@ -35,20 +41,20 @@ class TestTripActivity(TajTransportPhase3Case):
         with self.assertRaises(ValidationError):
             wizard.action_submit()
         self.assertFalse(trip.last_activity_at)
-        self.assertFalse(trip.activity_ids)
+        self.assertFalse(trip.trip_activity_ids)
 
     def test_arrival_and_departure_count_but_corrections_do_not(self):
         trip = self._started_trip(tag="MOVEMENT")
         checkpoint = self._milestone(trip, "Loading")
         self._record(checkpoint, "arrival")
         self._record(checkpoint, "departure")
-        self.assertEqual(set(trip.activity_ids.mapped("activity_type")), {"arrival", "departure"})
-        self.assertEqual(len(trip.activity_ids), 2)
-        self.assertTrue(all(trip.activity_ids.mapped("source_event_id")))
+        self.assertEqual(set(trip.trip_activity_ids.mapped("activity_type")), {"arrival", "departure"})
+        self.assertEqual(len(trip.trip_activity_ids), 2)
+        self.assertTrue(all(trip.trip_activity_ids.mapped("source_event_id")))
         last = trip.last_activity_at
         checkpoint._correct_timestamp("actual_arrival_at", checkpoint.actual_arrival_at, "Verified timestamp")
         self.assertEqual(trip.last_activity_at, last)
-        self.assertEqual(len(trip.activity_ids), 2)
+        self.assertEqual(len(trip.trip_activity_ids), 2)
 
     def test_alerts_only_for_in_progress_and_repeat_after_full_interval(self):
         self.company.write({

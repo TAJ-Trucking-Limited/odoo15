@@ -527,8 +527,10 @@ here, including after completion/cancellation.
 
 **Record Activity** on each open trip row or trip form opens a text dialog.
 Submit records the description, author and server submission time in the
-read-only **Activity History** tab and refreshes the originating view. Empty
-text, cancelled dialogs and rejected operations do not count as activity.
+read-only **Activity History** tab and refreshes the originating view.
+The history uses `trip_activity_ids`; Odoo scheduled activities retain their
+native `activity_ids` relation (registry compatibility fix in 19.0.1.17.1).
+Empty text, cancelled dialogs and rejected operations do not count as activity.
 Confirmed milestone arrivals and departures also create activity rows linked
 to their audit events. Their historical event time remains visible separately.
 Editing other trip fields, chatter, checkpoint skips and timestamp corrections
@@ -608,7 +610,7 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.17.0`
+it automatically during Git deployment. The manifest version is `19.0.1.17.1`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots, historical truck grouping, the dispatch worklists and
 their cutoff date;

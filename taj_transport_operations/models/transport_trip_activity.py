@@ -71,7 +71,7 @@ class TripActivity(models.Model):
 class TransportTrip(models.Model):
     _inherit = "taj.transport.trip"
 
-    activity_ids = fields.One2many("taj.transport.trip.activity", "trip_id", string="Activity History", readonly=True, copy=False)
+    trip_activity_ids = fields.One2many("taj.transport.trip.activity", "trip_id", string="Activity History", readonly=True, copy=False)
     last_activity_at = fields.Datetime(string="Last Activity Recorded", readonly=True, copy=False, index=True)
     inactivity_reference_at = fields.Datetime(compute="_compute_inactivity_reference_at", store=True, index=True)
     last_inactivity_alert_at = fields.Datetime(string="Last Inactivity Alert Queued", readonly=True, copy=False)
@@ -135,7 +135,7 @@ class TransportTrip(models.Model):
 
     @api.model
     def _check_activity_clock_values(self, vals_list):
-        if any({"last_activity_at", "last_inactivity_alert_at", "inactivity_reference_at", "activity_ids"}.intersection(vals) for vals in vals_list):
+        if any({"last_activity_at", "last_inactivity_alert_at", "inactivity_reference_at", "trip_activity_ids"}.intersection(vals) for vals in vals_list):
             raise UserError(_("Activity history and alert timestamps are system-managed."))
 
     def _inactivity_email_body(self, company, now, hours):

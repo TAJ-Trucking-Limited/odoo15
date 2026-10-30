@@ -23,11 +23,11 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "taj_transport_operations"
-EXPECTED_VERSION = "19.0.1.17.0"
+EXPECTED_VERSION = "19.0.1.17.1"
 
 # Comodel of the one2many fields that embed an inline list in a parent view.
 EMBEDDED_VIEWS = {
-    "activity_ids": "taj.transport.trip.activity",
+    "trip_activity_ids": "taj.transport.trip.activity",
     "assignment_ids": "taj.transport.assignment",
     "milestone_ids": "taj.transport.milestone",
     "event_ids": "taj.transport.milestone.event",
@@ -488,6 +488,10 @@ def run():
     pyfiles = sorted(MODULE.rglob("*.py"))
     xmlfiles = sorted(MODULE.rglob("*.xml"))
     models = parse_models(pyfiles)
+    assert "activity_ids" not in models["taj.transport.trip"]["fields"], (
+        "Trip history must not replace native Odoo mail.activity.mixin activity_ids"
+    )
+    assert "trip_activity_ids" in models["taj.transport.trip"]["fields"]
     assert MILESTONE_FIELDS.issubset(models["taj.transport.milestone"]["fields"])
     assert MILESTONE_METHODS.issubset(models["taj.transport.milestone"]["methods"])
     assert EVENT_FIELDS.issubset(models["taj.transport.milestone.event"]["fields"])
