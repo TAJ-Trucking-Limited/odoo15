@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_milestone_list_navirec" model="ir.ui.view">
+        <field name="name">taj.transport.milestone.list.navirec</field>
+        <field name="model">taj.transport.milestone</field>
+        <field name="inherit_id" ref="taj_transport_operations.view_transport_milestone_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='vehicle_id']" position="after">
+                <field name="navirec_has_position" column_invisible="1"/>
+                <field name="navirec_position_display"
+                       string="Current Position" optional="show"/>
+                <field name="navirec_last_state_time"
+                       string="Last GPS" optional="show"/>
+                <button name="action_view_current_truck_on_map" string="Map"
+                        type="object" icon="fa-map-marker" class="btn-link"
+                        invisible="not navirec_has_position"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

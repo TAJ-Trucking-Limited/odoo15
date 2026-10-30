@@ -11,6 +11,7 @@
         "data/ir_cron_data.xml",
         "reports/fleet_position_xlsx_report.xml",
         "views/fleet_vehicle_views.xml",
+        "views/transport_milestone_views.xml",
         "views/res_config_settings_views.xml",
         "views/report_subscription_views.xml",
         "views/navirec_sync_log_views.xml",
