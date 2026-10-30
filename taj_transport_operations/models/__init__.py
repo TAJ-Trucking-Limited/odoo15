@@ -12,3 +12,4 @@ from . import transport_trailer
 from . import transport_assignment
 from . import fleet_vehicle
 from . import transport_settings
+from . import transport_trip_activity

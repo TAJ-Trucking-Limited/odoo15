@@ -1148,7 +1148,7 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.origin_location, "Existing custom origin")
         self.assertEqual(trip.destination_location, "TZ Dar")
 
-    def test_manual_new_trip_form_onchange_suggests_missing_route_only(self):
+    def test_manual_new_trip_source_change_refreshes_route(self):
         self.product.product_tmpl_id.write({
             "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
         })
@@ -1157,7 +1157,7 @@ class TestTransportTripFoundation(TransactionCase):
             "origin_location": "Entered in form",
         })
         preview._onchange_sale_line_suggest_route()
-        self.assertEqual(preview.origin_location, "Entered in form")
+        self.assertEqual(preview.origin_location, "DRC kasumbalesa")
         self.assertEqual(preview.destination_location, "TZ Dar")
 
     def test_ambiguous_product_does_not_invent_route(self):

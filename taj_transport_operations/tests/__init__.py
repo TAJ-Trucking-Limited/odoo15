@@ -8,3 +8,5 @@ from . import test_milestone_concurrency
 from . import test_sales_route_cargo
 from . import test_trip_files
 from . import test_dispatch_readiness
+from . import test_transport_entrypoints
+from . import test_trip_activity

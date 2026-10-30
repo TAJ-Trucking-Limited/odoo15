@@ -95,13 +95,23 @@ class TestDispatchReadiness(TransactionCase):
     def _our_lines(self):
         return self.trucked_line | self.truckless_line | self.other_line
 
-    def test_trip_creation_requires_a_truck(self):
+    def test_truckless_line_can_create_draft_but_not_ready_trip(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.truckless_line.id,
+        })
+        self.assertEqual(trip.state, "draft")
+        self.assertFalse(trip.initial_vehicle_id)
+        self.assertFalse(trip.current_assignment_id)
         with self.assertRaises(ValidationError):
-            self.env["taj.transport.trip"].create(
-                {"sale_line_id": self.truckless_line.id}
-            )
+            trip.action_mark_ready()
+
+    def test_dispatch_button_opens_form_without_creating_trip(self):
+        action = self.truckless_line.action_prepare_transport_trip()
+        self.assertEqual(action["res_model"], "taj.transport.trip")
+        self.assertEqual(action["context"]["default_sale_line_id"], self.truckless_line.id)
+        self.assertEqual(action["context"]["default_sale_order_id"], self.order.id)
+        self.assertNotIn("res_id", action)
         self.assertFalse(self.truckless_line.transport_trip_ids)
-        self.assertEqual(self.truckless_line.transport_trip_count, 0)
 
     def test_without_trip_action_lists_confirmed_untripped_lines(self):
         lines = (

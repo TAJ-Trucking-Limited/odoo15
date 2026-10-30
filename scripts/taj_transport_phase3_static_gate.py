@@ -23,10 +23,11 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "taj_transport_operations"
-EXPECTED_VERSION = "19.0.1.15.0"
+EXPECTED_VERSION = "19.0.1.17.0"
 
 # Comodel of the one2many fields that embed an inline list in a parent view.
 EMBEDDED_VIEWS = {
+    "activity_ids": "taj.transport.trip.activity",
     "assignment_ids": "taj.transport.assignment",
     "milestone_ids": "taj.transport.milestone",
     "event_ids": "taj.transport.milestone.event",
@@ -374,7 +375,14 @@ def check_no_phase4():
         if file.is_dir() or file.suffix not in {".py", ".xml", ".csv"}:
             continue
         text = file.read_text(errors="ignore")
-        assert "ir.cron" not in text, "Phase 4 automation found in " + str(file)
+        if "ir.cron" in text:
+            assert file.relative_to(MODULE).as_posix() == "data/trip_activity_cron.xml", (
+                "Unexpected transport automation in " + str(file)
+            )
+            cron = etree.parse(str(file))
+            assert cron.xpath("//record[@model='ir.cron']/field[@name='code']/text()") == [
+                "model._cron_queue_inactivity_alerts()"
+            ], "Only the inactivity reminder job is authorized"
         for token in (
             "import requests",
             "urllib",

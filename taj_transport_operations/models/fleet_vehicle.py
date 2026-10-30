@@ -17,6 +17,48 @@ class FleetVehicle(models.Model):
     _inherit = "fleet.vehicle"
 
     is_transport_trailer = fields.Boolean(compute="_compute_is_transport_trailer")
+    transport_can_assign = fields.Boolean(
+        compute="_compute_transport_can_assign",
+        groups="taj_transport_operations.group_transport_user",
+    )
+
+    @api.depends("active", "category_id", "transport_availability_state", "transport_trip_ids", "transport_trip_ids.assignment_ids", "transport_trip_ids.state")
+    @api.depends_context("uid", "company", "allowed_company_ids")
+    def _compute_transport_can_assign(self):
+        category = self.env.ref("taj_transport_operations.fleet_category_truck")
+        for vehicle in self:
+            reserved = vehicle.transport_trip_ids.filtered(
+                lambda trip: trip.state == "draft" and not trip.assignment_ids
+            )
+            vehicle.transport_can_assign = bool(
+                vehicle.active and vehicle.category_id == category
+                and (vehicle.transport_availability_state == "standby" or reserved)
+                and vehicle.transport_availability_state != "busy"
+            )
+
+    def action_assign_transport_trip(self):
+        self.ensure_one()
+        self.check_access("read")
+        if not self.transport_can_assign:
+            raise ValidationError(_("Choose an active available Truck, or a truck reserved for an unassigned Draft trip."))
+        return {
+            "type": "ir.actions.act_window", "name": _("Assign Truck to Trip"),
+            "res_model": "taj.transport.initial.assignment.wizard",
+            "view_mode": "form", "target": "new",
+            "context": {
+                "default_vehicle_id": self.id,
+                "select_trip_for_vehicle": True,
+            },
+        }
+
+    def _lock_for_transport_assignment(self):
+        """Serialize truck reservations and assignment dialogs per vehicle."""
+        if self.ids:
+            self.check_access("read")
+            self.env.cr.execute(
+                "SELECT id FROM fleet_vehicle WHERE id IN %s ORDER BY id FOR UPDATE",
+                (tuple(self.ids),),
+            )
     transport_truck_assignment_ids = fields.One2many(
         "taj.transport.assignment", "vehicle_id", readonly=True,
         domain=[("effective_to", "=", False)],

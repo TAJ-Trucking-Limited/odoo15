@@ -9,6 +9,16 @@
                     <group>
                         <field name="dispatch_cutoff_date"/>
                     </group>
+                    <group string="Trip Inactivity Alerts">
+                        <field name="company_id" readonly="1"/>
+                        <field name="inactivity_alerts_enabled"/>
+                        <field name="inactivity_hours"/>
+                        <field name="inactivity_recipient" required="inactivity_alerts_enabled"/>
+                    </group>
+                    <p>In Progress trips only. Checks run every 15 minutes.
+                       If inactivity continues, reminders repeat after the same
+                       configured interval. Submitted updates and recorded
+                       milestone arrivals/departures reset the activity clock.</p>
                 </sheet>
                 <footer>
                     <button name="action_save" type="object" string="Save"

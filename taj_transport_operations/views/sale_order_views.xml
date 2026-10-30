@@ -5,12 +5,6 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//form/header" position="inside">
-                <button name="action_prepare_transport_trips" type="object"
-                        string="Create Trips" class="btn-secondary"
-                        groups="taj_transport_operations.group_transport_user"
-                        invisible="state not in ['sale', 'done']"/>
-            </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_trip_files" type="object"
                         class="oe_stat_button" icon="fa-folder-open"
@@ -45,12 +39,6 @@
                        invisible="display_type not in [False, 'product']"
                        placeholder="Optional loading, storage or handling notes"/>
             </xpath>
-            <xpath expr="//field[@name='order_line']/list" position="inside">
-                <button name="action_open_or_create_transport_trip"
-                        type="object" string="Trip" icon="fa-truck"
-                        groups="taj_transport_operations.group_transport_user"
-                        invisible="parent.state not in ['sale', 'done'] or display_type not in [False, 'product'] or not vehicle_id"/>
-            </xpath>
         </field>
     </record>
 
@@ -67,6 +55,14 @@
                 <field name="product_uom_qty" string="Quantity"/>
                 <field name="vehicle_id"/>
                 <field name="transport_trip_count" string="Trips"/>
+                <button name="action_prepare_transport_trip" string="Create Trip"
+                        type="object" icon="fa-truck"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="transport_trip_count != 0"/>
+                <button name="action_prepare_transport_trip" string="Open Trip"
+                        type="object" icon="fa-external-link"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="transport_trip_count == 0"/>
             </list>
         </field>
     </record>
@@ -109,7 +105,7 @@
         <field name="context">{'search_default_group_by_order': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a transport trip.</p>
-            <p>Use Create Trips on a confirmed sales order to plan new transport trips.</p>
+            <p>Use Create Trip on a line, or Trips &gt; New, to plan a transport trip.</p>
         </field>
     </record>
 
@@ -123,7 +119,7 @@
         <field name="context">{'search_default_group_by_order': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a truck.</p>
-            <p>A truck is required on the sales line before a transport trip can be created.</p>
+            <p>Draft trips may be created before assigning a truck. Assign resources before marking Ready.</p>
         </field>
     </record>
 

@@ -156,6 +156,8 @@ class TajTransportAssignment(models.Model):
         if not trip:
             raise ValidationError(_("Select an existing trip."))
         trip.check_access("write")
+        trip._lock_for_transition()
+        trip.invalidate_recordset(["state", "assignment_ids", "current_assignment_id"])
         for field, model in (
             ("vehicle_id", "fleet.vehicle"),
             ("trailer_id", "fleet.vehicle"),
@@ -167,6 +169,10 @@ class TajTransportAssignment(models.Model):
                 if not resource:
                     raise ValidationError(_("Select an existing resource."))
                 resource.check_access("read")
+        vehicles = self.env["fleet.vehicle"].browse([
+            vals[field] for field in ("vehicle_id", "trailer_id") if vals.get(field)
+        ])
+        vehicles._lock_for_transport_assignment()
         allowed_states = (
             ("draft", "ready", "in_progress")
             if replacement else ("draft",)
@@ -201,6 +207,15 @@ class TajTransportAssignment(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Match the trip -> vehicle order used by lifecycle/replacement dialogs.
+        for trip in self.env["taj.transport.trip"].browse(sorted({
+            vals["trip_id"] for vals in vals_list if vals.get("trip_id")
+        })).exists():
+            trip._lock_for_transition()
+        self.env["fleet.vehicle"].browse(sorted({
+            vals[field] for vals in vals_list for field in ("vehicle_id", "trailer_id")
+            if vals.get(field)
+        }))._lock_for_transport_assignment()
         prepared = [
             self._prepare_assignment_values(entry) for entry in vals_list
         ]

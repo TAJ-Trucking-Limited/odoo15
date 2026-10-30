@@ -4,7 +4,8 @@ from datetime import datetime, time
 
 import pytz
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import AccessError
 from odoo.tools.safe_eval import safe_eval
 
 CUTOFF_PARAM = "taj_transport_operations.dispatch_cutoff_date"
@@ -51,16 +52,37 @@ class TajTransportSettings(models.TransientModel):
         "the Lines Without Trip and Lines Without Truck worklists, whatever "
         "filters are applied. Leave empty to show every confirmed order.",
     )
+    company_id = fields.Many2one("res.company", default=lambda self: self.env.company, readonly=True, required=True)
+    inactivity_alerts_enabled = fields.Boolean(string="Enable Inactivity Alerts")
+    inactivity_hours = fields.Float(string="Inactivity Hours", default=24, required=True)
+    inactivity_recipient = fields.Char(string="Alert Recipient Email")
 
     @api.model
     def default_get(self, fields_list):
         values = super().default_get(fields_list)
         if "dispatch_cutoff_date" in fields_list:
             values["dispatch_cutoff_date"] = get_dispatch_cutoff_date(self.env)
+        company = self.env.company
+        for field, source in (
+            ("inactivity_alerts_enabled", "transport_inactivity_enabled"),
+            ("inactivity_hours", "transport_inactivity_hours"),
+            ("inactivity_recipient", "transport_inactivity_recipient"),
+        ):
+            if field in fields_list:
+                values[field] = company[source]
         return values
 
     def action_save(self):
         self.ensure_one()
+        if not self.env.su and not self.env.user.has_group("taj_transport_operations.group_transport_manager"):
+            raise AccessError(_("Only a Transport Manager can change transport settings."))
+        if self.company_id != self.env.company:
+            raise AccessError(_("Open settings in the company you want to configure."))
+        self.company_id.sudo().write({
+            "transport_inactivity_enabled": self.inactivity_alerts_enabled,
+            "transport_inactivity_hours": self.inactivity_hours,
+            "transport_inactivity_recipient": (self.inactivity_recipient or "").strip(),
+        })
         self.env["ir.config_parameter"].sudo().set_param(
             CUTOFF_PARAM,
             fields.Date.to_string(self.dispatch_cutoff_date)

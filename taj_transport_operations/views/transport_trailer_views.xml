@@ -17,6 +17,11 @@
                 <field name="driver_id" string="Fleet Driver" optional="hide"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="active" optional="hide"/>
+                <field name="transport_can_assign" column_invisible="True"/>
+                <button name="action_assign_transport_trip" string="Assign to Trip"
+                        type="object" icon="fa-plus"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="not transport_can_assign"/>
                 <button name="action_open_transport_trips" string="Trips"
                         type="object" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user"

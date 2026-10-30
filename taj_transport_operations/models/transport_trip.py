@@ -28,7 +28,10 @@ class TajTransportTrip(models.Model):
     )
     sale_order_id = fields.Many2one(
         "sale.order", string="Sales Order",
-        related="sale_line_id.order_id", store=True, readonly=True, index=True,
+        required=True, ondelete="restrict", index=True, copy=False,
+    )
+    source_product_tmpl_id = fields.Many2one(
+        related="sale_line_id.product_id.product_tmpl_id", readonly=True,
     )
     company_id = fields.Many2one(
         "res.company", related="sale_order_id.company_id",
@@ -442,16 +445,51 @@ class TajTransportTrip(models.Model):
                 "Only product/service lines can create transport trips, "
                 "not section or note lines."
             ))
-        if not sale_line.vehicle_id:
-            raise ValidationError(_(
-                "Assign a truck on sales line %(line)s before creating a "
-                "transport trip."
-            ) % {"line": sale_line.display_name})
 
     @api.constrains("sale_line_id")
     def _check_sale_line(self):
         for trip in self:
             trip._validate_sale_line(trip.sale_line_id)
+
+    @api.constrains("sale_order_id", "sale_line_id")
+    def _check_sale_order_line_match(self):
+        for trip in self:
+            if trip.sale_line_id.order_id != trip.sale_order_id:
+                raise ValidationError(_("The sales line must belong to the selected Sales Order."))
+
+    @api.model
+    def default_get(self, fields_list):
+        values = super().default_get(fields_list)
+        line_id = values.get("sale_line_id") or self.env.context.get("default_sale_line_id")
+        if line_id:
+            line = self.env["sale.order.line"].browse(line_id).exists()
+            line.check_access("read")
+            defaults = self._source_line_defaults(line)
+            values.update({key: value for key, value in defaults.items() if key in fields_list})
+        return values
+
+    @api.model
+    def _source_line_defaults(self, line):
+        """Refresh source-dependent fields on an unsaved trip."""
+        routes = self.env["taj.transport.route"]._matching_for_sale_line(line) if line else self.env["taj.transport.route"]
+        route = routes if len(routes) == 1 else self.env["taj.transport.route"]
+        origin, destination = self._route_from_sale_line_product(line)
+        return {
+            "sale_order_id": line.order_id.id or False,
+            "route_id": route.id or False,
+            "cargo_type_id": line.cargo_type_id.id or False,
+            "cargo_description": line.cargo_description or False,
+            "special_handling_instructions": line.special_handling_instructions or False,
+            "initial_vehicle_id": line.vehicle_id.id or False,
+            "origin_location": route.origin_location if (route.origin_location or "").strip() else origin or False,
+            "destination_location": route.destination_location if (route.destination_location or "").strip() else destination or False,
+        }
+
+    @api.onchange("sale_order_id")
+    def _onchange_sale_order_id(self):
+        for trip in self:
+            if not trip._origin.id and trip.sale_line_id.order_id != trip.sale_order_id:
+                trip.sale_line_id = False
 
     @api.model
     def _route_from_product_name(self, name):
@@ -593,14 +631,13 @@ class TajTransportTrip(models.Model):
 
     @api.onchange("sale_line_id")
     def _onchange_sale_line_suggest_route(self):
-        # Standalone trip creation: suggest from the selected product before
-        # saving. Operators may edit either field, including independently.
         for trip in self:
-            origin, destination = trip._route_from_sale_line_product(trip.sale_line_id)
-            if origin and not (trip.origin_location or "").strip():
-                trip.origin_location = origin
-            if destination and not (trip.destination_location or "").strip():
-                trip.destination_location = destination
+            if not trip._origin.id:
+                values = trip._source_line_defaults(trip.sale_line_id)
+                # Keep the chosen order while its line selection is empty.
+                if not trip.sale_line_id:
+                    values.pop("sale_order_id")
+                trip.update(values)
 
     def action_prefill_route_from_product(self):
         """Opt-in suggestion for existing Draft trips; never overwrite routes."""
@@ -652,7 +689,13 @@ class TajTransportTrip(models.Model):
             entry["sale_line_id"]
         ).exists()
         self._validate_sale_line(line)
+        line.check_access("read")
         vals = dict(entry)
+        if vals.get("sale_order_id") and vals["sale_order_id"] != line.order_id.id:
+            raise ValidationError(_("The sales line must belong to the selected Sales Order."))
+        if self.env.context.get("transport_trip_entry") or "sale_order_id" in entry:
+            self._require_matching_route_for_sale_line(line, vals.get("route_id"))
+        vals["sale_order_id"] = line.order_id.id
         vals = self._default_cargo_from_sale_line(vals, line)
         vals = self._sync_cargo_type_values(vals)
         # Explicit template locations win; blank template fields keep the
@@ -683,6 +726,11 @@ class TajTransportTrip(models.Model):
         new_vals_list = [
             self._prepare_trip_create_vals(entry) for entry in vals_list
         ]
+        # A batch takes vehicle locks in one order before reserving any truck.
+        self.env["fleet.vehicle"].browse([
+            vals["initial_vehicle_id"] for vals in new_vals_list
+            if vals.get("initial_vehicle_id")
+        ])._lock_for_transport_assignment()
         trips = super().create(new_vals_list)
         trips._assign_initial_fleet_defaults()
         # Older confirmed orders receive a file only for the line used here.
@@ -692,6 +740,8 @@ class TajTransportTrip(models.Model):
 
     def write(self, vals):
         vals = self._sync_cargo_type_values(vals)
+        if "sale_order_id" in vals and any(trip.sale_order_id.id != vals["sale_order_id"] for trip in self):
+            raise UserError(_("The Sales Order cannot be changed after a trip is created."))
         if "sale_line_id" in vals:
             for trip in self:
                 if vals["sale_line_id"] != trip.sale_line_id.id:

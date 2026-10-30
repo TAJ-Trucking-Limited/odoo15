@@ -6,9 +6,15 @@
         <field name="arch" type="xml">
             <form string="Assign Initial Trip Resources">
                 <group>
-                    <field name="trip_id" readonly="1"/>
+                    <field name="available_trip_ids" invisible="1"/>
+                    <field name="trip_id" readonly="not context.get('select_trip_for_vehicle')"
+                           domain="[('id', 'in', available_trip_ids)]"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="sale_order_id" readonly="1"/>
                     <field name="company_id" invisible="1"/>
-                    <field name="vehicle_id" options="{'no_create': True}"/>
+                    <field name="vehicle_id" readonly="context.get('select_trip_for_vehicle', False)"
+                           required="context.get('select_trip_for_vehicle', False)"
+                           options="{'no_create': True}"/>
                     <field name="trailer_id" options="{'no_create': True}"/>
                     <field name="driver_id" options="{'no_quick_create': True}"/>
                     <field name="co_driver_id" options="{'no_quick_create': True}"/>
@@ -20,9 +26,9 @@
                 <p class="text-muted">
                     Selecting a truck suggests its driver from Fleet. You can
                     choose another driver for this trip.
-                    Select at least one resource. Only the initial assignment
-                    can be created here. Replacements will have a separate
-                    audited workflow.
+                    Select at least one resource. Only Draft trips without
+                    assignment history can receive an initial assignment.
+                    Use Replace Resources to change an existing assignment.
                 </p>
                 <footer>
                     <button string="Assign Resources"

@@ -24,6 +24,10 @@
                 <field name="planned_departure_at" optional="hide"/>
                 <field name="planned_arrival_at" optional="hide"/>
                 <field name="state" widget="badge"/>
+                <field name="last_activity_at" optional="show"/>
+                <button name="action_open_record_activity" string="Record Activity"
+                        type="object" icon="fa-pencil"
+                        invisible="state not in ['draft', 'ready', 'in_progress']"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
             </list>
         </field>
@@ -35,6 +39,9 @@
         <field name="arch" type="xml">
             <form string="Transport Trip" delete="0" js_class="taj_transport_trip_form">
                 <header>
+                    <button name="action_open_record_activity" string="Record Activity"
+                            type="object" class="btn-secondary"
+                            invisible="not id or state not in ['draft', 'ready', 'in_progress']"/>
                     <button string="Fill Empty Fields"
                             name="action_open_fill_empty_fields_wizard"
                             type="object" class="btn-secondary"
@@ -78,10 +85,20 @@
                     </div>
                     <group>
                         <group string="Sales Source">
+                            <field name="company_id" invisible="1"/>
+                            <field name="sale_order_id" required="1" readonly="id"
+                                   domain="[('state', 'in', ['sale', 'done'])]"
+                                   options="{'no_create': True, 'no_create_edit': True}"
+                                   context="{'transport_order_label': True}"/>
                             <field name="sale_line_id" required="1" readonly="id"
-                                   domain="[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('vehicle_id', '!=', False)]"
-                                   options="{'no_create': True}"/>
-                            <field name="sale_order_id" readonly="1"/>
+                                   domain="[('order_id', '=', sale_order_id), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('transport_trip_ids', '=', False)]"
+                                   context="{'transport_line_label': True}"
+                                   options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="source_product_tmpl_id" invisible="1"/>
+                            <field name="route_id" required="not id" readonly="id"
+                                   invisible="id"
+                                   domain="[('active', '=', True), ('company_id', '=', company_id), ('product_tmpl_id', '=', source_product_tmpl_id)]"
+                                   options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="partner_id" readonly="1"/>
                             <field name="company_id" readonly="1"
                                    groups="base.group_multi_company"/>
@@ -93,6 +110,22 @@
                         </group>
                     </group>
                     <notebook>
+                        <page string="Activity History" name="activity_history" invisible="not id">
+                            <group>
+                                <field name="last_activity_at" readonly="1"/>
+                                <field name="last_inactivity_alert_at" readonly="1"/>
+                            </group>
+                            <field name="activity_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="recorded_at"/>
+                                    <field name="user_id"/>
+                                    <field name="activity_type"/>
+                                    <field name="milestone_id" optional="show"/>
+                                    <field name="occurred_at" optional="hide"/>
+                                    <field name="description"/>
+                                </list>
+                            </field>
+                        </page>
                         <page string="Commercial" name="commercial_details">
                             <group>
                                 <group string="Sales Commercial Data (Read Only)">
@@ -148,6 +181,7 @@
                                 <group string="Route">
                                     <field name="route_id"
                                            readonly="state in ('completed', 'cancelled')"
+                                           domain="[('active', '=', True), ('company_id', '=', company_id)] + ([('product_tmpl_id', '=', source_product_tmpl_id)] if not id else [])"
                                            options="{'no_create': True, 'no_create_edit': True}"/>
                                     <field name="origin_location" readonly="state in ('completed', 'cancelled')" placeholder="Loading / departure location"/>
                                     <field name="destination_location" readonly="state in ('completed', 'cancelled')" placeholder="Unloading / delivery location"/>
@@ -353,9 +387,11 @@
         <field name="name">Transport Trips</field>
         <field name="res_model">taj.transport.trip</field>
         <field name="view_mode">list,form</field>
+        <field name="context">{'transport_trip_entry': True}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No transport trips yet.</p>
-            <p>Open a confirmed Sales Order to select lines and create trips.</p>
+            <p>Click New, choose a confirmed Sales Order and one of its lines,
+               then select a matching route template.</p>
         </field>
     </record>
 

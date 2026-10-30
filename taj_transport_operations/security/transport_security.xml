@@ -25,6 +25,11 @@
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
         <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
     </record>
+    <record id="rule_transport_trip_activity_companies" model="ir.rule">
+        <field name="name">Trip activity: allowed companies only</field>
+        <field name="model_id" ref="model_taj_transport_trip_activity"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
     <record id="rule_transport_trip_file_companies" model="ir.rule">
         <field name="name">Trip Files: allowed companies only</field>
         <field name="model_id" ref="model_taj_transport_trip_file"/>

@@ -64,6 +64,9 @@ class TripFormCompiler extends FormCompiler {
 
 class TripFormRenderer extends FormRenderer {
     tripTabTitle(title, page) {
+        if (page.name === "activity_history") {
+            return title;
+        }
         const record = this.props.record;
         const emptyFields = new Set();
         for (const spec of page.fields) {

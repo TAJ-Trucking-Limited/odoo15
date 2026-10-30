@@ -9,8 +9,25 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
 
     trip_id = fields.Many2one(
         "taj.transport.trip", string="Trip", required=True,
-        readonly=True,
     )
+    available_trip_ids = fields.Many2many(
+        "taj.transport.trip", compute="_compute_available_trip_ids",
+    )
+    sale_order_id = fields.Many2one(related="trip_id.sale_order_id", readonly=True)
+
+    @api.depends("vehicle_id")
+    def _compute_available_trip_ids(self):
+        for wizard in self:
+            domain = [("state", "=", "draft"), ("assignment_ids", "=", False)]
+            if wizard.vehicle_id.company_id:
+                domain.append(("company_id", "=", wizard.vehicle_id.company_id.id))
+            reservations = self.env["taj.transport.trip"].sudo().search([
+                ("state", "=", "draft"), ("assignment_ids", "=", False),
+                ("initial_vehicle_id", "=", wizard.vehicle_id.id),
+            ]) if wizard.vehicle_id else self.env["taj.transport.trip"]
+            if reservations:
+                domain.append(("id", "in", reservations.ids))
+            wizard.available_trip_ids = self.env["taj.transport.trip"].search(domain)
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck",
         domain=lambda self: "[('category_id', '=', %s), ('active', '=', True), '|', "
@@ -51,6 +68,9 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
     def action_assign_initial_resources(self):
         self.ensure_one()
         trip = self.trip_id
+        trip.check_access("write")
+        trip._lock_for_transition()
+        trip.invalidate_recordset(["state", "assignment_ids", "current_assignment_id"])
         if not trip.exists() or trip.state != "draft":
             raise UserError(_("Choose an existing Draft trip."))
         if trip.current_assignment_id:
@@ -58,6 +78,25 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
                 "This trip is already assigned. Replacement is handled "
                 "separately to preserve the history."
             ))
+        if self.env.context.get("select_trip_for_vehicle"):
+            vehicle = self.vehicle_id
+            vehicle.check_access("read")
+            vehicle._lock_for_transport_assignment()
+            if (not vehicle or not vehicle.active
+                    or vehicle.category_id != self.env.ref("taj_transport_operations.fleet_category_truck")):
+                raise UserError(_("Select an active Truck."))
+            # Check all companies without exposing another company's trip.
+            occupied = self.env["taj.transport.assignment"].sudo().search_count([
+                ("effective_to", "=", False),
+                ("trip_id.state", "in", ["draft", "ready", "in_progress"]),
+                "|", ("vehicle_id", "=", vehicle.id), ("trailer_id", "=", vehicle.id),
+            ])
+            reserved = self.env["taj.transport.trip"].sudo().search_count([
+                ("state", "=", "draft"), ("assignment_ids", "=", False),
+                ("initial_vehicle_id", "=", vehicle.id), ("id", "!=", trip.id),
+            ])
+            if occupied or reserved:
+                raise UserError(_("This truck is assigned or reserved for another trip. Refresh Vehicle Availability."))
         self.env["taj.transport.assignment"].create({
             "trip_id": trip.id,
             "vehicle_id": self.vehicle_id.id or False,

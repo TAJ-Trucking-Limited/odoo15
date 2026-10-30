@@ -28,6 +28,14 @@ class SaleOrder(models.Model):
         for order in self:
             order.transport_trip_count = len(order.transport_trip_ids)
 
+    @api.depends("name", "partner_id")
+    @api.depends_context("transport_order_label")
+    def _compute_display_name(self):
+        if not self.env.context.get("transport_order_label"):
+            return super()._compute_display_name()
+        for order in self:
+            order.display_name = order.name
+
     @api.depends("trip_file_ids")
     def _compute_trip_file_count(self):
         for order in self:

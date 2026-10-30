@@ -21,6 +21,9 @@
                        decoration-success="state in ('completed', 'departed')"
                        decoration-muted="state == 'skipped'"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+                <button name="action_open_trip" string="Open Trip"
+                        type="object" icon="fa-truck" class="btn-link"
+                        invisible="not trip_id"/>
                 <button name="action_open_arrival_wizard" string="Arrival"
                         type="object" class="btn-secondary"
                         invisible="actual_arrival_at or state == 'skipped'"/>

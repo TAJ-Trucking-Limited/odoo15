@@ -20,6 +20,7 @@ MODULE = ROOT / "taj_transport_operations"
 
 # Comodel of the one2many fields that embed an inline list in a parent view.
 EMBEDDED_VIEWS = {
+    "activity_ids": "taj.transport.trip.activity",
     "assignment_ids": "taj.transport.assignment",
     "milestone_ids": "taj.transport.milestone",
     "event_ids": "taj.transport.milestone.event",
@@ -62,7 +63,7 @@ def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
     # Phase 2 behaviour is retained by the route/checkpoint and transporter
     # catalog releases, which this gate still verifies.
-    if manifest["version"] != "19.0.1.15.0":
+    if manifest["version"] != "19.0.1.17.0":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))

@@ -7,24 +7,26 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 
 - Each confirmed **product/service sales order line** can have **one** trip.
 - The relationship is enforced by a **database unique constraint**.
-- A trip requires a **truck on the sales line** (`vehicle_id`). Creating a trip
-  for a truckless line is refused; assign the truck on the Sales order first.
-  The trip starts in `Draft`.
-- Trip reference is generated using `TRIP/<year>/<sequence>`.
-- Sales Order > **Create Trips** opens a selection wizard. Truck-assigned lines
-  without trips are suggested; only trucked lines can be selected. The button
-  **does not** create trips automatically on confirmation.
-- Each **new** trip from Create Trips needs a route template linked to that
-  line's product (`product_tmpl_id` on the template). Exactly one active
-  same-company match is auto-selected; several matches require a per-line
-  choice; none yields a clear error before any trip is created. Existing trips
-  are opened unchanged. Standalone / API trip creation may still omit a
-  template, and unlinked legacy templates remain selectable on the trip form.
-- If no product line has a vehicle, the **Create Trips** dialog shows a yellow
-  warning and no line can be selected. Assign a truck on the sales order first.
-- The **Trip** button on each confirmed product line opens an existing trip or
-  creates exactly one when explicitly clicked (unique product-linked template,
-  or a chooser when several match).
+- Trips start in **Draft** and may be created without a truck. Truck and
+  driver are required before **Mark Ready**.
+- **Transport Operations > Trips > New** opens a trip form. Select a confirmed
+  Sales Order by number, then one of its untripped product/service lines. The
+  line selector shows the product, truck (or No truck), container and line
+  reference to distinguish repeated products.
+- **Dispatch Lines > Lines Without Trip / Lines Without Truck** offers
+  **Create Trip** per untripped line and **Open Trip** for lines with a trip.
+  Create Trip opens an unsaved form with that order and line preselected;
+  nothing is created until Save. Sales Order creation buttons are removed;
+  its Trips and Trip Files smart buttons remain available.
+- Trip reference is generated using `TRIP/<year>/<sequence>` on Save.
+- Form creation requires a route template linked to that line's product.
+  One active same-company match is preselected; multiple matches require a
+  choice; missing matches must be configured before saving. Changing the
+  source order clears its line, and changing the line refreshes source cargo,
+  route and locations. The order and line cannot change after creation.
+- Legacy ORM callers that provide only a sales line may still omit a template.
+  Legacy batch/route-chooser APIs remain for integrations and preparation
+  scripts; they are no longer Sales Order creation entry points.
 - Sales Order **Trips** smart button opens all linked trips.
 - Standalone **Transport Operations > Trips** menu lists and creates trips.
 - The original truck is snapshotted when the trip is created, and never
@@ -87,7 +89,7 @@ optional Cargo Type, Cargo Description and Special Handling Instructions on
 each sales order product/service line are visible in the order line list and
 line form to Sales users (cargo catalog is read-only for them). Every newly
 created trip snapshots these three values from its own source line across
-the wizard, line Trip button and ORM create paths; explicit create values win.
+the trip form, Dispatch Lines and ORM create paths; explicit create values win.
 Different lines on the same order can carry different cargo. Later line edits
 do not update existing trips. Cargo Description fills the trip's Operational Cargo Description; a
 blank line description leaves the trip description empty. An archived sales
@@ -137,11 +139,11 @@ cargo specifications in parentheses (comma-separated or 20/40/45ft)
 are excluded from the destination. Product codes, Sales line descriptions,
 cargo attributes and Sales/Accounting records are not changed.
 
-This applies to the Sales Order `Create Trips` wizard, individual Sales line
-`Trip` action, direct Trip creation and the Trip form's Sales line onchange.
-Any explicitly entered Origin/Destination wins; the fields remain editable
-and can be corrected by dispatchers. Subsequent product renames never
-silently change a trip's route.
+This fallback applies to direct Trip creation and the Trip form's source-line
+selection. Non-empty selected-template locations take priority on Save; blank
+template locations use entered locations or the product-name fallback. The
+fields remain editable on Draft trips. Subsequent product renames never
+silently change a saved trip's route.
 
 Existing Draft trips are **not bulk changed on upgrade**. Where a location
 is missing, `Route & Timing > Fill Route from Product` fills only missing
@@ -521,6 +523,51 @@ wizard. The wizard uses the caller's trip access and allowed-company rules;
 it does not elevate permissions. POD files and their filenames can be supplied
 here, including after completion/cancellation.
 
+## Trip activity and inactivity alerts (19.0.1.17.0)
+
+**Record Activity** on each open trip row or trip form opens a text dialog.
+Submit records the description, author and server submission time in the
+read-only **Activity History** tab and refreshes the originating view. Empty
+text, cancelled dialogs and rejected operations do not count as activity.
+Confirmed milestone arrivals and departures also create activity rows linked
+to their audit events. Their historical event time remains visible separately.
+Editing other trip fields, chatter, checkpoint skips and timestamp corrections
+do not reset the activity clock. Activity history cannot be edited or deleted.
+
+**Transport Operations > Configuration > Settings** configures inactivity
+alerts for the active company: enablement, a recipient email and positive
+inactivity hours (default **24**). Alerts are disabled until configured and
+explicitly enabled. Only **In Progress** trips are monitored. The clock starts
+at trip start, or the latest activity submission if later. Draft, Ready,
+Completed and Cancelled trips do not trigger alerts.
+
+A scheduled check runs every **15 minutes** and queues one digest per company
+with its overdue trips, Sales Orders, customers, trucks, last activity/start
+times (UTC), inactivity hours and links. If inactivity continues, that trip is
+included again after the configured interval since its previous queued alert.
+Fresh activity starts a new inactivity interval. Recording activity and alert
+selection serialize on each trip so duplicate checks cannot queue the same
+trip twice for one reminder interval. Alert timestamps mean **queued**;
+delivery follows Odoo's outgoing mail queue and configured email server.
+
+The upgrade imports previous arrival/departure audit events into activity
+history with their original recording times and authors, and derives the last
+activity from that history. It does not invent an update at upgrade time or
+activate alerts for a company.
+
+## Vehicle Availability assignment (19.0.1.16.0)
+
+**Assign to Trip** opens the initial resource dialog from an active Truck row.
+The truck is preselected, the dispatcher chooses a Draft trip without assignment
+history, and the driver defaults from Fleet with manual override. Same-company
+and shared trucks follow the normal assignment validations and audit history.
+An unassigned Draft trip may use its own reserved Sales truck; trucks assigned
+or reserved for another trip are refused. Confirmation locks and rechecks the
+truck, so an open dialog cannot silently reuse a truck assigned in the meantime.
+This shortcut uses the initial assignment workflow; resource changes on an
+assigned trip continue through **Replace Resources**. Sales truck values and
+trip-creation snapshots are not rewritten by operational assignment.
+
 ## Dispatch worklists (19.0.1.14.0)
 
 Under **Transport Operations > Dispatch Lines**, two read-only worklists list the
@@ -531,7 +578,8 @@ Sales Order.
 - **Lines Without Trip** — confirmed product/service lines with no trip.
   Rows whose line has no truck are highlighted in red.
 - **Lines Without Truck** — confirmed product/service lines with no truck.
-  A trip cannot be created for these lines.
+  Draft trips can be created here; operational trucks are assigned from
+  Vehicle Availability or the trip resource dialog before Mark Ready.
 
 Search filters **No Trip**, **Has Trip**, **No Truck** and **Has Truck** combine
 with the menu domain, and rows can be grouped by Sales Order or Customer.
@@ -560,13 +608,17 @@ value exists in the audit model as a reserved placeholder only.
 After the new `19_upgrade` commit is deployed to the Odoo.sh development
 build, **manually upgrade** the installed TAJ Transport Operations module
 in the Odoo Apps UI. Do not reinstall the module and do not upgrade or install
-it automatically during Git deployment. The manifest version is `19.0.1.15.0`
+it automatically during Git deployment. The manifest version is `19.0.1.17.0`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots, historical truck grouping, the dispatch worklists and
 their cutoff date;
 Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.
+
+**Milestone trip shortcut (19.0.1.15.1):** every row in the global milestone
+lists has an **Open Trip** button that opens its linked trip form, including
+Draft and Completed / Skipped milestones.
 
 **Milestone save navigation (19.0.1.13.2):** saving Arrival, Departure, Skip
 or a timestamp correction closes the dialog and refreshes the view that
