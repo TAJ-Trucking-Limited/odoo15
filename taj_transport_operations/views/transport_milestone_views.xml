@@ -7,6 +7,12 @@
             <list string="Trip Milestones" create="0" delete="0" edit="0">
                 <field name="vehicle_id"/>
                 <field name="trip_id"/>
+                <field name="trip_state" widget="badge"
+                       decoration-info="trip_state == 'draft'"
+                       decoration-warning="trip_state in ('ready','in_progress')"
+                       decoration-success="trip_state == 'completed'"
+                       decoration-muted="trip_state == 'cancelled'"
+                       optional="show"/>
                 <field name="sale_order_id"/>
                 <field name="partner_id"/>
                 <field name="sequence" optional="hide"/>
