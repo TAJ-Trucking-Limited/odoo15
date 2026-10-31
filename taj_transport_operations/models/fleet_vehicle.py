@@ -34,7 +34,7 @@ class FleetVehicle(models.Model):
                 lambda trip: trip.state == "draft" and not trip.assignment_ids
             )
             vehicle.transport_can_assign = bool(
-                vehicle.active and vehicle.category_id == category
+                vehicle.active and (not vehicle.category_id or vehicle.category_id == category)
                 and (vehicle.transport_availability_state == "standby" or reserved)
                 and vehicle.transport_availability_state != "busy"
             )
@@ -182,6 +182,8 @@ class FleetVehicle(models.Model):
     @api.model
     def _transport_resource_domain(self, kind):
         category = self.env.ref("taj_transport_operations.fleet_category_" + kind)
+        if kind == "truck":
+            return [("active", "=", True), "|", ("category_id", "=", False), ("category_id", "=", category.id)]
         return [("category_id", "=", category.id), ("active", "=", True)]
 
     @api.model_create_multi
@@ -213,7 +215,9 @@ class FleetVehicle(models.Model):
                 category = self.env.ref("taj_transport_operations.fleet_category_" + kind,
                                         raise_if_not_found=False)
                 if category:
-                    invalid = self.filtered(lambda v: v.category_id != category)
+                    invalid = self.filtered(
+                        lambda v: v.category_id != category and (kind != "truck" or v.category_id)
+                    )
                     if invalid and assignments.search_count([(field, "in", invalid.ids)]):
                         raise ValidationError(_(
                             "The category/model cannot change the resource type of an assigned vehicle."

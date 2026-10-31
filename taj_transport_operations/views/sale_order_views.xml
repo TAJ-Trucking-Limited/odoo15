@@ -20,8 +20,6 @@
             </xpath>
             <xpath expr="//field[@name='client_order_ref']" position="after">
                 <field name="transport_customer_email" readonly="1"/>
-                <field name="transport_planned_departure_at"/>
-                <field name="transport_planned_arrival_at"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="transport_trip_count" column_invisible="True"
@@ -36,6 +34,10 @@
                         invisible="display_type not in [False, 'product'] or transport_trip_count == 0"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+                <group string="Transport Schedule" invisible="display_type not in [False, 'product']">
+                    <field name="transport_planned_departure_at"/>
+                    <field name="transport_planned_arrival_at"/>
+                </group>
                 <group string="Cargo Details" invisible="display_type not in [False, 'product']">
                     <field name="cargo_type_id"
                            options="{'no_create': True, 'no_create_edit': True}"/>
@@ -46,6 +48,8 @@
                 </group>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
+                <field name="transport_planned_departure_at" optional="show" invisible="display_type not in [False, 'product']"/>
+                <field name="transport_planned_arrival_at" optional="show" invisible="display_type not in [False, 'product']"/>
                 <field name="cargo_type_id"
                        options="{'no_create': True, 'no_create_edit': True}"
                        optional="show" invisible="display_type not in [False, 'product']"/>

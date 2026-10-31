@@ -73,9 +73,26 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
     def _vehicle_wizard(self, trip):
         action = self.truck.action_assign_transport_trip()
         return self.env["taj.transport.initial.assignment.wizard"].with_context(action["context"]).create({
-            "trip_id": trip.id, "vehicle_id": self.truck.id,
+            "trip_id": trip.id, "sale_order_id": trip.sale_order_id.id, "vehicle_id": self.truck.id,
             "driver_id": self.driver.id,
         })
+
+    def test_vehicle_selection_filters_trips_by_sales_order(self):
+        first = self._trip(line=self._sale_line("SELECT1", vehicle_id=False))
+        second = self._trip(line=self._sale_line("SELECT2", vehicle_id=False))
+        action = self.truck.action_assign_transport_trip()
+        wizard = self.env["taj.transport.initial.assignment.wizard"].with_context(
+            action["context"]
+        ).create({"vehicle_id": self.truck.id, "sale_order_id": first.sale_order_id.id, "trip_id": first.id})
+        wizard.sale_order_id = second.sale_order_id
+        wizard._onchange_sale_order_id()
+        self.assertFalse(wizard.trip_id)
+        wizard.trip_id = first
+        with self.assertRaises(UserError):
+            wizard.action_assign_initial_resources()
+        wizard.trip_id = second
+        wizard.action_assign_initial_resources()
+        self.assertEqual(second.current_vehicle_id, self.truck)
 
     def test_availability_assigns_truck_without_changing_sales_source(self):
         line = self._sale_line("ASSIGN", vehicle_id=False)
@@ -88,6 +105,17 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
         self.assertFalse(line.vehicle_id)
         self.assertEqual(len(trip.assignment_ids), 1)
 
+    def test_uncategorized_vehicle_can_be_assigned_and_marked_ready(self):
+        self.truck.category_id = False
+        trip = self._trip(line=self._sale_line("NO-CATEGORY", vehicle_id=False))
+        self.assertTrue(self.truck.transport_can_assign)
+        self._vehicle_wizard(trip).action_assign_initial_resources()
+        self.assertEqual(trip.current_vehicle_id, self.truck)
+        self.assertFalse(self.truck.category_id)
+        self._plan(trip)
+        trip.action_mark_ready()
+        self.assertEqual(trip.state, "ready")
+
     def test_reserved_truck_can_only_be_assigned_to_its_own_trip(self):
         line = self._sale_line("RESERVED")
         # A Sales truck that was not eligible at creation leaves an unassigned
@@ -99,8 +127,6 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
         self.assertFalse(reserved_trip.assignment_ids)
         other = self._trip(line=self._sale_line("TARGET", vehicle_id=False))
         wizard = self._vehicle_wizard(other)
-        self.assertIn(reserved_trip, wizard.available_trip_ids)
-        self.assertNotIn(other, wizard.available_trip_ids)
         with self.assertRaises(UserError):
             wizard.action_assign_initial_resources()
         self.assertFalse(other.assignment_ids)

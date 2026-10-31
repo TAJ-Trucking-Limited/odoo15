@@ -574,8 +574,9 @@ activate alerts for a company.
 
 ## Vehicle Availability assignment (19.0.1.16.0)
 
-**Assign to Trip** opens the initial resource dialog from an active Truck row.
-The truck is preselected, the dispatcher chooses a Draft trip without assignment
+**Assign to Trip** opens the initial resource dialog from an active Truck or
+uncategorized vehicle row. Explicit Trailer categories remain excluded.
+The truck is preselected, the dispatcher chooses a Sales Order and a Draft trip without assignment
 history, and the driver defaults from Fleet with manual override. Same-company
 and shared trucks follow the normal assignment validations and audit history.
 An unassigned Draft trip may use its own reserved Sales truck; trucks assigned
@@ -618,20 +619,14 @@ web client caches `/web/action/load` responses on disk, which keeps serving the
 cutoff the action was first loaded with until the module is upgraded or the
 browser site data is cleared.
 
-## Sales Order transport schedule (19.0.1.17.6)
+## Sales line transport schedule
 
-Sales Orders have optional **Planned Departure** and **Planned Arrival**
-datetime fields next to the Client Reference. They are optional and may be
-left empty. A planned arrival earlier than the planned departure is refused on
-the Sales Order.
-
-Every trip created from the order inherits both values. This covers the Sales
-line **Create Trip** button, the **Create Trips** wizard and direct ORM/API
-creation. An explicit trip value wins, including an explicit blank, and each
-trip keeps its creation snapshot: later changes on the Sales Order do not move
-existing trips, and the trip never writes back to Sales. Trips created from an
-order without a schedule keep both fields empty; the existing Ready check still
-requires a planned departure and arrival before a trip can start.
+Sales order lines have optional **Planned Departure** and **Planned Arrival**
+fields. Arrival cannot be earlier than departure. A new trip copies the
+schedule from its own sales line, unless explicit trip values are provided.
+Later line edits do not change existing trips. During upgrade, existing order
+schedules are copied to their lines. A trip still needs both dates before it
+can start.
 
 ## Scope intentionally deferred
 

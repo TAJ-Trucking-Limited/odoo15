@@ -400,7 +400,7 @@
     <menuitem id="menu_transport_operations" name="Transport Operations"
               groups="taj_transport_operations.group_transport_user" sequence="50"/>
     <menuitem id="menu_transport_trips" name="Trips" parent="menu_transport_operations"
-              action="action_transport_trip" sequence="10"
+              action="action_transport_trip" sequence="80"
               groups="taj_transport_operations.group_transport_user"/>
     <menuitem id="menu_transport_configuration" name="Configuration"
               parent="menu_transport_operations" sequence="90"

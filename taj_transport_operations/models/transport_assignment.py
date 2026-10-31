@@ -97,7 +97,7 @@ class TajTransportAssignment(models.Model):
                         raise ValidationError(_(
                             "%s is archived in Fleet. Choose an active %s."
                         ) % (vehicle.display_name, kind))
-                    if vehicle.category_id != category:
+                    if vehicle.category_id != category and (kind != "truck" or vehicle.category_id):
                         raise ValidationError(_(
                             "%(vehicle)s has Fleet category %(actual)s; expected "
                             "%(expected)s. A Fleet administrator must correct "

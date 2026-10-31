@@ -244,7 +244,7 @@
 
     <menuitem id="menu_transport_milestones" name="Milestones"
               parent="menu_transport_operations"
-              action="action_transport_milestone" sequence="15"
+              action="action_transport_milestone" sequence="10"
               groups="taj_transport_operations.group_transport_user"/>
     <menuitem id="menu_transport_milestones_remaining" name="In Progress"
               parent="menu_transport_milestones"

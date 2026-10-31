@@ -1,42 +1,16 @@
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 
-    transport_planned_departure_at = fields.Datetime(
-        string="Planned Departure", copy=False,
-        help="Optional transport schedule. Copied onto each trip created "
-             "from this order; later changes do not update existing trips.",
-    )
-    transport_planned_arrival_at = fields.Datetime(
-        string="Planned Arrival", copy=False,
-        help="Optional transport schedule. Copied onto each trip created "
-             "from this order; later changes do not update existing trips.",
-    )
     transport_customer_email = fields.Char(
         string="Customer Email", related="partner_id.email",
         store=True, readonly=True,
         help="Email taken from the customer record. The trips of this order "
              "show the same address.",
     )
-
-    @api.constrains(
-        "transport_planned_departure_at", "transport_planned_arrival_at",
-    )
-    def _check_transport_planned_schedule(self):
-        for order in self:
-            if (
-                order.transport_planned_departure_at
-                and order.transport_planned_arrival_at
-                and order.transport_planned_arrival_at
-                < order.transport_planned_departure_at
-            ):
-                raise ValidationError(_(
-                    "Transport planned arrival cannot be earlier than the "
-                    "planned departure."
-                ))
 
     transport_trip_ids = fields.One2many(
         "taj.transport.trip", "sale_order_id",

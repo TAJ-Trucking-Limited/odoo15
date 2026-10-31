@@ -10,27 +10,25 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
     trip_id = fields.Many2one(
         "taj.transport.trip", string="Trip", required=True,
     )
-    available_trip_ids = fields.Many2many(
-        "taj.transport.trip", compute="_compute_available_trip_ids",
-    )
-    sale_order_id = fields.Many2one(related="trip_id.sale_order_id", readonly=True)
+    sale_order_id = fields.Many2one("sale.order", string="Sales Order")
 
-    @api.depends("vehicle_id")
-    def _compute_available_trip_ids(self):
-        for wizard in self:
-            domain = [("state", "=", "draft"), ("assignment_ids", "=", False)]
-            if wizard.vehicle_id.company_id:
-                domain.append(("company_id", "=", wizard.vehicle_id.company_id.id))
-            reservations = self.env["taj.transport.trip"].sudo().search([
-                ("state", "=", "draft"), ("assignment_ids", "=", False),
-                ("initial_vehicle_id", "=", wizard.vehicle_id.id),
-            ]) if wizard.vehicle_id else self.env["taj.transport.trip"]
-            if reservations:
-                domain.append(("id", "in", reservations.ids))
-            wizard.available_trip_ids = self.env["taj.transport.trip"].search(domain)
+    @api.model
+    def default_get(self, fields_list):
+        values = super().default_get(fields_list)
+        trip_id = values.get("trip_id") or self.env.context.get("default_trip_id")
+        if trip_id and "sale_order_id" in fields_list:
+            values["sale_order_id"] = self.env["taj.transport.trip"].browse(trip_id).sale_order_id.id
+        return values
+
+    @api.onchange("sale_order_id")
+    def _onchange_sale_order_id(self):
+        if self.env.context.get("select_trip_for_vehicle") and self.trip_id.sale_order_id != self.sale_order_id:
+            self.trip_id = False
+
+
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck",
-        domain=lambda self: "[('category_id', '=', %s), ('active', '=', True), '|', "
+        domain=lambda self: "[('active', '=', True), '|', ('category_id', '=', False), ('category_id', '=', %s), '|', "
                             "('company_id', '=', False), ('company_id', '=', company_id)]" %
                             self.env.ref("taj_transport_operations.fleet_category_truck").id,
     )
@@ -79,11 +77,13 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
                 "separately to preserve the history."
             ))
         if self.env.context.get("select_trip_for_vehicle"):
+            if not self.sale_order_id or trip.sale_order_id != self.sale_order_id:
+                raise UserError(_("Choose a trip belonging to the selected Sales Order."))
             vehicle = self.vehicle_id
             vehicle.check_access("read")
             vehicle._lock_for_transport_assignment()
             if (not vehicle or not vehicle.active
-                    or vehicle.category_id != self.env.ref("taj_transport_operations.fleet_category_truck")):
+                    or (vehicle.category_id and vehicle.category_id != self.env.ref("taj_transport_operations.fleet_category_truck"))):
                 raise UserError(_("Select an active Truck."))
             # Check all companies without exposing another company's trip.
             occupied = self.env["taj.transport.assignment"].sudo().search_count([

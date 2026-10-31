@@ -329,8 +329,8 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             }).action_create_trips()
         self.assertFalse(self.line_b.transport_trip_ids)
 
-    def test_trip_inherits_sales_order_planned_schedule(self):
-        self.order.write({
+    def test_trip_inherits_sales_line_planned_schedule(self):
+        self.line_a.write({
             "transport_planned_departure_at": "2026-11-02 08:00:00",
             "transport_planned_arrival_at": "2026-11-04 18:00:00",
         })
@@ -346,7 +346,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "2026-11-04 18:00:00",
         )
         # The trip keeps its creation snapshot; later Sales edits do not move it.
-        self.order.write({
+        self.line_a.write({
             "transport_planned_departure_at": "2026-11-10 08:00:00",
             "transport_planned_arrival_at": "2026-11-12 18:00:00",
         })
@@ -359,20 +359,20 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "2026-11-04 18:00:00",
         )
 
-    def test_explicit_trip_schedule_wins_over_sales_order(self):
-        self.order.write({
+    def test_explicit_trip_schedule_wins_over_sales_line(self):
+        self.line_a.write({
             "transport_planned_departure_at": "2026-11-02 08:00:00",
             "transport_planned_arrival_at": "2026-11-04 18:00:00",
         })
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_a.id,
-            "planned_departure_at": "2026-11-05 06:00:00",
+            "planned_departure_at": "2026-11-03 06:00:00",
         })
         self.assertEqual(
             trip.planned_departure_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "2026-11-05 06:00:00",
+            "2026-11-03 06:00:00",
         )
-        # Unset keys still inherit the other Sales Order value.
+        # Unset keys still inherit the other Sales line value.
         self.assertEqual(
             trip.planned_arrival_at.strftime("%Y-%m-%d %H:%M:%S"),
             "2026-11-04 18:00:00",
@@ -386,9 +386,9 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertFalse(blank.planned_departure_at)
         self.assertFalse(blank.planned_arrival_at)
 
-    def test_sales_order_rejects_arrival_before_departure(self):
+    def test_sales_line_rejects_arrival_before_departure(self):
         with self.assertRaises(ValidationError):
-            self.order.write({
+            self.line_a.write({
                 "transport_planned_departure_at": "2026-11-04 18:00:00",
                 "transport_planned_arrival_at": "2026-11-02 08:00:00",
             })

@@ -519,8 +519,8 @@ class TajTransportTrip(models.Model):
             "initial_vehicle_id": line.vehicle_id.id or False,
             "origin_location": route.origin_location if (route.origin_location or "").strip() else origin or False,
             "destination_location": route.destination_location if (route.destination_location or "").strip() else destination or False,
-            "planned_departure_at": line.order_id.transport_planned_departure_at or False,
-            "planned_arrival_at": line.order_id.transport_planned_arrival_at or False,
+            "planned_departure_at": line.transport_planned_departure_at or False,
+            "planned_arrival_at": line.transport_planned_arrival_at or False,
         }
 
     @api.onchange("sale_order_id")
@@ -719,20 +719,19 @@ class TajTransportTrip(models.Model):
         return vals
 
     @api.model
-    def _default_schedule_from_sale_order(self, vals, line):
-        """Copy the optional Sales Order schedule unless the caller set it.
+    def _default_schedule_from_sale_line(self, vals, line):
+        """Copy the optional sales line schedule unless the caller set it.
 
         Explicit values (including an explicit blank) win, matching the cargo
         snapshot behaviour. Existing trips are never updated by later edits.
         """
-        order = line.order_id
         if (
             "planned_departure_at" not in vals
-            and order.transport_planned_departure_at
+            and line.transport_planned_departure_at
         ):
-            vals["planned_departure_at"] = order.transport_planned_departure_at
-        if "planned_arrival_at" not in vals and order.transport_planned_arrival_at:
-            vals["planned_arrival_at"] = order.transport_planned_arrival_at
+            vals["planned_departure_at"] = line.transport_planned_departure_at
+        if "planned_arrival_at" not in vals and line.transport_planned_arrival_at:
+            vals["planned_arrival_at"] = line.transport_planned_arrival_at
         return vals
 
     @api.model
@@ -757,7 +756,7 @@ class TajTransportTrip(models.Model):
         # caller's values so the product-name fallback can still apply.
         vals = self._apply_explicit_route_locations(vals)
         vals = self._suggest_missing_route_values(vals, line)
-        vals = self._default_schedule_from_sale_order(vals, line)
+        vals = self._default_schedule_from_sale_line(vals, line)
         if vals.get("state", "draft") != "draft":
             raise ValidationError(_("Transport trips must start in Draft."))
         if self._workflow_fields.intersection(vals) - {"state"}:
@@ -897,9 +896,11 @@ class TajTransportTrip(models.Model):
                 category = self.env.ref(
                     "taj_transport_operations.fleet_category_" + kind,
                 )
-                if not vehicle.active or vehicle.category_id != category:
+                if not vehicle.active or (
+                    vehicle.category_id != category and (kind != "truck" or vehicle.category_id)
+                ):
                     raise ValidationError(_(
-                        "%s must be active and categorized as %s in Fleet."
+                        "%s must be active and have a compatible Fleet category for %s."
                     ) % (vehicle.display_name, kind.title()))
                 if vehicle.company_id and vehicle.company_id != self.company_id:
                     raise ValidationError(_(

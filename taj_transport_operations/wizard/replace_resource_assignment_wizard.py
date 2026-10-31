@@ -22,7 +22,7 @@ class TajTransportReplaceAssignmentWizard(models.TransientModel):
     )
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck",
-        domain=lambda self: "[('category_id', '=', %s), ('active', '=', True), '|', "
+        domain=lambda self: "[('active', '=', True), '|', ('category_id', '=', False), ('category_id', '=', %s), '|', "
                             "('company_id', '=', False), ('company_id', '=', company_id)]" %
                             self.env.ref("taj_transport_operations.fleet_category_truck").id,
     )
