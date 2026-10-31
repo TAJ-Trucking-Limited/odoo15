@@ -165,17 +165,20 @@ Resources**, available only while the Draft trip has no active assignment.
   Stable Truck and Trailer category XML IDs distinguish resource types. We do not create a second driver
   master or modify the driver's default assignment on the Fleet vehicle.
 - From `19.0.1.11.1`, creating a trip automatically records its initial truck
-  and driver when the original Sales truck is active, categorized as Truck,
-  and has an active compatible Fleet driver. Both resources must belong to
-  the trip company or be shared. This is an actual audited assignment, so the
-  current truck and driver are immediately visible in Resources.
+  when the original Sales truck is active, categorized as Truck, and belongs
+  to the trip company or is shared. A Fleet driver is included only when
+  active and valid; otherwise the assignment is truck-only. This is an actual
+  audited assignment, so the current truck is immediately visible in Resources.
 - If these defaults are incomplete or invalid, the trip remains Draft with
   manual initial assignment available. Existing Draft trips are not bulk
-  changed: **Apply Fleet Defaults** applies the valid truck/driver pair to a
-  Draft trip without assignment history. Assign Initial Resources remains an
-  alternative for choosing resources manually. Existing assignments and Fleet
-  drivers are never overwritten; use Replace Resources for subsequent changes,
-  including adding a trailer to an automatic initial assignment.
+  changed: **Apply Fleet Defaults** applies a valid truck to a Draft trip
+  without assignment history. **Assign Initial Resources** remains available
+  only while no assignment history exists. Once assigned (including truck-only),
+  use **Replace Resources** to add/change resources, including adding a
+  driver. Existing assignments and Fleet drivers are never overwritten;
+  changing the Fleet driver does not automatically update saved trips.
+- After a truck-only assignment, add the driver through **Replace Resources**
+  before marking Ready (Ready requires both a valid truck and a driver).
 - In `19.0.1.8.2`, the initial assignment wizard also suggests the selected
   truck's Fleet driver, including when opened with the initial Sales truck.
   Changing the truck refreshes the suggestion; the Dispatcher can override or

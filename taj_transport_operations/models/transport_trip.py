@@ -394,7 +394,7 @@ class TajTransportTrip(models.Model):
                 if other_trips:
                     trip.message_post(body=_("Automatic assignment skipped: truck is already assigned to another trip."))
                     if required:
-                        raise UserError(_("This truck is already assigned to another trip. Use Replace Resources or choose a different truck."))
+                        raise UserError(_("This truck is already assigned to another trip. Use Assign Initial Resources to choose a different available truck."))
                     continue
             # Check for Draft reservations by other trips (truck reserved but not yet assigned)
             other_reservations = self.env["taj.transport.trip"].sudo().search([
