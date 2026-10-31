@@ -608,6 +608,21 @@ only affects these two worklists: trips, Sales documents, the Create Trips
 wizard and reporting are unchanged. The cutoff is database-wide, not
 per company.
 
+## Sales Order transport schedule (19.0.1.17.6)
+
+Sales Orders have optional **Planned Departure** and **Planned Arrival**
+datetime fields next to the Client Reference. They are optional and may be
+left empty. A planned arrival earlier than the planned departure is refused on
+the Sales Order.
+
+Every trip created from the order inherits both values. This covers the Sales
+line **Create Trip** button, the **Create Trips** wizard and direct ORM/API
+creation. An explicit trip value wins, including an explicit blank, and each
+trip keeps its creation snapshot: later changes on the Sales Order do not move
+existing trips, and the trip never writes back to Sales. Trips created from an
+order without a schedule keep both fields empty; the existing Ready check still
+requires a planned departure and arrival before a trip can start.
+
 ## Scope intentionally deferred
 
 Resource overlap/availability enforcement **across different trips**,
@@ -622,11 +637,11 @@ value exists in the audit model as a reserved placeholder only.
 Odoo.sh upgrades the installed TAJ Transport Operations module when a deployed
 commit increases its manifest version. For installations outside Odoo.sh,
 upgrade the module through Apps or the Odoo CLI. Do not reinstall it.
-The manifest version is `19.0.1.17.5`
+The manifest version is `19.0.1.17.6`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
-sales cargo snapshots, historical truck grouping, the dispatch worklists and
-their cutoff date; automatic truck assignment from Sales line without requiring
-a Fleet driver;
+sales cargo snapshots, Sales Order planned schedule, historical truck grouping,
+the dispatch worklists and their cutoff date; automatic truck assignment from
+Sales line without requiring a Fleet driver;
 Navirec compatibility:
 `fleet_navirec` version `19.0.1.4.1`). The `19.0.1.8.0` upgrade migrates saved
 trip transporter selections from Contacts into the dedicated catalog.

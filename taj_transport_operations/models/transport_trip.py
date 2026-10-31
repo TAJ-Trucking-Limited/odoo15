@@ -514,6 +514,8 @@ class TajTransportTrip(models.Model):
             "initial_vehicle_id": line.vehicle_id.id or False,
             "origin_location": route.origin_location if (route.origin_location or "").strip() else origin or False,
             "destination_location": route.destination_location if (route.destination_location or "").strip() else destination or False,
+            "planned_departure_at": line.order_id.transport_planned_departure_at or False,
+            "planned_arrival_at": line.order_id.transport_planned_arrival_at or False,
         }
 
     @api.onchange("sale_order_id")
@@ -712,6 +714,23 @@ class TajTransportTrip(models.Model):
         return vals
 
     @api.model
+    def _default_schedule_from_sale_order(self, vals, line):
+        """Copy the optional Sales Order schedule unless the caller set it.
+
+        Explicit values (including an explicit blank) win, matching the cargo
+        snapshot behaviour. Existing trips are never updated by later edits.
+        """
+        order = line.order_id
+        if (
+            "planned_departure_at" not in vals
+            and order.transport_planned_departure_at
+        ):
+            vals["planned_departure_at"] = order.transport_planned_departure_at
+        if "planned_arrival_at" not in vals and order.transport_planned_arrival_at:
+            vals["planned_arrival_at"] = order.transport_planned_arrival_at
+        return vals
+
+    @api.model
     def _prepare_trip_create_vals(self, entry):
         """Validate and default one create dict; raises before any insert."""
         if not entry.get("sale_line_id"):
@@ -733,6 +752,7 @@ class TajTransportTrip(models.Model):
         # caller's values so the product-name fallback can still apply.
         vals = self._apply_explicit_route_locations(vals)
         vals = self._suggest_missing_route_values(vals, line)
+        vals = self._default_schedule_from_sale_order(vals, line)
         if vals.get("state", "draft") != "draft":
             raise ValidationError(_("Transport trips must start in Draft."))
         if self._workflow_fields.intersection(vals) - {"state"}:

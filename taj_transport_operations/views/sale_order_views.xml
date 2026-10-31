@@ -18,6 +18,10 @@
                            string="Trips"/>
                 </button>
             </xpath>
+            <xpath expr="//field[@name='client_order_ref']" position="after">
+                <field name="transport_planned_departure_at"/>
+                <field name="transport_planned_arrival_at"/>
+            </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="transport_trip_count" column_invisible="True"
                        groups="taj_transport_operations.group_transport_user"/>

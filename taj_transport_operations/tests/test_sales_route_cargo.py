@@ -314,6 +314,70 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             }).action_create_trips()
         self.assertFalse(self.line_b.transport_trip_ids)
 
+    def test_trip_inherits_sales_order_planned_schedule(self):
+        self.order.write({
+            "transport_planned_departure_at": "2026-11-02 08:00:00",
+            "transport_planned_arrival_at": "2026-11-04 18:00:00",
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_a.id,
+        })
+        self.assertEqual(
+            trip.planned_departure_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-11-02 08:00:00",
+        )
+        self.assertEqual(
+            trip.planned_arrival_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-11-04 18:00:00",
+        )
+        # The trip keeps its creation snapshot; later Sales edits do not move it.
+        self.order.write({
+            "transport_planned_departure_at": "2026-11-10 08:00:00",
+            "transport_planned_arrival_at": "2026-11-12 18:00:00",
+        })
+        self.assertEqual(
+            trip.planned_departure_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-11-02 08:00:00",
+        )
+        self.assertEqual(
+            trip.planned_arrival_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-11-04 18:00:00",
+        )
+
+    def test_explicit_trip_schedule_wins_over_sales_order(self):
+        self.order.write({
+            "transport_planned_departure_at": "2026-11-02 08:00:00",
+            "transport_planned_arrival_at": "2026-11-04 18:00:00",
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_a.id,
+            "planned_departure_at": "2026-11-05 06:00:00",
+        })
+        self.assertEqual(
+            trip.planned_departure_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-11-05 06:00:00",
+        )
+        # Unset keys still inherit the other Sales Order value.
+        self.assertEqual(
+            trip.planned_arrival_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-11-04 18:00:00",
+        )
+
+        blank = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_b.id,
+            "planned_departure_at": False,
+            "planned_arrival_at": False,
+        })
+        self.assertFalse(blank.planned_departure_at)
+        self.assertFalse(blank.planned_arrival_at)
+
+    def test_sales_order_rejects_arrival_before_departure(self):
+        with self.assertRaises(ValidationError):
+            self.order.write({
+                "transport_planned_departure_at": "2026-11-04 18:00:00",
+                "transport_planned_arrival_at": "2026-11-02 08:00:00",
+            })
+
     def test_line_button_unique_ambiguous_and_missing(self):
         action = self.line_a.action_open_or_create_transport_trip()
         self.assertEqual(action["res_model"], "taj.transport.trip")
