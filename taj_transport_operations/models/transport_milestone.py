@@ -882,13 +882,35 @@ class TajTransportMilestone(models.Model):
             {"default_milestone_id": self.id},
         )
 
+    def _selected_trip(self):
+        self.check_access("read")
+        trips = self.mapped("trip_id")
+        if len(trips) != 1:
+            raise UserError(_("Select milestones from one trip for this action."))
+        trips.check_access("read")
+        return trips
+
+    def action_open_next_event_wizard(self):
+        if len(self) != 1:
+            raise UserError(_("Select exactly one milestone to record arrival or departure."))
+        self.check_access("read")
+        self._check_recording_allowed(self.trip_id)
+        if self.actual_departure_at or self.state in ("departed", "completed", "skipped"):
+            raise UserError(_("This milestone is already finished. Select an unfinished milestone."))
+        if self.actual_arrival_at:
+            return self.action_open_departure_wizard()
+        return self.action_open_arrival_wizard()
+
+    def action_open_record_activity(self):
+        return self._selected_trip().action_open_record_activity()
+
     def action_open_trip(self):
-        self.ensure_one()
+        trip = self._selected_trip()
         return {
             "type": "ir.actions.act_window",
             "name": _("Transport Trip"),
             "res_model": "taj.transport.trip",
-            "res_id": self.trip_id.id,
+            "res_id": trip.id,
             "view_mode": "form",
             "target": "current",
         }

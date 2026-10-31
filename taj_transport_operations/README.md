@@ -454,6 +454,13 @@ historical groups. All three milestone menus allow Trip and Truck grouping.
 Milestone lists and forms show the linked Sales Order and Customer as
 read-only references, and both are available in the milestone search.
 
+Selecting milestones shows **Open Trip**, **Arrival / Departure**, and
+**Record Activity** above the list. Open Trip and Record Activity accept
+multiple milestones belonging to the same trip. Arrival / Departure requires
+one milestone: it opens Arrival before arrival is recorded, then Departure.
+Finished milestones and closed trips retain their workflow restrictions.
+Opening a wizard does not record an event; submit it to save the update.
+
 ## Vehicle Availability (19.0.1.10.0)
 
 **Vehicle Availability** replaces the Trailers menu. It lists all Fleet vehicles
@@ -615,7 +622,7 @@ value exists in the audit model as a reserved placeholder only.
 Odoo.sh upgrades the installed TAJ Transport Operations module when a deployed
 commit increases its manifest version. For installations outside Odoo.sh,
 upgrade the module through Apps or the Odoo CLI. Do not reinstall it.
-The manifest version is `19.0.1.17.4`
+The manifest version is `19.0.1.17.5`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots, historical truck grouping, the dispatch worklists and
 their cutoff date; automatic truck assignment from Sales line without requiring
