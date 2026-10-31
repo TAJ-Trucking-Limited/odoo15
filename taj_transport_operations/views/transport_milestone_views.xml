@@ -232,7 +232,7 @@
               parent="menu_transport_operations"
               action="action_transport_milestone" sequence="15"
               groups="taj_transport_operations.group_transport_user"/>
-    <menuitem id="menu_transport_milestones_remaining" name="Remaining"
+    <menuitem id="menu_transport_milestones_remaining" name="In Progress"
               parent="menu_transport_milestones"
               action="action_transport_milestone_remaining" sequence="10"
               groups="taj_transport_operations.group_transport_user"/>
