@@ -41,6 +41,11 @@ class TajTransportTrip(models.Model):
         "res.partner", related="sale_order_id.partner_id",
         store=True, readonly=True,
     )
+    partner_email = fields.Char(
+        string="Customer Email",
+        related="sale_order_id.transport_customer_email",
+        store=True, readonly=True,
+    )
     state = fields.Selection(
         [
             ("draft", "Draft"),

@@ -15,6 +15,12 @@ class SaleOrder(models.Model):
         help="Optional transport schedule. Copied onto each trip created "
              "from this order; later changes do not update existing trips.",
     )
+    transport_customer_email = fields.Char(
+        string="Customer Email", related="partner_id.email",
+        store=True, readonly=True,
+        help="Email taken from the customer record. The trips of this order "
+             "show the same address.",
+    )
 
     @api.constrains(
         "transport_planned_departure_at", "transport_planned_arrival_at",

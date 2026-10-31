@@ -107,6 +107,21 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertEqual(later_trip.cargo_type_id, self.fragile)
         self.assertEqual(later_trip.special_handling_instructions, "Do not stack")
 
+    def test_customer_email_follows_the_partner_onto_the_trip(self):
+        self.customer.email = "ops@route-cargo.example"
+        self.assertEqual(
+            self.order.transport_customer_email, "ops@route-cargo.example"
+        )
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_a.id,
+        })
+        self.assertEqual(trip.partner_email, "ops@route-cargo.example")
+        self.customer.email = "dispatch@route-cargo.example"
+        self.assertEqual(
+            self.order.transport_customer_email, "dispatch@route-cargo.example"
+        )
+        self.assertEqual(trip.partner_email, "dispatch@route-cargo.example")
+
     def test_explicit_cargo_vals_win_over_sales_line_defaults(self):
         other = self.env.ref("taj_transport_operations.cargo_type_fragile")
         trip = self.env["taj.transport.trip"].create({

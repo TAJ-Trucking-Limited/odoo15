@@ -19,6 +19,7 @@
                 </button>
             </xpath>
             <xpath expr="//field[@name='client_order_ref']" position="after">
+                <field name="transport_customer_email" readonly="1"/>
                 <field name="transport_planned_departure_at"/>
                 <field name="transport_planned_arrival_at"/>
             </xpath>

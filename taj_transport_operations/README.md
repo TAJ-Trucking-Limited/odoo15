@@ -72,12 +72,15 @@ creates the missing file for that line only. Confirmation does not create trips.
 Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
 
 **Read-only Sales source (updates reflect the linked Sales records):**
-- Customer, sales order and sales line, sales unit rate, currency.
+- Customer and customer email, sales order and sales line, sales unit rate, currency.
 - Customer reference, source document and payment terms.
 - Sales line description, container number, shipment reference (SRN), file
   name, consignee, weight, size, sales quantity and unit of measure.
 - The truck at trip creation stays a historical **snapshot**, not a live
   related field. The original truck is never written back to Sales.
+
+The Sales Order and trip show the selected customer's email as a read-only
+value. Changes to that customer's email are reflected on both records.
 
 **Dispatcher-maintained operational details (all optional):**
 - Transporter (selected from the name/email catalog maintained by the
@@ -644,7 +647,7 @@ value exists in the audit model as a reserved placeholder only.
 Odoo.sh upgrades the installed TAJ Transport Operations module when a deployed
 commit increases its manifest version. For installations outside Odoo.sh,
 upgrade the module through Apps or the Odoo CLI. Do not reinstall it.
-The manifest version is `19.0.1.17.8`
+The manifest version is `19.0.1.17.9`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots, Sales Order planned schedule, historical truck grouping,
 the dispatch worklists and their cutoff date; automatic truck assignment from
