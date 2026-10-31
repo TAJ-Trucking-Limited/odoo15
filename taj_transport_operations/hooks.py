@@ -4,28 +4,84 @@ from html import escape
 from psycopg2 import sql
 
 
+_TRANSPORT_CATEGORY_NAMES = {
+    "truck": {"truck", "trucks"},
+    "trailer": {"trailer", "trailers"},
+}
+
+
+def _matching_categories(env, kind):
+    """Case-insensitive singular/plural match, without wildcard guessing."""
+    names = _TRANSPORT_CATEGORY_NAMES[kind]
+    return env["fleet.vehicle.model.category"].search([]).filtered(
+        lambda category: (category.name or "").strip().lower() in names
+    )
+
+
+def _categories_in_use(env, categories):
+    vehicles = env["fleet.vehicle"].with_context(active_test=False)
+    return categories.filtered(
+        lambda category: vehicles.search_count([
+            ("category_id", "=", category.id),
+        ])
+    )
+
+
+def _write_category_xmlid(env, xml_name, category):
+    """Create or repair the stable XML ID so every consumer sees the category."""
+    IMD = env["ir.model.data"].sudo()
+    imd = IMD.search([
+        ("module", "=", "taj_transport_operations"),
+        ("name", "=", xml_name),
+        ("model", "=", "fleet.vehicle.model.category"),
+    ], limit=1)
+    if imd:
+        imd.write({"res_id": category.id})
+    else:
+        IMD.create({
+            "module": "taj_transport_operations", "name": xml_name,
+            "model": "fleet.vehicle.model.category", "res_id": category.id,
+            "noupdate": True,
+        })
+    env.registry.clear_cache()
+
+
 def ensure_transport_categories(env):
-    """Adopt existing categories without renaming them or duplicating names."""
+    """Adopt existing categories without renaming them or duplicating names.
+
+    Singular and plural spellings ("Truck"/"Trucks") are both accepted. If a
+    database already has both, the category actually carrying vehicles is
+    adopted and the stable XML ID is rebound to it. Ambiguous usage aborts
+    instead of silently splitting trucks between two categories.
+    """
     categories = {}
+    Category = env["fleet.vehicle.model.category"]
     for kind, label in (("truck", "Truck"), ("trailer", "Trailer")):
         xml_name = "fleet_category_" + kind
         category = env.ref("taj_transport_operations." + xml_name,
                            raise_if_not_found=False)
-        if not category:
-            matches = env["fleet.vehicle.model.category"].search([
-                ("name", "=ilike", label),
-            ])
-            if len(matches) > 1:
+        matches = _matching_categories(env, kind)
+        if category and category not in matches:
+            if category.active or not matches:
+                # The linked category was renamed by hand. Keep the link.
+                categories[kind] = category
+                continue
+            # The linked category was archived; adopt a live replacement.
+            category = Category.browse()
+        chosen = category
+        if len(matches) > 1:
+            used = _categories_in_use(env, matches)
+            if len(used) == 1:
+                chosen = used
+            elif used or not chosen:
                 raise ValueError("Ambiguous Fleet category: " + label)
-            category = matches or env["fleet.vehicle.model.category"].create({
-                "name": label,
-            })
-            env["ir.model.data"].create({
-                "module": "taj_transport_operations", "name": xml_name,
-                "model": "fleet.vehicle.model.category", "res_id": category.id,
-                "noupdate": True,
-            })
-        categories[kind] = category
+        elif matches:
+            chosen = matches
+        if not chosen:
+            chosen = Category.create({"name": label})
+        if chosen != category:
+            _write_category_xmlid(env, xml_name, chosen)
+        categories[kind] = chosen
     if categories["truck"] == categories["trailer"]:
         raise ValueError("Truck and Trailer must be different Fleet categories")
     return categories

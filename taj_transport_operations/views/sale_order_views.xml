@@ -139,16 +139,37 @@
         </field>
     </record>
 
+    <!-- The menus run these server actions instead of the window actions above.
+         The web client caches /web/action/load responses on disk, which would keep
+         an old dispatch cutoff in a cached action dict until a module upgrade;
+         server actions run uncached on every click and return the action dict
+         with the current cutoff already applied. -->
+    <record id="server_action_lines_without_trip" model="ir.actions.server">
+        <field name="name">Sale Orders Without Trip</field>
+        <field name="model_id" ref="sale.model_sale_order_line"/>
+        <field name="state">code</field>
+        <field name="group_ids" eval="[(6, 0, [ref('taj_transport_operations.group_transport_user')])]"/>
+        <field name="code">action = env.ref('taj_transport_operations.action_sale_order_line_without_trip').sudo()._get_action_dict()</field>
+    </record>
+
+    <record id="server_action_lines_without_truck" model="ir.actions.server">
+        <field name="name">Sale Orders Without Truck</field>
+        <field name="model_id" ref="sale.model_sale_order_line"/>
+        <field name="state">code</field>
+        <field name="group_ids" eval="[(6, 0, [ref('taj_transport_operations.group_transport_user')])]"/>
+        <field name="code">action = env.ref('taj_transport_operations.action_sale_order_line_without_truck').sudo()._get_action_dict()</field>
+    </record>
+
     <menuitem id="menu_transport_dispatch_lines" name="Dispatch Orders"
               parent="menu_transport_operations"
-              action="action_sale_order_line_without_trip"
+              action="server_action_lines_without_trip"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>
     <menuitem id="menu_transport_lines_without_trip" name="Sale Orders Without Trip"
               parent="menu_transport_dispatch_lines"
-              action="action_sale_order_line_without_trip"
+              action="server_action_lines_without_trip"
               sequence="10" groups="taj_transport_operations.group_transport_user"/>
     <menuitem id="menu_transport_lines_without_truck" name="Sale Orders Without Truck"
               parent="menu_transport_dispatch_lines"
-              action="action_sale_order_line_without_truck"
+              action="server_action_lines_without_truck"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>
 </odoo>

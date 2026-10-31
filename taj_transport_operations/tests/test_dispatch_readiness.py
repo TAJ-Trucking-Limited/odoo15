@@ -182,6 +182,48 @@ class TestDispatchReadiness(TransactionCase):
             self.env["taj.transport.settings"].create({}).dispatch_cutoff_date
         )
 
+    def test_worklist_menus_run_uncached_server_actions(self):
+        """Menus must not open the window action by id.
+
+        The web client caches /web/action/load on disk, so an action id keeps
+        serving the cutoff it was loaded with. Server actions run on every
+        click and return the action with the cutoff just read from the config.
+        """
+        menus = (
+            self.env.ref("taj_transport_operations.menu_transport_dispatch_lines"),
+            self.env.ref("taj_transport_operations.menu_transport_lines_without_trip"),
+            self.env.ref("taj_transport_operations.menu_transport_lines_without_truck"),
+        )
+        for menu in menus:
+            self.assertEqual(menu.action._name, "ir.actions.server", menu.name)
+
+        # A dispatcher has read access on sale.order.line only, never write.
+        dispatcher = new_test_user(
+            self.env,
+            login="dispatch_worklist_server_action",
+            company_id=self.env.company.id,
+            groups=(
+                "base.group_user,taj_transport_operations.group_transport_user"
+            ),
+        )
+        menu = self.env.ref(
+            "taj_transport_operations.menu_transport_lines_without_trip"
+        )
+        self._set_cutoff(fields.Date.today() + timedelta(days=2))
+        action = menu.action.with_user(dispatcher).run()
+        self.assertEqual(action["res_model"], "sale.order.line")
+        self.assertFalse(
+            self.env["sale.order.line"].search(safe_eval(action["domain"]))
+            & self._our_lines()
+        )
+        self._set_cutoff(fields.Date.today() - timedelta(days=1))
+        action = menu.action.with_user(dispatcher).run()
+        self.assertEqual(
+            self.env["sale.order.line"].search(safe_eval(action["domain"]))
+            & self._our_lines(),
+            self._our_lines(),
+        )
+
     def test_dispatcher_can_read_the_worklists(self):
         dispatcher = new_test_user(
             self.env,

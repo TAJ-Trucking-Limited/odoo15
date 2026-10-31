@@ -608,6 +608,13 @@ only affects these two worklists: trips, Sales documents, the Create Trips
 wizard and reporting are unchanged. The cutoff is database-wide, not
 per company.
 
+Both worklist menus run a server action that rebuilds the window action on every
+click (19.0.1.17.8). A change therefore takes effect on the next click, without
+a reload or an upgrade. Do not point those menus back at the window action: the
+web client caches `/web/action/load` responses on disk, which keeps serving the
+cutoff the action was first loaded with until the module is upgraded or the
+browser site data is cleared.
+
 ## Sales Order transport schedule (19.0.1.17.6)
 
 Sales Orders have optional **Planned Departure** and **Planned Arrival**
@@ -637,7 +644,7 @@ value exists in the audit model as a reserved placeholder only.
 Odoo.sh upgrades the installed TAJ Transport Operations module when a deployed
 commit increases its manifest version. For installations outside Odoo.sh,
 upgrade the module through Apps or the Odoo CLI. Do not reinstall it.
-The manifest version is `19.0.1.17.6`
+The manifest version is `19.0.1.17.8`
 (automatic Trip Files, product-linked route templates for Sales trip creation,
 sales cargo snapshots, Sales Order planned schedule, historical truck grouping,
 the dispatch worklists and their cutoff date; automatic truck assignment from
@@ -841,10 +848,14 @@ Company changes (including clearing the company) are blocked for both trucks and
 trailers with open or closed assignment history. Unassigned vehicles can still
 move company; writing the existing company remains valid.
 
-Initialization adopts an existing case-insensitive **Truck** or **Trailer** category
-without renaming it, and creates it only when absent. Multiple matching categories
-stop initialization for review. XML IDs `fleet_category_truck` and
-`fleet_category_trailer` remain stable even when category names change.
+Initialization adopts an existing case-insensitive **Truck** or **Trailer**
+category, including the plural **Trucks** / **Trailers** spellings, without
+renaming it; it creates the category only when absent. If both spellings already
+exist, the category that actually contains vehicles is adopted and the stable
+XML ID is rebound to it. Categories with vehicles split across both spellings
+stop initialization for review instead of guessing. XML IDs
+`fleet_category_truck` and `fleet_category_trailer` remain stable even when
+category names change.
 Categorize both Fleet models and vehicle records. Standard Odoo copies a nonempty
 model category when a vehicle's model changes; editing a model's category alone
 is not a bulk recategorization of its existing vehicles. Existing trucks are never

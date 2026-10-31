@@ -13,6 +13,46 @@ class TestTrailerMigration(TransactionCase):
         self.assertEqual(categories, again)
         self.assertEqual(self.env["fleet.vehicle.model.category"].search_count([]), before)
 
+    def _vehicle(self, category, plate):
+        brand = self.env["fleet.vehicle.model.brand"].create({
+            "name": "Category test brand " + plate,
+        })
+        model = self.env["fleet.vehicle.model"].create({
+            "name": "Category test model " + plate,
+            "brand_id": brand.id,
+            "category_id": category.id,
+        })
+        return self.env["fleet.vehicle"].create({
+            "model_id": model.id, "license_plate": plate,
+            "category_id": category.id,
+        })
+
+    def test_plural_category_is_adopted_and_xmlid_repaired(self):
+        Category = self.env["fleet.vehicle.model.category"]
+        linked = self.env.ref("taj_transport_operations.fleet_category_truck")
+        trucks = Category.create({"name": "Trucks"})
+        self._vehicle(trucks, "PLURAL-TRUCK")
+        categories = ensure_transport_categories(self.env)
+        self.assertEqual(categories["truck"], trucks)
+        self.assertEqual(
+            self.env.ref("taj_transport_operations.fleet_category_truck"),
+            trucks,
+        )
+        self.assertNotEqual(trucks, linked)
+
+    def test_two_used_matching_categories_abort(self):
+        Category = self.env["fleet.vehicle.model.category"]
+        linked = self.env.ref("taj_transport_operations.fleet_category_truck")
+        trucks = Category.create({"name": "Trucks"})
+        self._vehicle(linked, "LINKED-TRUCK")
+        self._vehicle(trucks, "PLURAL-TRUCK")
+        with self.assertRaises(ValueError):
+            ensure_transport_categories(self.env)
+        self.assertEqual(
+            self.env.ref("taj_transport_operations.fleet_category_truck"),
+            linked,
+        )
+
     def test_legacy_ids_are_remapped_and_history_is_preserved_idempotently(self):
         # Temporary tables shadow only the legacy sources, never Fleet or Sales.
         self.env.flush_all()
