@@ -40,18 +40,25 @@ class TestTrailerMigration(TransactionCase):
         )
         self.assertNotEqual(trucks, linked)
 
-    def test_two_used_matching_categories_abort(self):
+    def test_two_used_matching_categories_preserve_fleet_on_consolidation(self):
         Category = self.env["fleet.vehicle.model.category"]
         linked = self.env.ref("taj_transport_operations.fleet_category_truck")
         trucks = Category.create({"name": "Trucks"})
-        self._vehicle(linked, "LINKED-TRUCK")
-        self._vehicle(trucks, "PLURAL-TRUCK")
-        with self.assertRaises(ValueError):
-            ensure_transport_categories(self.env)
-        self.assertEqual(
-            self.env.ref("taj_transport_operations.fleet_category_truck"),
-            linked,
-        )
+        original = self._vehicle(linked, "LINKED-TRUCK")
+        migrated = self._vehicle(trucks, "PLURAL-TRUCK")
+        original_model = migrated.model_id
+        original_ids = (original.id, migrated.id, original_model.id)
+
+        categories = ensure_transport_categories(self.env)
+        self.assertEqual(categories["truck"], linked)
+        self.assertEqual(self.env.ref("taj_transport_operations.fleet_category_truck"), linked)
+        self.assertEqual(original.category_id, linked)
+        self.assertEqual(migrated.category_id, linked)
+        self.assertEqual(original_model.category_id, linked)
+        self.assertEqual((original.id, migrated.id, migrated.model_id.id), original_ids)
+        self.assertTrue(trucks.exists())  # No category or fleet record is deleted.
+        self.assertEqual(ensure_transport_categories(self.env)["truck"], linked)
+        self.assertEqual(migrated.category_id, linked)
 
     def test_legacy_ids_are_remapped_and_history_is_preserved_idempotently(self):
         # Temporary tables shadow only the legacy sources, never Fleet or Sales.

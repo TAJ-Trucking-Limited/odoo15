@@ -1,7 +1,11 @@
 """Fleet category setup and the explicit legacy trailer ID migration."""
 from html import escape
+import logging
 
 from psycopg2 import sql
+
+
+_logger = logging.getLogger(__name__)
 
 
 _TRANSPORT_CATEGORY_NAMES = {
@@ -27,6 +31,32 @@ def _categories_in_use(env, categories):
     )
 
 
+def _consolidate_categories(env, canonical, duplicates):
+    """Preserve Fleet and transport records while unifying equivalent labels.
+
+    Keep category rows/IDs and vehicle/model IDs. Only reclassify explicit
+    Truck(s) or Trailer(s) duplicates into the existing XML-ID category; never
+    infer a canonical category when there is no reliable XML-ID anchor.
+    """
+    if not duplicates:
+        return
+    Fleet = env["fleet.vehicle"].sudo().with_context(active_test=False)
+    Model = env["fleet.vehicle.model"].sudo().with_context(active_test=False)
+    models = Model.search([("category_id", "in", duplicates.ids)])
+    vehicles = Fleet.search([("category_id", "in", duplicates.ids)])
+    # Fleet category is stored and editable independently of its model.
+    # Updating both avoids leaving archived or manually categorized vehicles
+    # stranded in a category which assignment validation no longer accepts.
+    if models:
+        models.write({"category_id": canonical.id})
+    if vehicles:
+        vehicles.write({"category_id": canonical.id})
+    _logger.info(
+        "Consolidated equivalent Fleet categories %s into %s: %s models, %s vehicles",
+        duplicates.ids, canonical.id, len(models), len(vehicles),
+    )
+
+
 def _write_category_xmlid(env, xml_name, category):
     """Create or repair the stable XML ID so every consumer sees the category."""
     IMD = env["ir.model.data"].sudo()
@@ -43,6 +73,8 @@ def _write_category_xmlid(env, xml_name, category):
             "model": "fleet.vehicle.model.category", "res_id": category.id,
             "noupdate": True,
         })
+    # _xmlid_lookup reads SQL directly: flush before invalidating its cache.
+    imd.flush_recordset(["res_id"])
     env.registry.clear_cache()
 
 
@@ -74,7 +106,13 @@ def ensure_transport_categories(env):
             if len(used) == 1:
                 chosen = used
             elif used or not chosen:
-                raise ValueError("Ambiguous Fleet category: " + label)
+                # Distinct legacy Truck/Trucks categories can both contain
+                # vehicles in production snapshots. The existing XML ID is
+                # the only stable canonical choice; move the other Fleet
+                # records to it rather than failing every module upgrade.
+                if not chosen or chosen not in matches:
+                    raise ValueError("Ambiguous Fleet category: " + label)
+                _consolidate_categories(env, chosen, matches - chosen)
         elif matches:
             chosen = matches
         if not chosen:
