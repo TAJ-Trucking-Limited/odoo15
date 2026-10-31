@@ -26,6 +26,7 @@ EMBEDDED_VIEWS = {
     "event_ids": "taj.transport.milestone.event",
     "line_ids": "taj.transport.route.line",
     "selection_ids": "taj.transport.trip.create.wizard.line",
+    "email_dispatch_ids": "taj.transport.trip.email.dispatch",
 }
 
 
@@ -63,7 +64,7 @@ def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
     # Phase 2 behaviour is retained by the route/checkpoint and transporter
     # catalog releases, which this gate still verifies.
-    if manifest["version"] != "19.0.1.17.9":
+    if manifest["version"] != "19.0.1.18.0":
         raise AssertionError("Unexpected module version: " + manifest["version"])
     expected_depends = {"fleet", "mail", "move_invoice_line", "sale_management"}
     assert expected_depends.issubset(set(manifest["depends"]))

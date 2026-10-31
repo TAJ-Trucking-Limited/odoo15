@@ -13,3 +13,5 @@ from . import transport_assignment
 from . import fleet_vehicle
 from . import transport_settings
 from . import transport_trip_activity
+from . import transport_trip_email_dispatch
+from . import transport_trip_email

@@ -23,7 +23,7 @@ from lxml import etree
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "taj_transport_operations"
-EXPECTED_VERSION = "19.0.1.17.9"
+EXPECTED_VERSION = "19.0.1.18.0"
 
 # Comodel of the one2many fields that embed an inline list in a parent view.
 EMBEDDED_VIEWS = {
@@ -33,6 +33,7 @@ EMBEDDED_VIEWS = {
     "event_ids": "taj.transport.milestone.event",
     "line_ids": "taj.transport.route.line",
     "selection_ids": "taj.transport.trip.create.wizard.line",
+    "email_dispatch_ids": "taj.transport.trip.email.dispatch",
 }
 
 
@@ -376,13 +377,19 @@ def check_no_phase4():
             continue
         text = file.read_text(errors="ignore")
         if "ir.cron" in text:
-            assert file.relative_to(MODULE).as_posix() == "data/trip_activity_cron.xml", (
+            rel = file.relative_to(MODULE).as_posix()
+            assert rel in ("data/trip_activity_cron.xml", "data/trip_email_cron.xml"), (
                 "Unexpected transport automation in " + str(file)
             )
             cron = etree.parse(str(file))
-            assert cron.xpath("//record[@model='ir.cron']/field[@name='code']/text()") == [
-                "model._cron_queue_inactivity_alerts()"
-            ], "Only the inactivity reminder job is authorized"
+            if rel == "data/trip_activity_cron.xml":
+                assert cron.xpath("//record[@model='ir.cron']/field[@name='code']/text()") == [
+                    "model._cron_queue_inactivity_alerts()"
+                ], "Only the inactivity reminder job is authorized in trip_activity_cron.xml"
+            elif rel == "data/trip_email_cron.xml":
+                assert cron.xpath("//record[@model='ir.cron']/field[@name='code']/text()") == [
+                    "model._cron_send_due_trip_email_updates()"
+                ], "Trip email cron must call _cron_send_due_trip_email_updates()"
         for token in (
             "import requests",
             "urllib",
@@ -464,7 +471,9 @@ def count_tests():
 
 def run():
     manifest = ast.literal_eval((MODULE / "__manifest__.py").read_text())
-    assert manifest["version"] == EXPECTED_VERSION, manifest["version"]
+    assert manifest["version"] == EXPECTED_VERSION, (
+        f"Expected manifest version {EXPECTED_VERSION}, got {manifest['version']}"
+    )
     assert {"fleet", "mail", "move_invoice_line", "sale_management"}.issubset(
         set(manifest["depends"])
     ), "Phase 2 dependencies must be preserved"

@@ -102,6 +102,7 @@
                                    options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="partner_id" readonly="1"/>
                             <field name="partner_email" readonly="1"/>
+                            <field name="commercial_partner_id" invisible="1"/>
                             <field name="company_id" readonly="1"
                                    groups="base.group_multi_company"/>
                         </group>
@@ -319,6 +320,54 @@
                                     <field name="reason"/>
                                     <field name="assigned_by_id"/>
                                     <field name="notes" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Email Updates" name="trip_email_updates">
+                            <group>
+                                <group string="Update Settings">
+                                    <field name="email_notification_enabled" widget="boolean_toggle"/>
+                                    <field name="email_partner_ids" widget="many2many_tags"
+                                           options="{'no_create': True}"
+                                           domain="[('commercial_partner_id', '=', commercial_partner_id)]"
+                                           placeholder="Select customer contacts..."/>
+                                    <field name="email_extra_recipients"
+                                           placeholder="e.g. logistics@client.com, tracking@client.com"/>
+                                    <field name="email_interval_hours"/>
+                                </group>
+                                <group string="Schedule &amp; Live Position">
+                                    <field name="email_next_send_at" readonly="1"/>
+                                    <field name="email_last_queued_at" readonly="1"/>
+                                    <field name="email_failure_count" readonly="1"
+                                           invisible="not email_failure_count"/>
+                                    <field name="email_last_error" readonly="1"
+                                           invisible="not email_last_error"/>
+                                    <field name="email_position_preview" readonly="1"/>
+                                    <field name="email_position_source" readonly="1"/>
+                                    <field name="email_position_updated_at" readonly="1"/>
+                                    <field name="email_position_map_url" widget="url" text="View on Map"
+                                           invisible="not email_position_map_url" readonly="1"/>
+                                    <field name="email_position_notice" readonly="1"
+                                           invisible="not email_position_notice"/>
+                                    <button string="Send Update Email Now"
+                                            name="action_send_email_update_manual"
+                                            type="object" class="btn-primary"
+                                            icon="fa-envelope"
+                                            invisible="state == 'draft'"/>
+                                </group>
+                            </group>
+                            <separator string="Dispatch History"/>
+                            <field name="email_dispatch_ids" readonly="1">
+                                <list create="0" edit="0" delete="0">
+                                    <field name="queued_at"/>
+                                    <field name="dispatch_type"/>
+                                    <field name="requested_by_id"/>
+                                    <field name="recipient_emails"/>
+                                    <field name="status" widget="badge"
+                                           decoration-info="status == 'queued'"
+                                           decoration-success="status == 'sent'"
+                                           decoration-warning="status == 'partial_failure'"
+                                           decoration-danger="status == 'failed'"/>
                                 </list>
                             </field>
                         </page>

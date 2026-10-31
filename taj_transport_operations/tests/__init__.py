@@ -12,3 +12,5 @@ from . import test_transport_entrypoints
 from . import test_trip_activity
 from . import test_fleet_defaults
 from . import test_milestone_selection_actions
+from . import test_trip_email_updates
+from . import test_trip_email_concurrency
