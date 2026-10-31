@@ -49,7 +49,7 @@ class TajTransportSettings(models.TransientModel):
     dispatch_cutoff_date = fields.Date(
         string="Dispatch Cutoff Date",
         help="Confirmed sales orders dated before this day are hidden from "
-        "the Lines Without Trip and Lines Without Truck worklists, whatever "
+        "the Sale Orders Without Trip and Sale Orders Without Truck worklists, whatever "
         "filters are applied. Leave empty to show every confirmed order.",
     )
     company_id = fields.Many2one("res.company", default=lambda self: self.env.company, readonly=True, required=True)

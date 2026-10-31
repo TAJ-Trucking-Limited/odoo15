@@ -108,7 +108,7 @@
     </record>
 
     <record id="action_sale_order_line_without_trip" model="ir.actions.act_window">
-        <field name="name">Lines Without Trip</field>
+        <field name="name">Sale Orders Without Trip</field>
         <field name="res_model">sale.order.line</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
@@ -122,7 +122,7 @@
     </record>
 
     <record id="action_sale_order_line_without_truck" model="ir.actions.act_window">
-        <field name="name">Lines Without Truck</field>
+        <field name="name">Sale Orders Without Truck</field>
         <field name="res_model">sale.order.line</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
@@ -135,15 +135,15 @@
         </field>
     </record>
 
-    <menuitem id="menu_transport_dispatch_lines" name="Dispatch Lines"
+    <menuitem id="menu_transport_dispatch_lines" name="Dispatch Orders"
               parent="menu_transport_operations"
               action="action_sale_order_line_without_trip"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>
-    <menuitem id="menu_transport_lines_without_trip" name="Lines Without Trip"
+    <menuitem id="menu_transport_lines_without_trip" name="Sale Orders Without Trip"
               parent="menu_transport_dispatch_lines"
               action="action_sale_order_line_without_trip"
               sequence="10" groups="taj_transport_operations.group_transport_user"/>
-    <menuitem id="menu_transport_lines_without_truck" name="Lines Without Truck"
+    <menuitem id="menu_transport_lines_without_truck" name="Sale Orders Without Truck"
               parent="menu_transport_dispatch_lines"
               action="action_sale_order_line_without_truck"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>
