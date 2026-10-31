@@ -4,6 +4,7 @@ These are real Odoo ORM tests, not mocked _prepare_invoice_line assertions.
 Run on an isolated Odoo.sh development/staging test database only.
 """
 from datetime import timedelta
+from unittest.mock import patch
 
 from odoo import Command, fields
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
@@ -100,19 +101,27 @@ class TestTransportSalesAccountingBoundary(AccountTestInvoicingCommon):
         return order, lines
 
     def _trip(self, line):
-        trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": line.id,
-            "origin_location": "Dar es Salaam",
-            "destination_location": "Lusaka",
-            "planned_departure_at": fields.Datetime.now() - timedelta(hours=2),
-            "planned_arrival_at": fields.Datetime.now() + timedelta(days=1),
-        })
-        self.env["taj.transport.assignment"].create({
+        now = fields.Datetime.now()
+        # Keep the Sales truck snapshot and the real automatic assignment,
+        # dating creation before the historical handovers exercised below.
+        with patch.object(fields.Datetime, "now", return_value=now - timedelta(hours=5)):
+            trip = self.env["taj.transport.trip"].create({
+                "sale_line_id": line.id,
+                "origin_location": "Dar es Salaam",
+                "destination_location": "Lusaka",
+                "planned_departure_at": now - timedelta(hours=2),
+                "planned_arrival_at": now + timedelta(days=1),
+            })
+        action = trip.action_open_replace_assignment_wizard()
+        self.env["taj.transport.replace.assignment.wizard"].with_context(
+            **action["context"]
+        ).create({
             "trip_id": trip.id,
-            "vehicle_id": self.truck.id,
+            "expected_assignment_id": trip.current_assignment_id.id,
             "driver_id": self.driver.id,
-            "effective_from": fields.Datetime.now() - timedelta(hours=4),
-        })
+            "effective_from": now - timedelta(hours=4),
+            "reason": "Add the operational driver to the Sales truck",
+        }).action_replace_resources()
         return trip
 
     def _replace_truck(self, trip):

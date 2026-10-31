@@ -25,6 +25,8 @@ path (two plan switches racing) the committed result can additionally be a
 refuses one writer outright rather than corrupting the plan.
 """
 
+from psycopg2.errors import SerializationFailure
+
 from odoo import SUPERUSER_ID, api
 from odoo.modules.registry import Registry
 from odoo.tests import tagged
@@ -107,6 +109,23 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                     for tag in ("planned", "switch")
                 ]
             )
+            auto_vehicle = env["fleet.vehicle"].create({
+                "model_id": truck_model.id,
+                "license_plate": "CONCURRENCY-AUTO-01",
+                "company_id": False,
+                "driver_id": False,
+            })
+            auto_lines = env["sale.order.line"].create([
+                {
+                    "order_id": order.id,
+                    "product_id": product.id,
+                    "name": "Concurrent automatic assignment %s" % tag,
+                    "product_uom_qty": 1,
+                    "price_unit": 700,
+                    "vehicle_id": auto_vehicle.id,
+                }
+                for tag in ("owner", "contender")
+            ])
             order.action_confirm()
             route_a = cls._create_route(
                 env,
@@ -141,7 +160,10 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                 "customer": customer.id,
                 "product": product.id,
                 "order": order.id,
-                "lines": lines.ids,
+                "lines": (lines | auto_lines).ids,
+                "auto_lines": auto_lines.ids,
+                "auto_vehicle": auto_vehicle.id,
+                "auto_trips": [],
                 "route_a": route_a.id,
                 "route_b": route_b.id,
                 "route_c": route_c.id,
@@ -157,9 +179,13 @@ class TestMilestoneGenerationConcurrency(BaseCase):
     @classmethod
     def _remove_committed_fixtures(cls, ids):
         """Delete the committed fixtures; a test database is still a database."""
-        trips = (ids["trip_planned"], ids["trip_switch"])
+        trips = (ids["trip_planned"], ids["trip_switch"], *ids["auto_trips"])
         routes = (ids["route_a"], ids["route_b"], ids["route_c"])
         with cls.registry.cursor() as cr:
+            cr.execute(
+                "DELETE FROM taj_transport_trip_file WHERE sale_line_id IN %s",
+                (tuple(ids["lines"]),),
+            )
             cr.execute(
                 "DELETE FROM mail_message "
                 "WHERE model = 'taj.transport.trip' AND res_id IN %s",
@@ -173,13 +199,20 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                 "DELETE FROM taj_transport_milestone WHERE trip_id IN %s",
                 (trips,),
             )
+            cr.execute(
+                "DELETE FROM taj_transport_assignment WHERE trip_id IN %s",
+                (trips,),
+            )
             cr.execute("DELETE FROM taj_transport_trip WHERE id IN %s", (trips,))
             cr.execute(
                 "DELETE FROM sale_order_line WHERE id IN %s",
                 (tuple(ids["lines"]),),
             )
             cr.execute("DELETE FROM sale_order WHERE id = %s", (ids["order"],))
-            cr.execute("DELETE FROM fleet_vehicle WHERE id = %s", (ids["vehicle"],))
+            cr.execute(
+                "DELETE FROM fleet_vehicle WHERE id IN %s",
+                ((ids["vehicle"], ids["auto_vehicle"]),),
+            )
             cr.execute(
                 "DELETE FROM fleet_vehicle_model WHERE id = %s",
                 (ids["truck_model"],),
@@ -240,6 +273,58 @@ class TestMilestoneGenerationConcurrency(BaseCase):
     # ------------------------------------------------------------------
     # Locking and the unique index
     # ------------------------------------------------------------------
+    def test_concurrent_truck_only_defaults_retry_without_double_booking(self):
+        """A stale automatic create is refused; its retry keeps the truck free of duplicates."""
+        owner = self._session()
+        contender = self._session()
+        try:
+            owner_env = api.Environment(owner, SUPERUSER_ID, {})
+            contender_env = api.Environment(contender, SUPERUSER_ID, {})
+            contender.execute("SET LOCAL lock_timeout = %s", (self.lock_timeout,))
+            contender.execute("SET LOCAL statement_timeout = %s", ("5s",))
+            # Establish the contender's snapshot while the shared truck is free.
+            contender.execute(
+                "SELECT COUNT(*) FROM taj_transport_assignment "
+                "WHERE vehicle_id = %s AND effective_to IS NULL",
+                (self.ids["auto_vehicle"],),
+            )
+            self.assertEqual(contender.fetchone()[0], 0)
+            owner_trip = owner_env["taj.transport.trip"].create({
+                "sale_line_id": self.ids["auto_lines"][0],
+            })
+            self.ids["auto_trips"].append(owner_trip.id)
+            self.assertEqual(owner_trip.current_vehicle_id.id, self.ids["auto_vehicle"])
+            self.assertFalse(owner_trip.current_driver_id)
+            owner_env.flush_all()
+            owner.commit()
+            # The owner committed after the contender's snapshot: acquiring
+            # the changed vehicle row must refuse this stale transaction.
+            with self.assertRaises(SerializationFailure):
+                contender_env["taj.transport.trip"].create({
+                    "sale_line_id": self.ids["auto_lines"][1],
+                })
+        finally:
+            contender.rollback()
+            contender.close()
+            owner.rollback()
+            owner.close()
+
+        with self._session() as retry:
+            env = api.Environment(retry, SUPERUSER_ID, {})
+            trip = env["taj.transport.trip"].create({
+                "sale_line_id": self.ids["auto_lines"][1],
+            })
+            self.ids["auto_trips"].append(trip.id)
+            self.assertEqual(trip.state, "draft")
+            self.assertEqual(trip.initial_vehicle_id.id, self.ids["auto_vehicle"])
+            self.assertFalse(trip.assignment_ids)
+            assignments = env["taj.transport.assignment"].search([
+                ("vehicle_id", "=", self.ids["auto_vehicle"]),
+                ("effective_to", "=", False),
+            ])
+            self.assertEqual(len(assignments), 1)
+            self.assertEqual(assignments.trip_id.id, self.ids["auto_trips"][0])
+
     def test_generation_holds_the_trip_row_lock(self):
         """The generation lock is a database lock, not an in-process one."""
         owner = self._session()

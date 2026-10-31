@@ -56,13 +56,14 @@ class TestTripLifecycle(TransactionCase):
         cls.order = cls.env["sale.order"].create({
             "partner_id": cls.customer.id,
         })
+        # Lifecycle cases assign historical resources explicitly. Keep their
+        # Sales source truckless so creation does not assign a truck first.
         cls.line = cls.env["sale.order.line"].create({
             "order_id": cls.order.id,
             "product_id": cls.product.id,
             "name": "Lifecycle freight",
             "product_uom_qty": 1,
             "price_unit": 700,
-            "vehicle_id": cls.truck.id,
         })
         cls.order.action_confirm()
 
@@ -138,8 +139,8 @@ class TestTripLifecycle(TransactionCase):
         self.assertEqual(trip.last_assignment_id, original)
         self.assertEqual(trip.last_vehicle_id, self.truck)
         self.assertEqual(trip.last_driver_id, self.driver)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
-        self.assertEqual(self.line.vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
+        self.assertFalse(self.line.vehicle_id)
         self.assertEqual(self.line._prepare_invoice_line(), invoice_before)
 
     def test_last_resource_snapshot_recomputes_without_related_search_warnings(self):
@@ -382,7 +383,7 @@ class TestTripLifecycle(TransactionCase):
         self.assertTrue(assignment.effective_to)
         self.assertFalse(trip.current_assignment_id)
         self.assertEqual(trip.last_vehicle_id, self.truck)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
 
     def test_cancel_future_dated_initial_assignment_does_not_reverse_period(self):
         trip = self._trip(assignment=False, route=False)

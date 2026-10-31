@@ -780,7 +780,12 @@ class TestTripMilestones(TajTransportPhase3Case):
     def test_draft_truck_fallback_does_not_override_driver_only_assignment(self):
         route = self._route("Unassigned checkpoint grouping")
         line = self._sale_line("TRUCKFALLBACK", vehicle_id=self.truck.id)
+        # Keep a genuine unassigned Sales snapshot until Fleet eligibility
+        # is corrected; a valid driverless truck now auto-assigns immediately.
+        category = self.truck.category_id
+        self.truck.category_id = False
         trip = self._trip(route, line=line)
+        self.truck.category_id = category
         self.assertFalse(trip.assignment_ids)
         self.assertEqual(trip.milestone_ids.mapped("vehicle_id"), self.truck)
         self.env["taj.transport.assignment"].create({

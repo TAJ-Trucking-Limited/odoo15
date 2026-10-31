@@ -127,10 +127,16 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.srn, "TRIP-SRN-1")
         self.assertEqual(self.order.transport_trip_count, 1)
         self.assertEqual(trip.sale_line_id, self.line_1)
+        assignment = trip.current_assignment_id
+        self.assertEqual(len(trip.assignment_ids), 1)
+        self.assertEqual(assignment.vehicle_id, self.truck)
+        self.assertFalse(assignment.driver_id)
 
         self.line_1.write({"vehicle_id": self.truck_two.id})
         self.assertEqual(trip.initial_vehicle_id, self.truck)
         self.assertEqual(self.line_1.vehicle_id, self.truck_two)
+        self.assertEqual(trip.current_assignment_id, assignment)
+        self.assertEqual(trip.current_vehicle_id, self.truck)
 
     def test_duplicate_trip_rejected_by_sql_constraint(self):
         trip_model = self.env["taj.transport.trip"]
@@ -161,13 +167,16 @@ class TestTransportTripFoundation(TransactionCase):
                 "sale_line_id": self.note_line.id,
             })
 
-    def test_trip_requires_truck_on_sale_line(self):
-        with self.assertRaises(ValidationError):
-            self.env["taj.transport.trip"].create({
-                "sale_line_id": self.line_no_truck.id,
-            })
-        self.assertFalse(self.line_no_truck.transport_trip_ids)
-        self.assertEqual(self.line_no_truck.transport_trip_count, 0)
+    def test_truckless_sale_line_creates_unassigned_draft(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_no_truck.id,
+        })
+        self.assertEqual(trip.state, "draft")
+        self.assertFalse(trip.initial_vehicle_id)
+        self.assertFalse(trip.assignment_ids)
+        self.assertFalse(trip.current_vehicle_id)
+        self.assertEqual(self.line_no_truck.transport_trip_ids, trip)
+        self.assertEqual(self.line_no_truck.transport_trip_count, 1)
 
     def test_source_and_status_immutable(self):
         trip = self.env["taj.transport.trip"].create({
@@ -281,13 +290,13 @@ class TestTransportTripFoundation(TransactionCase):
             len(root.xpath("//filter[@name='by_transporter']")), 1
         )
 
-    def test_batch_four_initial_assignment_preserves_sales_truck_and_invoice(self):
+    def test_batch_four_initial_assignment_preserves_truckless_sales_snapshot_and_invoice(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         self.assertFalse(trip.current_assignment_id)
         self.assertFalse(trip.current_vehicle_id)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
 
         carrier_driver = self.env["res.partner"].create({
             "name": "Batch Four Driver",
@@ -299,19 +308,20 @@ class TestTransportTripFoundation(TransactionCase):
             "model_id": self.trailer_model.id,
             "license_plate": "TRL-001",
         })
-        before_invoice_line = self.line_1._prepare_invoice_line()
+        before_invoice_line = self.line_no_truck._prepare_invoice_line()
         open_action = trip.action_open_initial_assignment_wizard()
         self.assertEqual(
             open_action["res_model"],
             "taj.transport.initial.assignment.wizard",
         )
         self.assertEqual(
-            open_action["context"]["default_vehicle_id"], self.truck.id,
+            open_action["context"]["default_vehicle_id"], False,
         )
         wizard = self.env[
             "taj.transport.initial.assignment.wizard"
         ].with_context(**open_action["context"]).create({
             "trip_id": trip.id,
+            "vehicle_id": self.truck.id,
             "trailer_id": trailer.id,
             "driver_id": carrier_driver.id,
             "co_driver_id": co_driver.id,
@@ -340,9 +350,9 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.current_driver_id, carrier_driver)
         self.assertEqual(trip.current_co_driver_id, co_driver)
         self.assertEqual(trip.current_trailer_id, trailer)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
-        self.assertEqual(self.line_1.vehicle_id, self.truck)
-        self.assertEqual(self.line_1._prepare_invoice_line(), before_invoice_line)
+        self.assertFalse(trip.initial_vehicle_id)
+        self.assertFalse(self.line_no_truck.vehicle_id)
+        self.assertEqual(self.line_no_truck._prepare_invoice_line(), before_invoice_line)
 
         with self.assertRaises(UserError):
             trip.action_open_initial_assignment_wizard()
@@ -354,15 +364,14 @@ class TestTransportTripFoundation(TransactionCase):
                 }).flush_recordset()
 
     def test_batch_four_driver_only_assignment_for_unassigned_draft_trip(self):
-        # A truck without an active Fleet driver leaves the trip unassigned,
-        # so a driver-only initial assignment is still a reachable state.
+        # A truckless Sales source leaves the Draft genuinely unassigned.
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         driver = self.env["res.partner"].create({
             "name": "Driver without truck yet",
         })
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
         wizard = self.env["taj.transport.initial.assignment.wizard"].create({
             "trip_id": trip.id,
             "driver_id": driver.id,
@@ -370,13 +379,13 @@ class TestTransportTripFoundation(TransactionCase):
         wizard.action_assign_initial_resources()
         self.assertEqual(trip.current_driver_id, driver)
         self.assertFalse(trip.current_vehicle_id)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
         self.assertEqual(trip.state, "draft")
         self.assertEqual(len(trip.assignment_ids), 1)
 
     def test_batch_four_rejects_same_driver_and_codriver(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         driver = self.env["res.partner"].create({
             "name": "A single driver contact",
@@ -392,7 +401,7 @@ class TestTransportTripFoundation(TransactionCase):
 
     def test_batch_four_rejects_empty_assignment_and_protects_history(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         with assert_raises_any(ValidationError, IntegrityError, CheckViolation):
             with self.env.cr.savepoint():
@@ -415,7 +424,7 @@ class TestTransportTripFoundation(TransactionCase):
 
     def test_batch_four_rejects_inconsistent_company(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         other_company = self.env["res.company"].create({
             "name": "Other Transport Test Company",
@@ -482,7 +491,7 @@ class TestTransportTripFoundation(TransactionCase):
         ).res_model, "fleet.vehicle")
 
     def test_assignment_rejects_wrong_fleet_categories(self):
-        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_no_truck.id})
         trailer = self.env["fleet.vehicle"].create({
             "model_id": self.trailer_model.id, "license_plate": "TRL-CATEGORY",
         })
@@ -492,7 +501,7 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertFalse(trip.assignment_ids)
 
     def test_assignment_rejects_archived_resources(self):
-        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_no_truck.id})
         self.truck.active = False
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             self.env["taj.transport.assignment"].create({
@@ -501,16 +510,15 @@ class TestTransportTripFoundation(TransactionCase):
 
     def test_model_change_cannot_reclassify_assigned_truck(self):
         trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
-        assignment = self.env["taj.transport.assignment"].create({
-            "trip_id": trip.id, "vehicle_id": self.truck.id,
-        })
+        assignment = trip.current_assignment_id
+        self.assertEqual(assignment.vehicle_id, self.truck)
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             self.truck.model_id = self.trailer_model
         self.assertEqual(assignment.vehicle_id, self.truck)
         self.assertEqual(trip.initial_vehicle_id, self.truck)
 
     def test_assignment_does_not_change_fleet_default_driver(self):
-        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_no_truck.id})
         self.truck.driver_id = self.customer
         driver = self.env["res.partner"].create({"name": "Independent trip driver"})
         self.env["taj.transport.assignment"].create({
@@ -520,7 +528,7 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.current_driver_id, driver)
 
     def test_assigned_truck_and_trailer_cannot_change_company(self):
-        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_no_truck.id})
         trailer = self.env["fleet.vehicle"].create({
             "model_id": self.trailer_model.id, "license_plate": "COMPANY-GUARD",
         })
@@ -537,10 +545,10 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(assignment.company_id, trip.company_id)
         self.assertEqual(self.truck.company_id, trip.company_id)
         self.assertEqual(trailer.company_id, trip.company_id)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
 
     def test_closed_assignment_also_prevents_company_transfer(self):
-        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_no_truck.id})
         assignment = self.env["taj.transport.assignment"].create({
             "trip_id": trip.id, "vehicle_id": self.truck.id,
             "effective_from": "2026-10-01 08:00:00",
@@ -568,7 +576,7 @@ class TestTransportTripFoundation(TransactionCase):
             groups="taj_transport_operations.group_transport_user,sales_team.group_sale_salesman_all_leads")
         user.company_ids = self.env.company
         user.company_id = self.env.company
-        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_1.id})
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line_no_truck.id})
         self.assertEqual(self.truck.with_user(user).license_plate, "PH2-TEST-01")
         with self.assertRaises(AccessError), self.env.cr.savepoint():
             self.truck.with_user(user).write({"license_plate": "UNAUTHORIZED"})
@@ -582,8 +590,9 @@ class TestTransportTripFoundation(TransactionCase):
             })
 
     def _replacement_fixture(self):
+        # A truckless source permits a genuine manual initial crew and period.
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         trailer = self.env["fleet.vehicle"].create({
             "model_id": self.trailer_model.id,
@@ -618,7 +627,7 @@ class TestTransportTripFoundation(TransactionCase):
 
     def test_replace_resources_preserves_history_sales_and_unchanged_crew(self):
         trip, original, trailer, driver = self._replacement_fixture()
-        before_invoice = self.line_1._prepare_invoice_line()
+        before_invoice = self.line_no_truck._prepare_invoice_line()
         replacement_at = original.effective_from + timedelta(hours=2)
         wizard = self._replacement_wizard(
             trip, replacement_at,
@@ -650,9 +659,9 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(current.effective_location, "Nakonde")
         self.assertEqual(current.reason, "Truck breakdown")
         self.assertEqual(current.notes, "Replacement truck sent by dispatcher")
-        self.assertEqual(self.line_1._prepare_invoice_line(), before_invoice)
-        self.assertEqual(self.line_1.vehicle_id, self.truck)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertEqual(self.line_no_truck._prepare_invoice_line(), before_invoice)
+        self.assertFalse(self.line_no_truck.vehicle_id)
+        self.assertFalse(trip.initial_vehicle_id)
         self.assertEqual(trip.state, "draft")
         self.assertIn(
             "Truck breakdown", " ".join(trip.message_ids.mapped("body")),
@@ -686,11 +695,11 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(current.driver_id, self.customer)
         self.assertEqual(current.trailer_id, trailer)
         self.assertEqual(original.driver_id, driver)
-        self.assertEqual(trip.initial_vehicle_id, self.truck)
+        self.assertFalse(trip.initial_vehicle_id)
 
     def test_replacement_can_swap_trailer_and_clear_codriver(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         trailer_before = self.env["fleet.vehicle"].create({
             "model_id": self.trailer_model.id,
@@ -946,7 +955,7 @@ class TestTransportTripFoundation(TransactionCase):
         from odoo.tests.common import new_test_user
 
         own_trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         own_assignment = self.env["taj.transport.assignment"].create({
             "trip_id": own_trip.id,
@@ -1013,7 +1022,7 @@ class TestTransportTripFoundation(TransactionCase):
 
     def test_uncategorized_or_mismatched_fleet_vehicle_error_is_actionable(self):
         trip = self.env["taj.transport.trip"].create({
-            "sale_line_id": self.line_1.id,
+            "sale_line_id": self.line_no_truck.id,
         })
         trailer = self.env["fleet.vehicle"].create({
             "model_id": self.trailer_model.id,
@@ -1153,12 +1162,36 @@ class TestTransportTripFoundation(TransactionCase):
             "name": "DRC kasumbalesa - TZ Dar (40ft, Normal, No Special Requirements)",
         })
         preview = self.env["taj.transport.trip"].new({
+            "sale_order_id": self.order.id,
             "sale_line_id": self.line_1.id,
             "origin_location": "Entered in form",
+            "destination_location": "Previous destination",
         })
         preview._onchange_sale_line_suggest_route()
+        self.assertEqual(preview.sale_line_id, self.line_1)
+        self.assertEqual(preview.sale_order_id, self.order)
+        self.assertEqual(preview.route_id, self.linked_route)
+        self.assertEqual(preview.origin_location, "Foundation Origin")
+        self.assertEqual(preview.destination_location, "Foundation Destination")
+
+        # A new source with blank template locations uses its product name.
+        self.linked_route.write({
+            "origin_location": False,
+            "destination_location": False,
+        })
+        preview.sale_line_id = self.line_2
+        preview._onchange_sale_line_suggest_route()
+        self.assertEqual(preview.sale_line_id, self.line_2)
+        self.assertEqual(preview.route_id, self.linked_route)
         self.assertEqual(preview.origin_location, "DRC kasumbalesa")
         self.assertEqual(preview.destination_location, "TZ Dar")
+
+        preview.sale_line_id = False
+        preview._onchange_sale_line_suggest_route()
+        self.assertEqual(preview.sale_order_id, self.order)
+        self.assertFalse(preview.route_id)
+        self.assertFalse(preview.origin_location)
+        self.assertFalse(preview.destination_location)
 
     def test_ambiguous_product_does_not_invent_route(self):
         self.product.product_tmpl_id.write({
@@ -1508,5 +1541,6 @@ class TestTransportTripFoundation(TransactionCase):
         from lxml import etree
         root = etree.fromstring(view.get_combined_arch())
         names = root.xpath("//button/@name")
-        self.assertIn("action_prepare_transport_trips", names)
-        self.assertIn("action_open_or_create_transport_trip", names)
+        self.assertNotIn("action_prepare_transport_trips", names)
+        self.assertNotIn("action_open_or_create_transport_trip", names)
+        self.assertIn("action_prepare_transport_trip", names)

@@ -18,7 +18,9 @@ class TestTripActivity(TajTransportPhase3Case):
         Trip = self.env["taj.transport.trip"]
         self.assertEqual(Trip._fields["activity_ids"].comodel_name, "mail.activity")
         self.assertEqual(Trip._fields["trip_activity_ids"].comodel_name, "taj.transport.trip.activity")
-        self.assertEqual(tuple(Trip._fields["activity_type_id"].related), ("activity_ids", "activity_type_id"))
+        related = Trip._fields["activity_type_id"].related
+        path = related.split(".") if isinstance(related, str) else related
+        self.assertEqual(tuple(path), ("activity_ids", "activity_type_id"))
 
     def test_manual_submission_records_author_and_preserves_list_navigation(self):
         trip = self._started_trip(tag="UPDATE")
@@ -44,7 +46,8 @@ class TestTripActivity(TajTransportPhase3Case):
         self.assertFalse(trip.trip_activity_ids)
 
     def test_arrival_and_departure_count_but_corrections_do_not(self):
-        trip = self._started_trip(tag="MOVEMENT")
+        route = self._route("Activity movement route")
+        trip = self._started_trip(route, tag="MOVEMENT")
         checkpoint = self._milestone(trip, "Loading")
         self._record(checkpoint, "arrival")
         self._record(checkpoint, "departure")
@@ -52,7 +55,10 @@ class TestTripActivity(TajTransportPhase3Case):
         self.assertEqual(len(trip.trip_activity_ids), 2)
         self.assertTrue(all(trip.trip_activity_ids.mapped("source_event_id")))
         last = trip.last_activity_at
-        checkpoint._correct_timestamp("actual_arrival_at", checkpoint.actual_arrival_at, "Verified timestamp")
+        checkpoint._correct_timestamp(
+            "actual_arrival_at", checkpoint.actual_arrival_at - timedelta(seconds=1),
+            "Verified timestamp",
+        )
         self.assertEqual(trip.last_activity_at, last)
         self.assertEqual(len(trip.trip_activity_ids), 2)
 

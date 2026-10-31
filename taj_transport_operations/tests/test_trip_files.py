@@ -50,12 +50,19 @@ class TestTripFiles(TransactionCase):
             ],
         })
 
+    def _confirm(self, orders):
+        orders.action_confirm()
+        # Read persisted related links, as a fresh UI request does. The test
+        # context can retain both precomputed NewIds and their persisted rows.
+        orders.env.flush_all()
+        orders.invalidate_recordset(["trip_file_ids"])
+
     def test_confirmation_creates_one_file_per_product_line_without_trips(self):
         order = self._order()
         self.assertFalse(order.trip_file_ids)
-        order.action_confirm()
+        self._confirm(order)
         files = order.trip_file_ids
-        self.assertEqual(len(files), 2)
+        self.assertEqual(len(files), 2, files.ids)
         self.assertEqual(order.trip_file_count, 2)
         self.assertEqual(len(set(files.mapped("name"))), 2)
         self.assertTrue(all(name.startswith("TF/") for name in files.mapped("name")))
@@ -67,14 +74,14 @@ class TestTripFiles(TransactionCase):
 
     def test_batch_confirmation_generates_distinct_references_for_all_orders(self):
         orders = self._order() | self._order()
-        orders.action_confirm()
+        self._confirm(orders)
         files = orders.trip_file_ids
         self.assertEqual(len(files), 4)
         self.assertEqual(len(set(files.mapped("name"))), 4)
 
     def test_reconfirmation_reuses_files_and_preserves_container_snapshot(self):
         order = self._order()
-        order.action_confirm()
+        self._confirm(order)
         files = order.trip_file_ids
         files.write({"bill_of_lading": "BOL-RETAIN"})
         original = {file.id: (file.name, file.container_number) for file in files}
@@ -84,7 +91,7 @@ class TestTripFiles(TransactionCase):
         order.action_cancel()
         self.assertEqual(order.trip_file_ids, files)
         order.action_draft()
-        order.action_confirm()
+        self._confirm(order)
         self.env["taj.transport.trip.file"]._ensure_for_sale_lines(order.order_line)
         self.assertEqual(order.trip_file_ids, files)
         self.assertEqual(original, {
@@ -94,7 +101,7 @@ class TestTripFiles(TransactionCase):
 
     def test_each_trip_backfills_only_its_own_line_file(self):
         order = self._order()
-        order.action_confirm()
+        self._confirm(order)
         lines = order.order_line.filtered("product_id")
         trips = self.env["taj.transport.trip"].create([
             {"sale_line_id": line.id} for line in lines
@@ -113,7 +120,7 @@ class TestTripFiles(TransactionCase):
 
     def test_line_added_after_confirmation_gets_file_with_optional_container(self):
         order = self._order()
-        order.action_confirm()
+        self._confirm(order)
         line = self.env["sale.order.line"].create({
             "order_id": order.id, "product_id": self.product.id,
             "product_uom_qty": 1, "price_unit": 100,
@@ -130,29 +137,31 @@ class TestTripFiles(TransactionCase):
         self.assertFalse(order.trip_file_ids)
         line = order.order_line.filtered("product_id")[:1]
         trip = self.env["taj.transport.trip"].create({"sale_line_id": line.id})
+        self.env.flush_all()
+        order.invalidate_recordset(["trip_file_ids"])
         self.assertEqual(len(order.trip_file_ids), 1)
         self.assertEqual(order.trip_file_ids.trip_id, trip)
         self.assertEqual(order.trip_file_ids.sale_line_id, line)
 
     def test_order_and_trip_links_cannot_be_replaced_by_context_defaults(self):
         other_order = self._order()
-        other_order.action_confirm()
+        self._confirm(other_order)
         other_trip = self.env["taj.transport.trip"].create({
             "sale_line_id": other_order.order_line.filtered("product_id")[0].id,
         })
         order = self._order()
-        order.with_context(
+        self._confirm(order.with_context(
             default_sale_order_id=other_order.id, default_trip_id=other_trip.id,
-        ).action_confirm()
+        ))
         self.assertEqual(order.trip_file_ids.sale_order_id, order)
         self.assertFalse(order.trip_file_ids.trip_id)
 
     def test_copying_an_order_generates_new_files_only_on_confirmation(self):
         order = self._order()
-        order.action_confirm()
+        self._confirm(order)
         duplicate = order.copy()
         self.assertFalse(duplicate.trip_file_ids)
-        duplicate.action_confirm()
+        self._confirm(duplicate)
         self.assertEqual(len(duplicate.trip_file_ids), 2)
         self.assertFalse(set(order.trip_file_ids.ids) & set(duplicate.trip_file_ids.ids))
         self.assertFalse(set(order.trip_file_ids.mapped("name")) &
@@ -165,12 +174,12 @@ class TestTripFiles(TransactionCase):
         )
         order = self._order()
         order.user_id = salesperson
-        order.with_user(salesperson).action_confirm()
+        self._confirm(order.with_user(salesperson))
         files = order.trip_file_ids.with_user(salesperson)
         files.write({"bill_of_lading": "BOL-SALES"})
         self.assertEqual(files.mapped("bill_of_lading"), ["BOL-SALES", "BOL-SALES"])
         other_order = self._order()
-        other_order.action_confirm()
+        self._confirm(other_order)
         with self.assertRaises(AccessError):
             other_order.trip_file_ids.with_user(salesperson).read(["name"])
         with self.assertRaises(AccessError):
@@ -190,7 +199,7 @@ class TestTripFiles(TransactionCase):
                 "product_id": self.product.id, "product_uom_qty": 1, "price_unit": 100,
             })],
         })
-        other_order.action_confirm()
+        self._confirm(other_order)
         self.assertEqual(other_order.trip_file_ids.company_id, other_company)
         with self.assertRaises(AccessError):
             other_order.trip_file_ids.with_user(operator).with_context(

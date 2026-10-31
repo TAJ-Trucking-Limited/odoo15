@@ -171,7 +171,7 @@ class TajTransportPhase3Case(TransactionCase):
 
     def _trip(self, route=None, tag="A", line=None, **vals):
         values = {
-            "sale_line_id": (line or self._sale_line(tag)).id,
+            "sale_line_id": (line or self._sale_line(tag, vehicle_id=False)).id,
             **vals,
         }
         if route:

@@ -22,7 +22,10 @@ class FleetVehicle(models.Model):
         groups="taj_transport_operations.group_transport_user",
     )
 
-    @api.depends("active", "category_id", "transport_availability_state", "transport_trip_ids", "transport_trip_ids.assignment_ids", "transport_trip_ids.state")
+    @api.depends(
+        "active", "category_id", "transport_availability_state",
+        "transport_initial_trip_ids.state", "transport_initial_trip_ids.assignment_ids",
+    )
     @api.depends_context("uid", "company", "allowed_company_ids")
     def _compute_transport_can_assign(self):
         category = self.env.ref("taj_transport_operations.fleet_category_truck")

@@ -89,7 +89,14 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
         self.assertEqual(len(trip.assignment_ids), 1)
 
     def test_reserved_truck_can_only_be_assigned_to_its_own_trip(self):
-        reserved_trip = self._trip(tag="RESERVED")
+        line = self._sale_line("RESERVED")
+        # A Sales truck that was not eligible at creation leaves an unassigned
+        # Draft reservation. Restoring eligibility makes it manually assignable.
+        category = self.truck.category_id
+        self.truck.category_id = False
+        reserved_trip = self._trip(line=line)
+        self.truck.category_id = category
+        self.assertFalse(reserved_trip.assignment_ids)
         other = self._trip(line=self._sale_line("TARGET", vehicle_id=False))
         wizard = self._vehicle_wizard(other)
         self.assertIn(reserved_trip, wizard.available_trip_ids)

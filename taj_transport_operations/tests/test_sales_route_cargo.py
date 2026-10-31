@@ -232,9 +232,10 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
             "destination_location": "Filled dest",
             "cargo_description": "Already set",
         })
-        defaults = self.env["taj.transport.fill.empty.fields.wizard"].with_context(
+        Wizard = self.env["taj.transport.fill.empty.fields.wizard"].with_context(
             default_trip_id=trip.id,
-        ).default_get([
+        )
+        defaults = Wizard.default_get([
             "trip_id", "empty_field_names", "route_id",
             "origin_location", "destination_location", "cargo_description",
         ])
@@ -242,7 +243,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertNotIn("origin_location", defaults["empty_field_names"])
         self.assertNotIn("cargo_description", defaults["empty_field_names"])
         defaults["route_id"] = self.route_a.id
-        wizard = self.env["taj.transport.fill.empty.fields.wizard"].create(defaults)
+        wizard = Wizard.create(defaults)
         wizard.action_save()
         self.assertEqual(trip.route_id, self.route_a)
         self.assertEqual(trip.origin_location, "Template Origin A")
