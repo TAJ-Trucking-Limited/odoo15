@@ -357,7 +357,7 @@ class TajTransportTrip(models.Model):
         }
 
     def _assign_initial_fleet_defaults(self, required=False):
-        """Create an audited assignment, never merely display a Fleet driver."""
+        """Create an audited assignment from the Sales truck; driver optional."""
         category = self.env.ref("taj_transport_operations.fleet_category_truck")
         for trip in self.sorted("id"):
             trip._lock_for_transition()
@@ -371,29 +371,60 @@ class TajTransportTrip(models.Model):
                     ))
                 continue
             vehicle = trip.initial_vehicle_id
-            driver = vehicle.driver_id
             if (
                 not vehicle or not vehicle.active or vehicle.category_id != category
                 or (vehicle.company_id and vehicle.company_id != trip.company_id)
-                or not driver or not driver.active
-                or (driver.company_id and driver.company_id != trip.company_id)
             ):
                 if required:
                     raise UserError(_(
                         "The original Sales truck needs to be active, categorized "
-                        "as Truck, and have an active Fleet driver. Both must "
-                        "belong to this trip's company or be shared. Otherwise, "
-                        "use Assign Initial Resources to select them manually."
+                        "as Truck, and belong to this trip's company or be shared. "
+                        "Use Assign Initial Resources to select it manually."
                     ))
                 continue
+            vehicle.check_access("read")
+            vehicle._lock_for_transport_assignment()
+            # Check for active assignments to other trips
+            active_assignment = self.env["taj.transport.assignment"].sudo().search([
+                ("vehicle_id", "=", vehicle.id),
+                ("effective_to", "=", False),
+            ])
+            if active_assignment:
+                other_trips = active_assignment.mapped("trip_id").filtered(lambda t: t.id != trip.id)
+                if other_trips:
+                    trip.message_post(body=_("Automatic assignment skipped: truck is already assigned to another trip."))
+                    if required:
+                        raise UserError(_("This truck is already assigned to another trip. Use Replace Resources or choose a different truck."))
+                    continue
+            # Check for Draft reservations by other trips (truck reserved but not yet assigned)
+            other_reservations = self.env["taj.transport.trip"].sudo().search([
+                ("state", "=", "draft"),
+                ("initial_vehicle_id", "=", vehicle.id),
+                ("assignment_ids", "=", False),
+                ("id", "!=", trip.id),
+            ])
+            if other_reservations:
+                trip.message_post(body=_("Automatic assignment skipped: truck is reserved by another Draft trip."))
+                if required:
+                    raise UserError(_("This truck is reserved by another Draft trip. Use Assign Initial Resources or choose a different truck."))
+                continue
+            driver = vehicle.driver_id if vehicle.driver_id else False
+            if driver and driver.active and driver.company_id and driver.company_id != trip.company_id:
+                driver = False
+            elif driver and not driver.active:
+                driver = False
             self.env["taj.transport.assignment"].create({
                 "trip_id": trip.id,
                 "vehicle_id": vehicle.id,
-                "driver_id": driver.id,
+                "driver_id": driver.id if driver else False,
                 "effective_from": fields.Datetime.now(),
-                "reason": _("Initial truck and driver from Fleet defaults"),
+                "reason": _("Initial truck from Sales line") if not driver else _("Initial truck and driver from Sales line"),
             })
-            trip.message_post(body=_("Initial truck and driver assigned from Fleet defaults."))
+            if driver:
+                trip.message_post(body=_("Initial truck and driver assigned from Sales line."))
+            else:
+                trip.message_post(body=_("Initial truck assigned from Sales line. Add a driver before marking Ready."))
+
 
     def action_apply_initial_fleet_defaults(self):
         self.ensure_one()
