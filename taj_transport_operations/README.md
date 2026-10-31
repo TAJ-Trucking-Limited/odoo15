@@ -16,8 +16,10 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 - **Dispatch Lines > Lines Without Trip / Lines Without Truck** offers
   **Create Trip** per untripped line and **Open Trip** for lines with a trip.
   Create Trip opens an unsaved form with that order and line preselected;
-  nothing is created until Save. Sales Order creation buttons are removed;
-  its Trips and Trip Files smart buttons remain available.
+  nothing is created until Save. The same **Create Trip** / **Open Trip**
+  buttons are available on product/service lines inside a Sales Order for
+  transport users. Create Trip requires a confirmed order; sections and notes
+  have no trip buttons. The Trips and Trip Files smart buttons remain available.
 - Trip reference is generated using `TRIP/<year>/<sequence>` on Save.
 - Form creation requires a route template linked to that line's product.
   One active same-company match is preselected; multiple matches require a
@@ -26,7 +28,7 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   route and locations. The order and line cannot change after creation.
 - Legacy ORM callers that provide only a sales line may still omit a template.
   Legacy batch/route-chooser APIs remain for integrations and preparation
-  scripts; they are no longer Sales Order creation entry points.
+  scripts; Sales Order lines use the same unsaved trip form as Dispatch Lines.
 - Sales Order **Trips** smart button opens all linked trips.
 - Standalone **Transport Operations > Trips** menu lists and creates trips.
 - The original truck is snapshotted when the trip is created, and never

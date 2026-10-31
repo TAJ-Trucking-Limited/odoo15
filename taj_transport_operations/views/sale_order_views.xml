@@ -18,6 +18,18 @@
                            string="Trips"/>
                 </button>
             </xpath>
+            <xpath expr="//field[@name='order_line']/list" position="inside">
+                <field name="transport_trip_count" column_invisible="True"
+                       groups="taj_transport_operations.group_transport_user"/>
+                <button name="action_prepare_transport_trip" string="Create Trip"
+                        type="object" icon="fa-truck"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="parent.state not in ['sale', 'done'] or display_type not in [False, 'product'] or not product_id or transport_trip_count != 0"/>
+                <button name="action_prepare_transport_trip" string="Open Trip"
+                        type="object" icon="fa-external-link"
+                        groups="taj_transport_operations.group_transport_user"
+                        invisible="display_type not in [False, 'product'] or transport_trip_count == 0"/>
+            </xpath>
             <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
                 <group string="Cargo Details" invisible="display_type not in [False, 'product']">
                     <field name="cargo_type_id"
