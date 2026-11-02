@@ -177,6 +177,66 @@ class TestRouteTemplates(TajTransportPhase3Case):
                 }
             )
 
+    def test_file_type_catalog_is_seeded_and_manager_maintained(self):
+        file_types = self.env["taj.transport.file.type"]
+        transit_import = self.env.ref(
+            "taj_transport_operations.file_type_transit_import"
+        )
+        transit_export = self.env.ref(
+            "taj_transport_operations.file_type_transit_export"
+        )
+        self.assertEqual(transit_import.name, "Transit Import")
+        self.assertEqual(transit_export.name, "Transit Export")
+        self.assertTrue(transit_import.active)
+        self.assertTrue(transit_export.active)
+        self.assertEqual(
+            transit_import.with_user(self.dispatcher).read(["name"])[0]["name"],
+            "Transit Import",
+        )
+        with self.assertRaises(AccessError):
+            file_types.with_user(self.dispatcher).create(
+                {"name": "Not allowed"}
+            )
+        with self.assertRaises(AccessError):
+            transit_import.with_user(self.dispatcher).write(
+                {"name": "Not allowed"}
+            )
+        with self.assertRaises(AccessError):
+            transit_import.with_user(self.dispatcher).unlink()
+
+        custom_type = file_types.with_user(self.manager).create(
+            {"name": "Cross Border"}
+        )
+        self.assertTrue(custom_type.active)
+        custom_type.with_user(self.manager).write({"sequence": 30})
+        self.assertEqual(custom_type.sequence, 30)
+        custom_type.with_user(self.manager).write({"active": False})
+        self.assertFalse(custom_type.active)
+        with self.assertRaises(IntegrityError), self.env.cr.savepoint():
+            file_types.create({"name": "Transit Import"})
+
+    def test_file_type_is_assignable_to_route_templates(self):
+        route = self._route("Transit import route")
+        self.assertFalse(route.file_type_id)
+        transit_import = self.env.ref(
+            "taj_transport_operations.file_type_transit_import"
+        )
+        transit_export = self.env.ref(
+            "taj_transport_operations.file_type_transit_export"
+        )
+        route.write({"file_type_id": transit_import.id})
+        self.assertEqual(route.file_type_id, transit_import)
+        self.assertIn(
+            route,
+            self.env["taj.transport.route"].search([
+                ("file_type_id", "=", transit_import.id),
+            ]),
+        )
+        route.write({"file_type_id": transit_export.id})
+        self.assertEqual(route.file_type_id, transit_export)
+        route.write({"file_type_id": False})
+        self.assertFalse(route.file_type_id)
+
     def test_route_menu_is_manager_scoped_and_views_are_valid(self):
         menu = self.env.ref("taj_transport_operations.menu_transport_routes")
         self.assertIn(self.env.ref(MANAGER_GROUP), menu.group_ids)
@@ -187,6 +247,19 @@ class TestRouteTemplates(TajTransportPhase3Case):
             ).get_combined_arch()
         )
         self.assertEqual(len(form.xpath("//field[@name='line_ids']")), 1)
+        self.assertEqual(len(form.xpath("//field[@name='file_type_id']")), 1)
+        self.assertIn(
+            self.env.ref(MANAGER_GROUP),
+            self.env.ref(
+                "taj_transport_operations.menu_transport_file_types"
+            ).group_ids,
+        )
+        self.assertNotIn(
+            self.env.ref(DISPATCHER_GROUP),
+            self.env.ref(
+                "taj_transport_operations.menu_transport_file_types"
+            ).group_ids,
+        )
         for field_name in (
             "sequence",
             "name",

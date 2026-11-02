@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Initial file types; managers can maintain these records after install. -->
+    <record id="file_type_transit_import" model="taj.transport.file.type">
+        <field name="name">Transit Import</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="file_type_transit_export" model="taj.transport.file.type">
+        <field name="name">Transit Export</field>
+        <field name="sequence">20</field>
+    </record>
+</odoo>
