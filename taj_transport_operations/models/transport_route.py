@@ -51,6 +51,14 @@ class TajTransportRoute(models.Model):
         "templates may share the same product. Leave empty for standalone "
         "or legacy templates that are chosen only on the trip form.",
     )
+    file_type_id = fields.Many2one(
+        "taj.transport.file.type",
+        string="File Type",
+        index=True,
+        ondelete="restrict",
+        help="Optional file classification for this route template. "
+        "Transport Managers maintain the available file types.",
+    )
     origin_location = fields.Char(
         string="Planned Origin",
         help="Optional planning default. On trip create with this template, "

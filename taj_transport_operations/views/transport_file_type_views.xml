@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_transport_file_type_list" model="ir.ui.view">
+        <field name="name">taj.transport.file.type.list</field>
+        <field name="model">taj.transport.file.type</field>
+        <field name="arch" type="xml">
+            <list string="File Types" delete="0">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_transport_file_type_form" model="ir.ui.view">
+        <field name="name">taj.transport.file.type.form</field>
+        <field name="model">taj.transport.file.type</field>
+        <field name="arch" type="xml">
+            <form string="File Type" delete="0">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_transport_file_types" model="ir.actions.act_window">
+        <field name="name">File Types</field>
+        <field name="res_model">taj.transport.file.type</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_transport_file_types" name="File Types"
+              parent="menu_transport_configuration"
+              action="action_transport_file_types" sequence="15"
+              groups="taj_transport_operations.group_transport_manager"/>
+</odoo>

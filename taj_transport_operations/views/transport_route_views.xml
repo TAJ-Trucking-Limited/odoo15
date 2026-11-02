@@ -6,6 +6,7 @@
         <field name="arch" type="xml">
             <list string="Route Templates" delete="0">
                 <field name="name"/>
+                <field name="file_type_id" optional="show"/>
                 <field name="product_tmpl_id" optional="show"/>
                 <field name="origin_location" optional="show"/>
                 <field name="destination_location" optional="show"/>
@@ -34,6 +35,8 @@
                         </group>
                         <group string="Configuration">
                             <field name="product_tmpl_id"
+                                   options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="file_type_id"
                                    options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="active"/>
                             <field name="line_count"/>
@@ -83,6 +86,7 @@
             <search string="Route Templates">
                 <field name="name"/>
                 <field name="product_tmpl_id"/>
+                <field name="file_type_id"/>
                 <field name="origin_location"/>
                 <field name="destination_location"/>
                 <filter name="archived" string="Archived"
@@ -94,6 +98,8 @@
                             context="{'group_by': 'company_id'}"/>
                     <filter name="by_product" string="Sales Product"
                             context="{'group_by': 'product_tmpl_id'}"/>
+                    <filter name="by_file_type" string="File Type"
+                            context="{'group_by': 'file_type_id'}"/>
                 </group>
             </search>
         </field>
