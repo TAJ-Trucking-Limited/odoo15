@@ -1,42 +1,73 @@
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError
+
+
+# Only trusted accounting methods can supply this object; RPC context values cannot.
+_CONFIRMED_SALE_ACCOUNTING = object()
 
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 
-    transport_planned_departure_at = fields.Datetime(
-        string="Planned Departure", copy=False,
-        help="Optional transport schedule. Copied onto each trip created "
-             "from this order; later changes do not update existing trips.",
-    )
-    transport_planned_arrival_at = fields.Datetime(
-        string="Planned Arrival", copy=False,
-        help="Optional transport schedule. Copied onto each trip created "
-             "from this order; later changes do not update existing trips.",
-    )
+    transport_confirmed_readonly = fields.Boolean(compute="_compute_transport_confirmed_readonly")
+
+    @api.depends("state")
+    @api.depends_context("uid")
+    def _compute_transport_confirmed_readonly(self):
+        allowed = self.env.su or self.env.user.has_group("taj_transport_operations.group_edit_confirmed_sale_orders")
+        for order in self:
+            order.transport_confirmed_readonly = order.state in ("sale", "done") and not allowed
+
+    def _check_confirmed_sale_edit_access(self):
+        if self.env.context.get("_confirmed_sale_accounting") is _CONFIRMED_SALE_ACCOUNTING:
+            return
+        if (not self.env.su
+                and not self.env.user.has_group("taj_transport_operations.group_edit_confirmed_sale_orders")
+                and any(order.state in ("sale", "done") for order in self)):
+            raise AccessError(_(
+                "You need the Edit Confirmed Sales Orders permission to modify a confirmed sales order."
+            ))
+
+    def _should_be_locked(self):
+        self.ensure_one()
+        return True
+
+    @api.model
+    def _get_view(self, view_id=None, view_type="form", **options):
+        arch, view = super()._get_view(view_id, view_type, **options)
+        if view_type == "form" and arch.xpath(".//field[@name='transport_confirmed_readonly'][not(ancestor::field)]"):
+            # Include fields supplied by other Sales addons, preserving native modifiers.
+            for node in arch.xpath(".//field[not(ancestor::field)]"):
+                field = self._fields.get(node.get("name"))
+                if field and not field.readonly:
+                    readonly = node.get("readonly", "False")
+                    node.set("readonly", "(%s) or locked or transport_confirmed_readonly" % readonly)
+        return arch, view
+
+    def _create_down_payment_section_line_if_needed(self):
+        self.check_access("write")
+        order = self.with_context(_confirmed_sale_accounting=_CONFIRMED_SALE_ACCOUNTING)
+        line = super(SaleOrder, order)._create_down_payment_section_line_if_needed()
+        return line.with_env(self.env) if line else line
+
+    def _create_down_payment_lines_from_base_lines(self, down_payment_base_lines):
+        self.check_access("write")
+        order = self.with_context(_confirmed_sale_accounting=_CONFIRMED_SALE_ACCOUNTING)
+        lines = super(SaleOrder, order)._create_down_payment_lines_from_base_lines(down_payment_base_lines)
+        return lines.with_env(self.env)
+
+    def write(self, vals):
+        # Confirmation may lock the order without granting permission to edit it.
+        if vals and vals != {"locked": True}:
+            self._check_confirmed_sale_edit_access()
+        return super().write(vals)
+
     transport_customer_email = fields.Char(
         string="Customer Email", related="partner_id.email",
         store=True, readonly=True,
         help="Email taken from the customer record. The trips of this order "
              "show the same address.",
     )
-
-    @api.constrains(
-        "transport_planned_departure_at", "transport_planned_arrival_at",
-    )
-    def _check_transport_planned_schedule(self):
-        for order in self:
-            if (
-                order.transport_planned_departure_at
-                and order.transport_planned_arrival_at
-                and order.transport_planned_arrival_at
-                < order.transport_planned_departure_at
-            ):
-                raise ValidationError(_(
-                    "Transport planned arrival cannot be earlier than the "
-                    "planned departure."
-                ))
 
     transport_trip_ids = fields.One2many(
         "taj.transport.trip", "sale_order_id",
@@ -47,13 +78,13 @@ class SaleOrder(models.Model):
         string="Transport Trips",
     )
     trip_file_ids = fields.One2many(
-        "taj.transport.trip.file", "sale_order_id", string="Trip Files",
+        "taj.transport.trip.file", "sale_order_id", string="Trips",
         readonly=True, copy=False,
-        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user",
+        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry",
     )
     trip_file_count = fields.Integer(
-        string="Trip Files", compute="_compute_trip_file_count",
-        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user",
+        string="Trips", compute="_compute_trip_file_count",
+        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry",
     )
 
     @api.depends("transport_trip_ids")
@@ -75,6 +106,7 @@ class SaleOrder(models.Model):
             order.trip_file_count = len(order.trip_file_ids)
 
     def _action_confirm(self):
+        self.order_line._check_goods_transport_configuration()
         result = super()._action_confirm()
         self.env["taj.transport.trip.file"]._ensure_for_sale_lines(self.order_line)
         return result
@@ -84,7 +116,7 @@ class SaleOrder(models.Model):
         self.check_access("read")
         action = self.env.ref(
             "taj_transport_operations.action_transport_trip_file"
-        ).read()[0]
+        ).sudo().read()[0]
         action["domain"] = [("sale_order_id", "=", self.id)]
         return action
 

@@ -1,16 +1,270 @@
+from markupsafe import Markup
+
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
+from .transport_trip_file import SHIPMENT_FIELDS, _FILE_SHIPMENT_WRITE
 
 
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
+    allocation_date = fields.Datetime(
+        string="Allocation Date", readonly=True, copy=False,
+        help="Time the Sales line first received a truck. Replacements preserve this date.",
+    )
+
+    def _lock_transport_vehicle(self, creating_trip=False):
+        """Serialize first allocation with assignment backfill and trip creation."""
+        self.check_access("read")
+        self.flush_recordset(["vehicle_id", "allocation_date"])
+        self.env.cr.execute(
+            # The wizard/trip foreign keys hold KEY SHARE locks on this row.
+            # Only non-key values change: avoid a lock upgrade deadlock between dialogs.
+            "SELECT id FROM sale_order_line WHERE id = ANY(%s) ORDER BY id FOR NO KEY UPDATE",
+            (sorted(self.ids),),
+        )
+        if creating_trip:
+            # The trip is a reverse FK, invisible to an older repeatable-read
+            # snapshot. Advance the source row version so allocators retry and
+            # see the new trip; keep the commercial timestamp unchanged.
+            self.env.cr.execute(
+                "UPDATE sale_order_line SET write_date = write_date WHERE id = ANY(%s)",
+                (sorted(self.ids),),
+            )
+        self.invalidate_recordset(["vehicle_id", "allocation_date", "transport_trip_ids"])
+
+    transport_file_line_ids = fields.One2many(
+        "taj.transport.trip.file.line",
+        "sale_line_id",
+        readonly=True,
+        copy=False,
+    )
+    transport_file_id = fields.Many2one(
+        "taj.transport.trip.file",
+        string="File Number",
+        compute="_compute_transport_file_id",
+        store=True,
+        readonly=True,
+    )
+
+    @api.depends("transport_file_line_ids.file_id")
+    def _compute_transport_file_id(self):
+        for line in self:
+            line.transport_file_id = line.transport_file_line_ids[:1].file_id
+
+    def _file_shipment_display_value(self, name):
+        self.ensure_one()
+        value = self[name]
+        field = self._fields[name]
+        if field.type == "many2one":
+            return value.display_name or ""
+        if field.type == "selection":
+            return dict(field._description_selection(self.env)).get(value, "")
+        return str(value) if value is not False and value is not None else ""
+
+    def _write_file_shipment(self, values, row):
+        self.ensure_one()
+        row.ensure_one()
+        row.check_access("write")
+        self.check_access("read")
+        if not (
+            self.env.su
+            or self.env.user.has_group(
+                "taj_transport_operations.group_shipment_data_entry"
+            )
+        ):
+            raise AccessError(_("Shipment Data Entry permission is required."))
+        if (
+            set(values) - set(SHIPMENT_FIELDS)
+            or row.sale_line_id != self
+            or row.file_id.sale_order_id != self.order_id
+        ):
+            raise AccessError(
+                _(
+                    "Only this file's shipment fields may be changed; prices cannot be edited."
+                )
+            )
+        if self.company_id not in self.env.companies or self.order_id.state == "cancel":
+            raise AccessError(
+                _(
+                    "This shipment cannot be edited in the current company or order state."
+                )
+            )
+        if "product_id" in values and values["product_id"] != self.product_id.id:
+            if (
+                not values["product_id"]
+                or self.transport_trip_ids
+                or self.qty_invoiced
+                or self.qty_delivered
+            ):
+                raise UserError(
+                    _(
+                        "The Product cannot be changed after a trip, invoice or delivery exists."
+                    )
+                )
+        # Do not expose a general Sales write capability. All incoming keys were checked.
+        values = dict(
+            values,
+            price_unit=self.price_unit,
+            technical_price_unit=self.technical_price_unit,
+        )
+        return (
+            self.sudo()
+            .with_context(_file_shipment_write=_FILE_SHIPMENT_WRITE)
+            .write(values)
+        )
+
+    def _get_protected_fields(self):
+        protected = super()._get_protected_fields()
+        if self.env.context.get("_file_shipment_write") is _FILE_SHIPMENT_WRITE:
+            allowed = set(SHIPMENT_FIELDS) | {
+                "price_unit",
+                "technical_price_unit",
+                "name",
+            }
+            return [name for name in protected if name not in allowed]
+        return protected
+
+    @api.depends(
+        "product_id",
+        "state",
+        "qty_invoiced",
+        "qty_delivered",
+        "order_id.locked",
+        "transport_trip_ids",
+    )
+    @api.depends_context("_file_shipment_write")
+    def _compute_product_updatable(self):
+        super()._compute_product_updatable()
+        if self.env.context.get("_file_shipment_write") is _FILE_SHIPMENT_WRITE:
+            for line in self:
+                if not (
+                    line.is_downpayment
+                    or line.state == "cancel"
+                    or line.transport_trip_ids
+                    or line.qty_invoiced
+                    or line.qty_delivered
+                ):
+                    line.product_updatable = True
+
+    vehicle_id = fields.Many2one(readonly=True, copy=False)
+    file_type_id = fields.Many2one(
+        "taj.transport.file.type",
+        string="File Type",
+        ondelete="restrict",
+    )
+    clearing_service = fields.Selection(
+        [("included", "Included"), ("not_included", "Not Included")],
+        string="Clearing Service",
+    )
+    bill_of_lading = fields.Char(string="Bill of Lading")
+    eta = fields.Date(string="ETA")
+    etol = fields.Date(
+        string="ETOL",
+        help="Estimated time of loading (estimated loading date).",
+    )
+    shipping_line = fields.Char(string="Shipping Line")
+
+    @api.model
+    def action_open_duplicate_line_wizard(self):
+        order = self.env["sale.order"].browse(self.env.context.get("order_id")).exists()
+        if not order:
+            raise UserError(
+                _("Save the quotation or sales order before duplicating a line.")
+            )
+        order.ensure_one()
+        order.check_access("write")
+        order._check_confirmed_sale_edit_access()
+        if order.locked or order.state not in ("draft", "sent", "sale"):
+            raise UserError(
+                _(
+                    "Lines can only be duplicated on an unlocked quotation or sales order."
+                )
+            )
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Duplicate Line"),
+            "res_model": "taj.transport.duplicate.sale.line.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_sale_order_id": order.id},
+        }
+
+    @api.constrains(
+        "product_id", "file_type_id", "order_id", "display_type", "is_downpayment"
+    )
+    def _check_goods_transport_configuration(self):
+        for line in self:
+            if (
+                line.display_type not in (False, "product")
+                or line.is_downpayment
+                or line.product_id.type != "consu"
+            ):
+                continue
+            if not line.file_type_id:
+                raise ValidationError(
+                    _("Select a File Type for Goods product %(product)s.")
+                    % {"product": line.product_id.display_name}
+                )
+            # Sales users only need an existence check, not access to route maintenance.
+            if (
+                not self.env["taj.transport.route"]
+                .sudo()
+                .search_count(
+                    [
+                        ("product_tmpl_id", "=", line.product_id.product_tmpl_id.id),
+                        ("company_id", "=", line.company_id.id),
+                        ("active", "=", True),
+                    ],
+                    limit=1,
+                )
+            ):
+                raise ValidationError(
+                    _(
+                        "Goods product %(product)s needs an active Route Template "
+                        "linked to it in company %(company)s."
+                    )
+                    % {
+                        "product": line.product_id.display_name,
+                        "company": line.company_id.display_name,
+                    }
+                )
+
+    transport_planned_departure_at = fields.Datetime(
+        string="Planned Departure",
+        copy=False,
+        help="Copied to a new trip; later edits do not update existing trips.",
+    )
+    transport_planned_arrival_at = fields.Datetime(
+        string="Planned Arrival",
+        copy=False,
+        help="Copied to a new trip; later edits do not update existing trips.",
+    )
+
+    @api.constrains("transport_planned_departure_at", "transport_planned_arrival_at")
+    def _check_transport_planned_schedule(self):
+        for line in self:
+            if (
+                line.transport_planned_departure_at
+                and line.transport_planned_arrival_at
+                and line.transport_planned_arrival_at
+                < line.transport_planned_departure_at
+            ):
+                raise ValidationError(
+                    _(
+                        "Transport planned arrival cannot be earlier than the planned departure."
+                    )
+                )
+
     transport_trip_ids = fields.One2many(
-        "taj.transport.trip", "sale_line_id",
-        string="Transport Trip", readonly=True,
+        "taj.transport.trip",
+        "sale_line_id",
+        string="Transport Trip",
+        readonly=True,
     )
     transport_trip_count = fields.Integer(
-        string="Transport Trips", compute="_compute_transport_trip_count",
+        string="Transport Trips",
+        compute="_compute_transport_trip_count",
     )
 
     @api.depends("transport_trip_ids")
@@ -18,7 +272,15 @@ class SaleOrderLine(models.Model):
         for line in self:
             line.transport_trip_count = len(line.transport_trip_ids)
 
-    @api.depends("product_id", "order_id", "order_partner_id", "name", "vehicle_id", "vehicle_id.license_plate", "container_num")
+    @api.depends(
+        "product_id",
+        "order_id",
+        "order_partner_id",
+        "name",
+        "vehicle_id",
+        "vehicle_id.license_plate",
+        "container_num",
+    )
     @api.depends_context("transport_line_label")
     def _compute_display_name(self):
         if not self.env.context.get("transport_line_label"):
@@ -33,6 +295,18 @@ class SaleOrderLine(models.Model):
             # Distinguish repeated product/truck/container combinations.
             line.display_name = "%s [#%s]" % (label, line.id)
 
+    def action_open_assign_truck_wizard(self):
+        self.ensure_one()
+        self.check_access("read")
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Assign Truck"),
+            "res_model": "taj.transport.assign.truck.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_sale_line_id": self.id},
+        }
+
     def action_prepare_transport_trip(self):
         self.ensure_one()
         self.check_access("read")
@@ -44,8 +318,16 @@ class SaleOrderLine(models.Model):
             "type": "ir.actions.act_window",
             "name": _("Create Transport Trip"),
             "res_model": "taj.transport.trip",
-            "view_mode": "form", "target": "current",
-            "views": [(self.env.ref("taj_transport_operations.view_transport_trip_form").id, "form")],
+            "view_mode": "form",
+            "target": "current",
+            "views": [
+                (
+                    self.env.ref(
+                        "taj_transport_operations.view_transport_trip_form"
+                    ).id,
+                    "form",
+                )
+            ],
             "context": {
                 "default_sale_order_id": self.order_id.id,
                 "default_sale_line_id": self.id,
@@ -54,7 +336,8 @@ class SaleOrderLine(models.Model):
         }
 
     cargo_type_id = fields.Many2one(
-        "taj.transport.cargo.type", string="Cargo Type",
+        "taj.transport.cargo.type",
+        string="Cargo Type",
         help="Optional cargo classification copied onto the new trip for "
         "this sales line. Later line edits do not update existing trips.",
     )
@@ -71,19 +354,104 @@ class SaleOrderLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        if any("allocation_date" in vals for vals in vals_list):
+            raise UserError(_("Allocation Date is recorded automatically."))
+        default_vehicle = self.default_get(["vehicle_id"]).get("vehicle_id")
+        vals_list = [dict(vals) for vals in vals_list]
+        for vals in vals_list:
+            vals["allocation_date"] = fields.Datetime.now() if vals.get("vehicle_id", default_vehicle) else False
+        default_order_id = (
+            self.default_get(["order_id"]).get("order_id")
+            if any("order_id" not in vals for vals in vals_list)
+            else False
+        )
+        order_ids = [vals.get("order_id", default_order_id) for vals in vals_list]
+        self.env["sale.order"].browse(
+            [order_id for order_id in order_ids if order_id]
+        )._check_confirmed_sale_edit_access()
         lines = super().create(vals_list)
         confirmed = lines.filtered(lambda line: line.order_id.state in ("sale", "done"))
         self.env["taj.transport.trip.file"]._ensure_for_sale_lines(confirmed)
         return lines
 
     def write(self, vals):
+        if "allocation_date" in vals:
+            raise UserError(_("Allocation Date is recorded automatically."))
+        if vals:
+            self.order_id._check_confirmed_sale_edit_access()
+            if vals.get("order_id"):
+                self.env["sale.order"].browse(
+                    vals["order_id"]
+                )._check_confirmed_sale_edit_access()
         if "order_id" in vals and any(
             line.order_id.id != vals["order_id"]
-            and self.env["taj.transport.trip"].sudo().search_count([("sale_line_id", "=", line.id)])
+            and self.env["taj.transport.trip"]
+            .sudo()
+            .search_count([("sale_line_id", "=", line.id)])
             for line in self
         ):
-            raise UserError(_("A sales line linked to a trip cannot move to another Sales Order."))
-        return super().write(vals)
+            raise UserError(
+                _("A sales line linked to a trip cannot move to another Sales Order.")
+            )
+        if vals.get("order_id") and any(
+            line.order_id.id != vals["order_id"] and line.transport_file_line_ids
+            for line in self
+        ):
+            raise UserError(
+                _(
+                    "A shipment linked to a File Number cannot move to another Sales Order."
+                )
+            )
+        tracked = set(vals) & set(SHIPMENT_FIELDS)
+        rows = (
+            self.env["taj.transport.trip.file.line"]
+            .sudo()
+            .search([("sale_line_id", "in", self.ids)])
+            if tracked
+            else self.env["taj.transport.trip.file.line"]
+        )
+        before = {
+            row.sale_line_id.id: {
+                name: row.sale_line_id._file_shipment_display_value(name)
+                for name in tracked
+            }
+            for row in rows
+        }
+        if vals.get("vehicle_id"):
+            self._lock_transport_vehicle()
+            first_allocations = self.filtered(lambda line: not line.allocation_date)
+            if first_allocations:
+                super(SaleOrderLine, first_allocations).write({
+                    "allocation_date": fields.Datetime.now(),
+                })
+        result = super().write(vals)
+        for row in rows:
+            line = row.sale_line_id
+            changes = []
+            for name in sorted(tracked):
+                old = before[line.id][name]
+                new = line._file_shipment_display_value(name)
+                if old != new:
+                    changes.append(
+                        Markup("<li><strong>%s</strong>: %s → %s</li>")
+                        % (
+                            line._fields[name]._description_string(self.env),
+                            old or _("Empty"),
+                            new or _("Empty"),
+                        )
+                    )
+            if changes:
+                body = Markup("<p>Shipment line #%s — %s</p><ul>%s</ul>") % (
+                    line.id,
+                    line.product_id.display_name,
+                    Markup("").join(changes),
+                )
+                row.file_id.sudo()._log_shipment_change(body)
+        return result
+
+    def unlink(self):
+        self.order_id._check_confirmed_sale_edit_access()
+        return super().unlink()
 
     def action_open_or_create_transport_trip(self):
         self.ensure_one()
@@ -101,16 +469,19 @@ class SaleOrderLine(models.Model):
         Trip._validate_sale_line(self)
         routes = self.env["taj.transport.route"]._matching_for_sale_line(self)
         if not routes:
-            raise UserError(_(
-                "No active route template is linked to product %(product)s "
-                "for company %(company)s. Ask a Transport Manager to link a "
-                "route template to this product, then try again."
-            ) % {
-                "product": self.product_id.display_name,
-                "company": (
-                    self.company_id or self.order_id.company_id
-                ).display_name,
-            })
+            raise UserError(
+                _(
+                    "No active route template is linked to product %(product)s "
+                    "for company %(company)s. Ask a Transport Manager to link a "
+                    "route template to this product, then try again."
+                )
+                % {
+                    "product": self.product_id.display_name,
+                    "company": (
+                        self.company_id or self.order_id.company_id
+                    ).display_name,
+                }
+            )
         if len(routes) > 1:
             return {
                 "type": "ir.actions.act_window",
@@ -120,10 +491,12 @@ class SaleOrderLine(models.Model):
                 "target": "new",
                 "context": {"default_sale_line_id": self.id},
             }
-        trip = Trip.create({
-            "sale_line_id": self.id,
-            "route_id": routes.id,
-        })
+        trip = Trip.create(
+            {
+                "sale_line_id": self.id,
+                "route_id": routes.id,
+            }
+        )
         return {
             "type": "ir.actions.act_window",
             "name": _("Transport Trip"),

@@ -6,8 +6,15 @@ from . import test_route_templates
 from . import test_trip_milestones
 from . import test_milestone_concurrency
 from . import test_sales_route_cargo
+from . import test_sale_line_columns
+from . import test_duplicate_sale_line
+from . import test_confirmed_sale_lock
 from . import test_trip_files
+from . import test_file_grouping_concurrency
 from . import test_dispatch_readiness
+from . import test_without_allocation
+from . import test_trip_dispatch_summary
+from . import test_allocation_concurrency
 from . import test_transport_entrypoints
 from . import test_trip_activity
 from . import test_fleet_defaults

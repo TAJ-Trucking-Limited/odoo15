@@ -271,8 +271,8 @@ class TajTransportTrip(models.Model):
             if updates:
                 trip._write_email_schedule(updates)
 
-    def action_start_trip(self):
-        res = super().action_start_trip()
+    def action_start_trip(self, actual_start_at=None):
+        res = super().action_start_trip(actual_start_at=actual_start_at)
         now = fields.Datetime.now()
         for trip in self:
             if trip.email_notification_enabled:
@@ -322,9 +322,15 @@ class TajTransportTrip(models.Model):
                 "label": f"{event_type} {latest.name}",
                 "source": "milestone",
                 "updated_at": event_time,
-                "latitude": False,
-                "longitude": False,
-                "map_url": False,
+                "latitude": latest.latitude,
+                "longitude": latest.longitude,
+                "map_url": (
+                    "https://www.google.com/maps?q=%s,%s" % (latest.latitude, latest.longitude)
+                    # Optional Float fields use zero for missing coordinates.
+                    # Suppress incomplete/ambiguous historical coordinate pairs.
+                    if (latest.latitude and latest.longitude
+                        and -90 <= latest.latitude <= 90 and -180 <= latest.longitude <= 180) else False
+                ),
                 "is_stale": False,
                 "notice": _("Last recorded checkpoint (not a live GPS fix)"),
             }

@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="privilege_shipment_data_entry" model="res.groups.privilege">
+        <field name="name">Shipment Data Entry</field>
+        <field name="category_id" ref="base.module_category_sales"/>
+    </record>
+    <record id="group_shipment_data_entry" model="res.groups">
+        <field name="name">Shipment Data Entry</field>
+        <field name="privilege_id" ref="privilege_shipment_data_entry"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Edit shipment information in File Numbers without changing prices or unlocking Sales Orders.</field>
+    </record>
+    <record id="privilege_confirmed_sale_edit" model="res.groups.privilege">
+        <field name="name">Confirmed Sales Order Editing</field>
+        <field name="category_id" ref="base.module_category_sales"/>
+    </record>
+    <record id="group_edit_confirmed_sale_orders" model="res.groups">
+        <field name="name">Edit Confirmed Sales Orders</field>
+        <field name="privilege_id" ref="privilege_confirmed_sale_edit"/>
+        <field name="comment">Unlock and edit confirmed sales orders within the user's normal Sales access.</field>
+    </record>
     <record id="category_transport" model="ir.module.category">
         <field name="name">TAJ Transport</field>
         <field name="sequence">60</field>
@@ -23,7 +42,7 @@
         <field name="name">Transport trips: allowed companies only</field>
         <field name="model_id" ref="model_taj_transport_trip"/>
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
-        <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
+        <field name="groups" eval="[(5, 0, 0)]"/>
     </record>
     <record id="rule_transport_trip_activity_companies" model="ir.rule">
         <field name="name">Trip activity: allowed companies only</field>
@@ -88,5 +107,68 @@
         <field name="model_id" ref="model_taj_transport_trip_email_dispatch"/>
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
         <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
+    </record>
+    <record id="rule_file_data_entry" model="ir.rule">
+        <field name="name">rule file data entry</field>
+        <field name="model_id" ref="model_taj_transport_trip_file"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('taj_transport_operations.group_shipment_data_entry'))]"/>
+    </record>
+    <record id="rule_file_line_company" model="ir.rule">
+        <field name="name">rule file line company</field>
+        <field name="model_id" ref="model_taj_transport_trip_file_line"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_file_line_sales" model="ir.rule">
+        <field name="name">rule file line sales</field>
+        <field name="model_id" ref="model_taj_transport_trip_file_line"/>
+        <field name="domain_force">['|', ('sale_order_id.user_id', '=', user.id), ('sale_order_id.user_id', '=', False)]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+    </record>
+    <record id="rule_file_line_all_sales" model="ir.rule">
+        <field name="name">rule file line all sales</field>
+        <field name="model_id" ref="model_taj_transport_trip_file_line"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman_all_leads')), (4, ref('taj_transport_operations.group_transport_user')), (4, ref('taj_transport_operations.group_shipment_data_entry'))]"/>
+    </record>
+    <record id="rule_trip_sales_read" model="ir.rule">
+        <field name="name">rule trip sales read</field>
+        <field name="model_id" ref="model_taj_transport_trip"/>
+        <field name="domain_force">['|', ('sale_order_id.user_id', '=', user.id), ('sale_order_id.user_id', '=', False)]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_trip_all_read" model="ir.rule">
+        <field name="name">rule trip all read</field>
+        <field name="model_id" ref="model_taj_transport_trip"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman_all_leads')), (4, ref('taj_transport_operations.group_transport_user')), (4, ref('taj_transport_operations.group_shipment_data_entry'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_data_entry_order_read" model="ir.rule">
+        <field name="name">rule data entry order read</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('taj_transport_operations.group_shipment_data_entry'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="rule_data_entry_line_read" model="ir.rule">
+        <field name="name">rule data entry line read</field>
+        <field name="model_id" ref="sale.model_sale_order_line"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('taj_transport_operations.group_shipment_data_entry'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
     </record>
 </odoo>

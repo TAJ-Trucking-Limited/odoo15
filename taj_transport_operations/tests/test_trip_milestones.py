@@ -447,6 +447,7 @@ class TestTripMilestones(TajTransportPhase3Case):
     # ------------------------------------------------------------------
     def test_completed_trip_requires_a_manager_correction(self):
         trip = self._checkpoint_trip("COMPLETED", state="in_progress")
+        trip.write({"actual_departure_at": fields.Datetime.now() - timedelta(hours=4)})
         border = self._milestone(trip, "Kasumbalesa border")
         self._record(
             border,
@@ -707,7 +708,8 @@ class TestTripMilestones(TajTransportPhase3Case):
             ).get_combined_arch()
         )
         self.assertTrue(search.xpath("//filter[@name='group_state']"))
-        self.assertTrue(search.xpath("//filter[@name='open']"))
+        for name in ("trip_in_progress", "trip_completed", "trip_not_started"):
+            self.assertTrue(search.xpath(f"//filter[@name='{name}']"))
 
     def _replace_grouping_truck(self, trip, effective_from):
         truck = self.env["fleet.vehicle"].create({

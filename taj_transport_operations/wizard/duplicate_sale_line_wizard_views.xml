@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_duplicate_sale_line_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.duplicate.sale.line.wizard.form</field>
+        <field name="model">taj.transport.duplicate.sale.line.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Duplicate Line">
+                <group>
+                    <field name="sale_order_id"/>
+                    <field name="source_line_id" context="{'transport_line_label': True}"
+                           options="{'no_create': True, 'no_create_edit': True, 'no_open': True}"/>
+                    <field name="clean_mode" widget="radio"/>
+                </group>
+                <p class="text-muted" invisible="clean_mode != 'container'">
+                    Clear Container Number. Keep the other shipment values and Unit Price.
+                </p>
+                <p class="text-muted" invisible="clean_mode != 'all'">
+                    Clear Container Number, Cargo Type, Size, Weight, Cargo Description
+                    and Special Handling Instructions. Set Unit Price to 0.
+                </p>
+                <footer>
+                    <button name="action_duplicate" type="object" string="Duplicate Line" class="btn-primary"/>
+                    <button special="cancel" string="Cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

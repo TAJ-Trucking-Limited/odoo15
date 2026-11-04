@@ -113,7 +113,7 @@ class TestDispatchReadiness(TransactionCase):
         self.assertNotIn("res_id", action)
         self.assertFalse(self.truckless_line.transport_trip_ids)
 
-    def test_without_trip_action_lists_confirmed_untripped_lines(self):
+    def test_not_started_action_keeps_confirmed_draft_trips(self):
         lines = (
             self._action_lines(
                 "taj_transport_operations.action_sale_order_line_without_trip"
@@ -133,7 +133,7 @@ class TestDispatchReadiness(TransactionCase):
             )
             & self._our_lines()
         )
-        self.assertNotIn(self.trucked_line, lines)
+        self.assertIn(self.trucked_line, lines)
         self.assertIn(self.truckless_line, lines)
         self.assertIn(self.other_line, lines)
 

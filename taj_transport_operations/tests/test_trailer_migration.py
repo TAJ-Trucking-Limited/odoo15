@@ -29,7 +29,20 @@ class TestTrailerMigration(TransactionCase):
 
     def test_plural_category_is_adopted_and_xmlid_repaired(self):
         Category = self.env["fleet.vehicle.model.category"]
-        linked = self.env.ref("taj_transport_operations.fleet_category_truck")
+        # Adoption requires one used matching category and an unused old link.
+        # Isolate that premise from installed Fleet data and committed test fixtures.
+        existing = Category.search([]).filtered(
+            lambda category: (category.name or "").strip().lower() in ("truck", "trucks")
+        )
+        for category in existing:
+            category.name = "Unrelated category fixture #%s" % category.id
+        Category.flush_model(["name"])
+        linked = Category.create({"name": "Truck"})
+        self.env["ir.model.data"].search([
+            ("module", "=", "taj_transport_operations"), ("name", "=", "fleet_category_truck"),
+        ]).write({"res_id": linked.id})
+        self.env["ir.model.data"].flush_model(["res_id"])
+        self.env.registry.clear_cache()
         trucks = Category.create({"name": "Trucks"})
         self._vehicle(trucks, "PLURAL-TRUCK")
         categories = ensure_transport_categories(self.env)

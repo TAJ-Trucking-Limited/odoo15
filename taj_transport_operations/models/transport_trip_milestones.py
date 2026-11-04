@@ -673,7 +673,8 @@ class TajTransportTrip(models.Model):
         applicable = self.milestone_ids.filtered(
             lambda milestone: milestone.state != "skipped"
         ).sorted(key=lambda milestone: (milestone.sequence, milestone.id))
-        last_value, last_label = False, False
+        last_value = self.actual_departure_at if self.state in ("in_progress", "completed") else False
+        last_label = _("Trip start") if last_value else False
         for milestone in applicable:
             overrides = pending_values.get(milestone.id, {})
             arrival = overrides.get(

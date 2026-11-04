@@ -4,85 +4,178 @@
         <field name="name">taj.transport.trip.file.list</field>
         <field name="model">taj.transport.trip.file</field>
         <field name="arch" type="xml">
-            <list string="Trip Files" create="0" delete="0">
-                <field name="name"/>
-                <field name="bill_of_lading"/>
-                <field name="container_number"/>
-                <field name="trip_id" groups="taj_transport_operations.group_transport_user"/>
-                <field name="sale_order_id"/>
-                <field name="sale_line_id" optional="hide"/>
-                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            <list string="File Numbers" create="0" delete="0">
+                <field name="name" optional="show"/>
+                <field name="partner_id" optional="show"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="line_count" optional="show"/>
+                <field name="trip_count" optional="show"/>
+                <field name="unplanned_line_count" optional="hide"/>
+                <field name="products" optional="show"/>
+                <field name="file_types" optional="hide"/>
+                <field name="clearing_services" optional="hide"/>
+                <field name="consignees" optional="hide"/>
+                <field name="bill_of_lading" optional="show"/>
+                <field name="container_number" optional="show"/>
+                <field name="etas" optional="hide"/>
+                <field name="etols" optional="hide"/>
+                <field name="shipping_lines" optional="hide"/>
+                <field name="cargo_types" optional="hide"/>
+                <field name="sizes" optional="hide"/>
+                <field name="weights" optional="hide"/>
+                <field name="cargo_descriptions" optional="hide"/>
+                <field name="handling_instructions" optional="hide"/>
+                <field name="total_quantity" optional="hide"/>
+                <field name="units" optional="hide"/>
+                <field name="trip_ids" optional="hide" widget="many2many_tags"
+                       context="{'form_view_ref': 'taj_transport_operations.view_file_related_trip_form'}"/>
+                <field name="legacy_container_number" optional="hide"/>
+                <field name="legacy_bill_of_lading" optional="hide"/>
+                <field name="create_date" optional="hide"/>
+                <field name="create_uid" optional="hide"/>
+                <field name="write_date" optional="hide"/>
+                <field name="write_uid" optional="hide"/>
+                <field name="company_id" optional="hide"/>
             </list>
         </field>
     </record>
-
     <record id="view_transport_trip_file_form" model="ir.ui.view">
         <field name="name">taj.transport.trip.file.form</field>
         <field name="model">taj.transport.trip.file</field>
         <field name="arch" type="xml">
-            <form string="Trip File" create="0" delete="0" duplicate="0">
+            <form string="File Number" create="0" delete="0" duplicate="0">
                 <sheet>
-                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_related_trips" type="object" class="oe_stat_button" icon="fa-truck">
+                            <field name="trip_count" widget="statinfo" string="Related Trips"/>
+                        </button>
+                    </div>
+                    <div class="oe_title"><label for="name"/><h1><field name="name"/></h1></div>
+                    <field name="can_edit_shipments" invisible="1"/>
                     <group>
-                        <group string="Shipment">
-                            <field name="bill_of_lading" placeholder="Enter the Bill of Lading when available"/>
-                            <field name="container_number"/>
-                        </group>
-                        <group string="Source">
+                        <group>
+                            <field name="partner_id"/>
                             <field name="sale_order_id"/>
-                            <field name="sale_line_id"/>
-                            <field name="trip_id" groups="taj_transport_operations.group_transport_user"/>
+                            <field name="trip_ids" widget="many2many_tags" options="{'no_create': True}"
+                                   context="{'form_view_ref': 'taj_transport_operations.view_file_related_trip_form'}"/>
+                        </group>
+                        <group>
+                            <field name="line_count"/>
+                            <field name="unplanned_line_count"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                     </group>
-                    <p class="text-muted">
-                        This file was generated for a confirmed sales line.
-                        The trip is linked automatically when it is created.
-                        Container Number keeps the value copied when the file
-                        was created. Bill of Lading can be filled in later.
-                    </p>
+                    <field name="line_ids" readonly="not can_edit_shipments">
+                        <list editable="bottom" create="0" delete="0">
+                            <field name="product_editable" column_invisible="True"/>
+                            <field name="product_id" optional="show" readonly="not product_editable" options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="file_type_id" optional="show" options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="clearing_service" optional="show"/>
+                            <field name="consignee" optional="show"/>
+                            <field name="bill_of_lading" optional="show"/>
+                            <field name="container_num" optional="show"/>
+                            <field name="eta" optional="show"/>
+                            <field name="etol" optional="show"/>
+                            <field name="shipping_line" optional="show"/>
+                            <field name="cargo_type_id" optional="show" options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="size" optional="show"/>
+                            <field name="weight" optional="show"/>
+                            <field name="cargo_description" optional="show"/>
+                            <field name="special_handling_instructions" optional="show"/>
+                            <field name="product_uom_qty" optional="show"/>
+                            <field name="trip_id" optional="show" options="{'no_create': True, 'no_create_edit': True}"
+                                   context="{'form_view_ref': 'taj_transport_operations.view_file_related_trip_form'}"/>
+                        </list>
+                    </field>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="view_file_related_trip_list" model="ir.ui.view">
+        <field name="name">taj.transport.trip.file.related.list</field>
+        <field name="model">taj.transport.trip</field>
+        <field name="arch" type="xml">
+            <list string="Related Trips" create="0" edit="0" delete="0">
+                <field name="name" optional="show"/>
+                <field name="state" optional="show"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="sale_line_id" optional="show"/>
+                <field name="route_id" optional="hide"/>
+                <field name="origin_location" optional="show"/>
+                <field name="destination_location" optional="show"/>
+                <field name="planned_departure_at" optional="hide"/>
+                <field name="planned_arrival_at" optional="hide"/>
+                <field name="actual_departure_at" optional="hide"/>
+                <field name="actual_arrival_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_file_related_trip_form" model="ir.ui.view">
+        <field name="name">taj.transport.trip.file.related.form</field>
+        <field name="model">taj.transport.trip</field>
+        <field name="arch" type="xml">
+            <form string="Related Trip" create="0" edit="0" delete="0" duplicate="0">
+                <sheet>
+                    <h1><field name="name"/></h1>
+                    <group>
+                        <group>
+                            <field name="state"/>
+                            <field name="sale_order_id"/>
+                            <field name="sale_line_id"/>
+                            <field name="route_id" options="{'no_open': True}"/>
+                            <field name="container_num"/>
+                        </group>
+                        <group>
+                            <field name="origin_location"/>
+                            <field name="destination_location"/>
+                            <field name="planned_departure_at"/>
+                            <field name="planned_arrival_at"/>
+                            <field name="actual_departure_at"/>
+                            <field name="actual_arrival_at"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="cargo_description"/>
+                        <field name="special_handling_instructions"/>
+                    </group>
                 </sheet>
             </form>
         </field>
     </record>
-
     <record id="view_transport_trip_file_search" model="ir.ui.view">
         <field name="name">taj.transport.trip.file.search</field>
         <field name="model">taj.transport.trip.file</field>
         <field name="arch" type="xml">
-            <search string="Trip Files">
+            <search string="File Numbers">
                 <field name="name"/>
+                <field name="partner_id"/>
+                <field name="sale_order_id"/>
+                <field name="products"/>
                 <field name="bill_of_lading"/>
                 <field name="container_number"/>
-                <field name="sale_order_id"/>
-                <field name="trip_id" groups="taj_transport_operations.group_transport_user"/>
-                <filter name="missing_bill_of_lading" string="Missing Bill of Lading"
-                        domain="[('bill_of_lading', '=', False)]"/>
-                <filter name="awaiting_trip" string="Awaiting Trip"
-                        domain="[('trip_id', '=', False)]"
-                        groups="taj_transport_operations.group_transport_user"/>
+                <field name="shipping_lines"/>
+                <field name="file_types"/>
+                <filter name="awaiting_trip" string="Lines Awaiting Trips" domain="[('unplanned_line_count', '&gt;', 0)]"/>
+                <filter name="has_trip" string="Has Trips" domain="[('trip_count', '&gt;', 0)]"/>
                 <group>
-                    <filter name="by_sale_order" string="Sales Order"
-                            context="{'group_by': 'sale_order_id'}"/>
-                    <filter name="by_company" string="Company"
-                            context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+                    <filter name="by_customer" string="Customer" context="{'group_by': 'partner_id'}"/>
+                    <filter name="by_sale_order" string="Sales Order" context="{'group_by': 'sale_order_id'}"/>
+                    <filter name="by_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
                 </group>
             </search>
         </field>
     </record>
-
     <record id="action_transport_trip_file" model="ir.actions.act_window">
-        <field name="name">Trip Files</field>
+        <field name="name">File Numbers</field>
         <field name="res_model">taj.transport.trip.file</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">No Trip Files yet.</p>
-            <p>Confirm a sales order to generate a file for each product/service
-               line. Its trip will be linked when created.</p>
+            <p class="o_view_nocontent_smiling_face">No File Numbers yet.</p>
+            <p>Confirm a Sales Order to group its shipment lines and related trips under a File Number.</p>
         </field>
     </record>
-
-    <menuitem id="menu_transport_trip_files" name="Trip Files"
-              parent="menu_transport_operations" action="action_transport_trip_file"
-              sequence="12" groups="taj_transport_operations.group_transport_user"/>
+    <menuitem id="menu_transport_trip_files" name="File Numbers"
+              parent="menu_transport_operations" action="action_transport_trip_file" sequence="12"
+              groups="taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry,sales_team.group_sale_salesman"/>
 </odoo>

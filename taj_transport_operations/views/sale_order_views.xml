@@ -3,25 +3,44 @@
     <record id="view_sale_order_form_transport" model="ir.ui.view">
         <field name="name">sale.order.form.transport.operations</field>
         <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="inherit_id" ref="move_invoice_line.view_sale_form_madfox"/>
         <field name="arch" type="xml">
+            <xpath expr="//form/sheet" position="inside">
+                <field name="transport_confirmed_readonly" invisible="1"/>
+            </xpath>
+            <xpath expr="//button[@name='action_unlock']" position="attributes">
+                <attribute name="groups">taj_transport_operations.group_edit_confirmed_sale_orders</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_cancel']" position="attributes">
+                <attribute name="invisible" add="transport_confirmed_readonly" separator=" or "/>
+            </xpath>
+            <xpath expr="//button[@name='action_unlock']" position="after">
+                <button name="action_lock" type="object" string="Lock"
+                        invisible="locked or state != 'sale'"
+                        groups="taj_transport_operations.group_edit_confirmed_sale_orders"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/control/create[@name='add_product_control']" position="after">
+                <button name="action_open_duplicate_line_wizard" type="object"
+                        string="Duplicate Line" class="btn-link"
+                        context="{'order_id': parent.id}"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="parent.locked or parent.state == 'cancel' or parent.transport_confirmed_readonly"/>
+            </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_trip_files" type="object"
                         class="oe_stat_button" icon="fa-folder-open"
-                        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user">
-                    <field name="trip_file_count" widget="statinfo" string="Trip Files"/>
+                        groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry">
+                    <field name="trip_file_count" widget="statinfo" string="Trips"/>
                 </button>
                 <button name="action_view_transport_trips" type="object"
                         class="oe_stat_button" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user">
                     <field name="transport_trip_count" widget="statinfo"
-                           string="Trips"/>
+                           string="Transport Trips"/>
                 </button>
             </xpath>
             <xpath expr="//field[@name='client_order_ref']" position="after">
                 <field name="transport_customer_email" readonly="1"/>
-                <field name="transport_planned_departure_at"/>
-                <field name="transport_planned_arrival_at"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="transport_trip_count" column_invisible="True"
@@ -36,6 +55,16 @@
                         invisible="display_type not in [False, 'product'] or transport_trip_count == 0"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
+                <group string="Shipment Details" invisible="display_type not in [False, 'product']">
+                    <field name="file_type_id" required="product_type == 'consu' and not is_downpayment"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="clearing_service"/>
+                    <field name="bill_of_lading"/>
+                    <field name="eta"/>
+                    <field name="etol"/>
+                    <field name="shipping_line"/>
+                    <field name="vehicle_id" readonly="1"/>
+                </group>
                 <group string="Cargo Details" invisible="display_type not in [False, 'product']">
                     <field name="cargo_type_id"
                            options="{'no_create': True, 'no_create_edit': True}"/>
@@ -46,6 +75,8 @@
                 </group>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
+                <field name="transport_planned_departure_at" optional="hide" invisible="display_type not in [False, 'product']"/>
+                <field name="transport_planned_arrival_at" optional="hide" invisible="display_type not in [False, 'product']"/>
                 <field name="cargo_type_id"
                        options="{'no_create': True, 'no_create_edit': True}"
                        optional="show" invisible="display_type not in [False, 'product']"/>
@@ -56,6 +87,82 @@
                        invisible="display_type not in [False, 'product']"
                        placeholder="Optional loading, storage or handling notes"/>
             </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_template_id']" position="after">
+                <field name="file_type_id" optional="show"
+                       required="not display_type and product_type == 'consu' and not is_downpayment"
+                       invisible="display_type not in [False, 'product']"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
+                <field name="clearing_service" optional="show" invisible="display_type not in [False, 'product']"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='consignee']" position="move"/>
+                <field name="bill_of_lading" optional="show" invisible="display_type not in [False, 'product']"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='container_num']" position="move"/>
+                <field name="eta" optional="show" invisible="display_type not in [False, 'product']"/>
+                <field name="etol" optional="show" invisible="display_type not in [False, 'product']"/>
+                <field name="shipping_line" optional="show" invisible="display_type not in [False, 'product']"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='cargo_type_id']" position="move"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='size']" position="move"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='weight']" position="move"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='cargo_description']" position="move"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='special_handling_instructions']" position="move"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/button[@name='action_prepare_transport_trip'][1]" position="before">
+                <xpath expr="//field[@name='order_line']/list/field[@name='analytic_account_id']" position="move"/>
+                <xpath expr="//field[@name='order_line']/list/field[@name='vehicle_id']" position="move"/>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='vehicle_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='analytic_account_id']" position="attributes">
+                <attribute name="string">Analytical Account</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="attributes">
+                <attribute name="string">QTY</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='cargo_description']" position="attributes">
+                <attribute name="string">Cargo Desc.</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='consignee']" position="attributes">
+                <attribute name="string">Consignee</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='container_num']" position="attributes">
+                <attribute name="string">Container Number</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='size']" position="attributes">
+                <attribute name="string">Size</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='weight']" position="attributes">
+                <attribute name="string">Weight</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='analytic_distribution']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='qty_delivered']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='qty_invoiced']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_id']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='tax_ids']" position="attributes">
+                <attribute name="optional">show</attribute>
+                <attribute name="string">Tax</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='discount']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='file_name']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='order_line']/list/field[@name='srn']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
         </field>
     </record>
 
@@ -63,23 +170,61 @@
         <field name="name">sale.order.line.dispatch.list</field>
         <field name="model">sale.order.line</field>
         <field name="arch" type="xml">
-            <list string="Sales Lines" create="0" edit="0" delete="0"
-                  decoration-danger="not vehicle_id">
-                <field name="order_id"/>
-                <field name="order_partner_id" string="Customer"/>
-                <field name="product_id"/>
-                <field name="name" string="Description"/>
-                <field name="product_uom_qty" string="Quantity"/>
-                <field name="vehicle_id"/>
-                <field name="transport_trip_count" string="Trips"/>
-                <button name="action_prepare_transport_trip" string="Create Trip"
+            <list string="Sale Orders - Trip Not Started" create="0" edit="0" delete="0">
+                <field name="transport_file_id" optional="show"/>
+                <field name="file_type_id" optional="show"/>
+                <field name="clearing_service" optional="show"/>
+                <field name="order_id" optional="show" string="Sales Order Number"/>
+                <field name="order_partner_id" optional="show" string="Customer Name"/>
+                <field name="consignee" optional="show"/>
+                <field name="product_id" optional="hide"/>
+                <field name="name" optional="show" string="Product Description"/>
+                <field name="product_uom_qty" optional="hide" string="QTY"/>
+                <field name="vehicle_id" optional="show"/>
+                <field name="eta" optional="show" string="ETA (Shipment Arrival)"/>
+                <field name="etol" optional="show" string="ETOL (Estimated Loading Date)"/>
+                <field name="cargo_type_id" optional="show"/>
+                <field name="size" optional="show"/>
+                <field name="weight" optional="show"/>
+                <field name="cargo_description" optional="show" string="Cargo Desc."/>
+                <field name="special_handling_instructions" optional="show"/>
+                <field name="allocation_date" optional="show"/>
+                <button name="action_open_or_create_transport_trip" string="Create Trip"
+                        type="object" icon="fa-truck"
+                        groups="taj_transport_operations.group_transport_user"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_sale_order_line_without_allocation_list" model="ir.ui.view">
+        <field name="name">sale.order.line.without.allocation.list</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <list string="Sale Orders without Allocation" create="0" edit="0" delete="0">
+                <field name="transport_file_id" optional="show"/>
+                <field name="file_type_id" optional="show"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
+                <field name="clearing_service" optional="show"/>
+                <field name="order_id" string="Sales Order Number" optional="show"/>
+                <field name="order_partner_id" string="Customer Name" optional="show"/>
+                <field name="consignee" optional="show"/>
+                <field name="product_id" optional="hide"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
+                <field name="name" string="Product Description" optional="show"/>
+                <field name="product_uom_qty" string="QTY" optional="hide"/>
+                <field name="vehicle_id" optional="show" readonly="1"/>
+                <field name="eta" optional="show"/>
+                <field name="cargo_type_id" optional="show"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
+                <field name="size" optional="show"/>
+                <field name="weight" optional="show"/>
+                <field name="cargo_description" string="Cargo Desc." optional="show"/>
+                <field name="special_handling_instructions" optional="show"/>
+                <field name="etol" optional="show"/>
+                <button name="action_open_assign_truck_wizard" string="Assign Truck"
                         type="object" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user"
-                        invisible="transport_trip_count != 0"/>
-                <button name="action_prepare_transport_trip" string="Open Trip"
-                        type="object" icon="fa-external-link"
-                        groups="taj_transport_operations.group_transport_user"
-                        invisible="transport_trip_count == 0"/>
+                        invisible="vehicle_id"/>
             </list>
         </field>
     </record>
@@ -113,30 +258,30 @@
     </record>
 
     <record id="action_sale_order_line_without_trip" model="ir.actions.act_window">
-        <field name="name">Sale Orders Without Trip</field>
+        <field name="name">Sale Orders - Trip Not Started</field>
         <field name="res_model">sale.order.line</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
         <field name="search_view_id" ref="view_sale_order_line_dispatch_search"/>
-        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('transport_trip_ids', '=', False)]</field>
-        <field name="context">{'search_default_group_by_order': 1}</field>
+        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('is_downpayment', '=', False), '|', ('transport_trip_ids', '=', False), ('transport_trip_ids.state', 'in', ['draft', 'ready'])]</field>
+        <field name="context">{}</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a transport trip.</p>
-            <p>Use Create Trip on a line, or Trips &gt; New, to plan a transport trip.</p>
+            <p class="o_view_nocontent_smiling_face">Every confirmed shipment has started its trip.</p>
+            <p>Create Trip opens a Draft trip, or the existing trip that has not started.</p>
         </field>
     </record>
 
     <record id="action_sale_order_line_without_truck" model="ir.actions.act_window">
-        <field name="name">Sale Orders Without Truck</field>
+        <field name="name">Sale Orders without Allocation</field>
         <field name="res_model">sale.order.line</field>
         <field name="view_mode">list,form</field>
-        <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
+        <field name="view_id" ref="view_sale_order_line_without_allocation_list"/>
         <field name="search_view_id" ref="view_sale_order_line_dispatch_search"/>
-        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('vehicle_id', '=', False)]</field>
-        <field name="context">{'search_default_group_by_order': 1}</field>
+        <field name="context">{}</field>
+        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('is_downpayment', '=', False), ('vehicle_id', '=', False)]</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a truck.</p>
-            <p>Draft trips may be created before assigning a truck. Assign resources before marking Ready.</p>
+            <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a truck allocated.</p>
+            <p>Assign Truck fills the first Sales truck and assigns an existing unassigned Draft trip. It does not create a trip.</p>
         </field>
     </record>
 
@@ -146,7 +291,7 @@
          server actions run uncached on every click and return the action dict
          with the current cutoff already applied. -->
     <record id="server_action_lines_without_trip" model="ir.actions.server">
-        <field name="name">Sale Orders Without Trip</field>
+        <field name="name">Sale Orders - Trip Not Started</field>
         <field name="model_id" ref="sale.model_sale_order_line"/>
         <field name="state">code</field>
         <field name="group_ids" eval="[(6, 0, [ref('taj_transport_operations.group_transport_user')])]"/>
@@ -154,7 +299,7 @@
     </record>
 
     <record id="server_action_lines_without_truck" model="ir.actions.server">
-        <field name="name">Sale Orders Without Truck</field>
+        <field name="name">Sale Orders without Allocation</field>
         <field name="model_id" ref="sale.model_sale_order_line"/>
         <field name="state">code</field>
         <field name="group_ids" eval="[(6, 0, [ref('taj_transport_operations.group_transport_user')])]"/>
@@ -165,11 +310,11 @@
               parent="menu_transport_operations"
               action="server_action_lines_without_trip"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>
-    <menuitem id="menu_transport_lines_without_trip" name="Sale Orders Without Trip"
+    <menuitem id="menu_transport_lines_without_trip" name="Sale Orders - Trip Not Started"
               parent="menu_transport_dispatch_lines"
               action="server_action_lines_without_trip"
               sequence="10" groups="taj_transport_operations.group_transport_user"/>
-    <menuitem id="menu_transport_lines_without_truck" name="Sale Orders Without Truck"
+    <menuitem id="menu_transport_lines_without_truck" name="Sale Orders without Allocation"
               parent="menu_transport_dispatch_lines"
               action="server_action_lines_without_truck"
               sequence="20" groups="taj_transport_operations.group_transport_user"/>

@@ -182,10 +182,9 @@ class TestMilestoneGenerationConcurrency(BaseCase):
         trips = (ids["trip_planned"], ids["trip_switch"], *ids["auto_trips"])
         routes = (ids["route_a"], ids["route_b"], ids["route_c"])
         with cls.registry.cursor() as cr:
-            cr.execute(
-                "DELETE FROM taj_transport_trip_file WHERE sale_line_id IN %s",
-                (tuple(ids["lines"]),),
-            )
+            api.Environment(cr, SUPERUSER_ID, {})["taj.transport.trip.file"].search([
+                ("line_ids.sale_line_id", "in", ids["lines"]),
+            ]).unlink()
             cr.execute(
                 "DELETE FROM mail_message "
                 "WHERE model = 'taj.transport.trip' AND res_id IN %s",

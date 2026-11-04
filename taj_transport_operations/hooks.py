@@ -43,6 +43,9 @@ def _write_category_xmlid(env, xml_name, category):
             "model": "fleet.vehicle.model.category", "res_id": category.id,
             "noupdate": True,
         })
+    # XML-ID lookup reads SQL directly. Flush a deferred rebind before clearing
+    # the lookup cache so immediate callers see the adopted category.
+    IMD.flush_model(["res_id"])
     env.registry.clear_cache()
 
 

@@ -122,10 +122,9 @@ class TestTripEmailConcurrency(BaseCase):
                 "WHERE model = 'taj.transport.trip' AND res_id = %s",
                 (trip_id,),
             )
-            cr.execute(
-                "DELETE FROM taj_transport_trip_file WHERE sale_line_id = %s",
-                (ids["line"],),
-            )
+            env["taj.transport.trip.file"].search([
+                ("line_ids.sale_line_id", "=", ids["line"]),
+            ]).unlink()
             cr.execute(
                 "DELETE FROM taj_transport_milestone_event WHERE trip_id = %s",
                 (trip_id,),
@@ -144,6 +143,10 @@ class TestTripEmailConcurrency(BaseCase):
             )
             cr.execute(
                 "DELETE FROM sale_order WHERE id = %s", (ids["order"],),
+            )
+            cr.execute(
+                "DELETE FROM fleet_vehicle_assignation_log WHERE vehicle_id = %s",
+                (ids["vehicle"],),
             )
             cr.execute(
                 "DELETE FROM fleet_vehicle WHERE id = %s", (ids["vehicle"],),

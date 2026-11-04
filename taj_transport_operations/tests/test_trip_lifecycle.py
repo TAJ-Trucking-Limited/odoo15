@@ -140,7 +140,7 @@ class TestTripLifecycle(TransactionCase):
         self.assertEqual(trip.last_vehicle_id, self.truck)
         self.assertEqual(trip.last_driver_id, self.driver)
         self.assertFalse(trip.initial_vehicle_id)
-        self.assertFalse(self.line.vehicle_id)
+        self.assertEqual(self.line.vehicle_id, self.truck)
         self.assertEqual(self.line._prepare_invoice_line(), invoice_before)
 
     def test_last_resource_snapshot_recomputes_without_related_search_warnings(self):
@@ -222,18 +222,17 @@ class TestTripLifecycle(TransactionCase):
         self.assertEqual(trip.state, "draft")
         self.assertFalse(trip.ready_at)
 
-    def test_cannot_mark_ready_without_planned_arrival(self):
+    def test_can_mark_ready_without_planned_arrival(self):
         trip = self._trip()
         trip.write({"planned_arrival_at": False})
-        with self.assertRaises(ValidationError):
-            trip.action_mark_ready()
-        self.assertEqual(trip.state, "draft")
+        trip.action_mark_ready()
+        self.assertEqual(trip.state, "ready")
 
-    def test_cannot_mark_ready_with_equal_planned_times(self):
+    def test_legacy_planned_times_do_not_block_readiness(self):
         trip = self._trip()
         trip.write({"planned_arrival_at": trip.planned_departure_at})
-        with self.assertRaises(ValidationError):
-            trip.action_mark_ready()
+        trip.action_mark_ready()
+        self.assertEqual(trip.state, "ready")
 
     def test_cannot_mark_ready_without_active_assignment(self):
         trip = self._trip(assignment=False)
@@ -272,17 +271,14 @@ class TestTripLifecycle(TransactionCase):
             trip.action_mark_ready()
         self.assertEqual(trip.state, "draft")
 
-    def test_start_requires_ready_and_valid_actual_departure(self):
+    def test_start_requires_valid_actual_departure(self):
         trip = self._trip()
-        with self.assertRaises(UserError):
-            trip.action_start_trip()
-        trip.action_mark_ready()
         trip.write({
             "actual_departure_at": fields.Datetime.now() + timedelta(hours=2),
         })
         with self.assertRaises(ValidationError):
             trip.action_start_trip()
-        self.assertEqual(trip.state, "ready")
+        self.assertEqual(trip.state, "draft")
         self.assertFalse(trip.started_at)
 
     def test_completion_requires_in_progress_and_valid_arrival(self):
@@ -569,7 +565,7 @@ class TestTripLifecycle(TransactionCase):
         self.assertEqual(statusbar[0].get("readonly"), "1")
         self.assertIn("cancelled", statusbar[0].get("statusbar_visible"))
         for name in (
-            "action_mark_ready", "action_start_trip",
+            "action_open_start_trip_wizard",
             "action_complete_trip", "action_open_cancel_trip_wizard",
         ):
             self.assertTrue(

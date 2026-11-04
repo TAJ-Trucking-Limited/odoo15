@@ -1,5 +1,43 @@
 # TAJ Transport Operations (Odoo 19)
 
+## Dispatch and Trips Summary (19.0.1.26.0)
+
+- **Dispatch Orders > Sale Orders - Trip Not Started** is an ungrouped shipment
+  worklist with configurable columns. It includes confirmed lines without a trip
+  and lines whose trip is Draft or Ready. Down payments are excluded from both
+  dispatch queues. Product and QTY are hidden by default.
+- **Create Trip** uses the existing product route selection, saves a Draft trip,
+  and opens it. Multiple matching templates open the route chooser. Reopening a
+  line with an unstarted trip opens the same trip rather than creating a duplicate.
+- **Start Trip** is available on Draft and Ready trips. The dialog defaults Actual
+  Start to now and accepts an earlier business time. Truck, driver, route locations,
+  assignment periods and checkpoint chronology are validated. Actual Start can be
+  corrected on an open trip; the original action audit timestamp remains intact.
+  Planned departure/arrival and the Sales Commercial Data block are removed from
+  the trip form. Legacy schedule fields remain in the model for compatibility and
+  are no longer readiness/start prerequisites.
+- **Trips** replaces the Milestones navigation. Its In Progress, Completed and
+  Not Started submenus select checkpoints by **parent trip status**, including
+  pending checkpoints on completed trips. Record Activity is available beside
+  the row's Open Trip and Arrival actions and from the selection toolbar.
+- **File Numbers** keeps the grouped file list separate from trip operations.
+- **Trips Summary** replaces the old standalone Transport Trips menu. Every data column has
+  Show/Hide; Product and QTY start hidden. It includes shipment details, ETA/ETOL,
+  first allocation time, latest recorded checkpoint event/date, current driver,
+  checkpoint progress, last activity, position/source/time and a map link when
+  usable coordinates are known. Position providers (including Navirec overrides)
+  are reused; incomplete checkpoint coordinates do not generate a map position.
+  Status badges show lifecycle state; overdue activity uses the company's existing
+  inactivity-hours threshold and red row coloring. The summary list has no Record
+  Activity button. Each trip also has a Summary tab with the key information.
+- **Assign Truck** is fill-once and serialized with concurrent assignments and trip
+  creation. Stale dialogs cannot replace a truck on a locked Sales Order. If an
+  unassigned Draft trip exists, the action creates its initial resource assignment;
+  otherwise it records the Sales allocation without creating a trip. First
+  Allocation Date is automatic, read-only and retained across resource changes.
+  Upgrade recovers dates from existing truck assignment history where available;
+  it leaves unknown historical allocation times blank.
+
 ## Phase 2 / Batch 1: trip foundation
 
 This module adds operational trip identities without changing any existing
@@ -8,18 +46,19 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 - Each confirmed **product/service sales order line** can have **one** trip.
 - The relationship is enforced by a **database unique constraint**.
 - Trips start in **Draft** and may be created without a truck. Truck and
-  driver are required before **Mark Ready**.
-- **Transport Operations > Trips > New** opens a trip form. Select a confirmed
+  driver are required before **Start Trip** (or the optional legacy Ready action).
+- **Transport Operations > Trips Summary > New** opens a trip form. Select a confirmed
   Sales Order by number, then one of its untripped product/service lines. The
   line selector shows the product, truck (or No truck), container and line
   reference to distinguish repeated products.
-- **Dispatch Lines > Lines Without Trip / Lines Without Truck** offers
-  **Create Trip** per untripped line and **Open Trip** for lines with a trip.
-  Create Trip opens an unsaved form with that order and line preselected;
-  nothing is created until Save. The same **Create Trip** / **Open Trip**
-  buttons are available on product/service lines inside a Sales Order for
+- **Dispatch Orders > Sale Orders - Trip Not Started** offers **Create Trip**
+  for each line without a started trip. **Sale Orders without Allocation**
+  offers **Assign Truck** for confirmed product lines with no planned truck.
+  The dispatch action saves and opens a Draft using a matching route template.
+  Sales Order **Create Trip** / **Open Trip** buttons open an unsaved form
+  and are available on product/service lines inside a Sales Order for
   transport users. Create Trip requires a confirmed order; sections and notes
-  have no trip buttons. The Trips and Trip Files smart buttons remain available.
+  have no trip buttons. The Transport Trips and Trips smart buttons remain available.
 - Trip reference is generated using `TRIP/<year>/<sequence>` on Save.
 - Form creation requires a route template linked to that line's product.
   One active same-company match is preselected; multiple matches require a
@@ -28,11 +67,11 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   route and locations. The order and line cannot change after creation.
 - Legacy ORM callers that provide only a sales line may still omit a template.
   Legacy batch/route-chooser APIs remain for integrations and preparation
-  scripts; Sales Order lines use the same unsaved trip form as Dispatch Lines.
-- Sales Order **Trips** smart button opens all linked trips.
-- Standalone **Transport Operations > Trips** menu lists and creates trips.
-- The original truck is snapshotted when the trip is created, and never
-  synchronized back to the sales line. Customer and commercial details are
+  scripts; Sales Order line buttons retain the unsaved trip form; Dispatch uses route selection and saved Draft creation.
+- Sales Order **Transport Trips** smart button opens all operational trips.
+- Standalone **Transport Operations > Trips Summary** menu lists and creates trips.
+- The original truck is snapshotted when the trip is created. An empty
+  Sales Vehicle is filled once from the first truck assignment. Customer and commercial details are
   read-only links to their source records.
 - Access requires the Dispatcher or Transport Manager group (under the
   Odoo 19 Transport Operations privilege). Dispatchers get read-only access to
@@ -43,29 +82,74 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   deletion rights on trips in this batch.
 - No migration, backfill, or bulk creation of historical trips.
 
-## Trip Files (19.0.1.13.0)
+## Grouped File Numbers (introduced in 19.0.1.24.0)
 
-Confirming a sales order generates one **Trip File** per product/service line,
-including lines without a truck or a route template. Sections and notes are
-excluded, and quantity does not multiply files. Each file receives a generated
-`TF/<year>/<sequence>` reference, the sales order and source sales line, and a
-copy of that line's Container Number. Bill of Lading starts blank and can be
-entered later. The matching trip is linked automatically when it is created.
+**Transport Operations > File Numbers** lists grouped files. A new confirmed Sales
+Order receives one File Number containing its product/service shipment rows
+and related operational trips. Sections, notes and down payments are excluded.
+Additional Sales lines join the order's first file. Confirmation does not
+create operational trips. File Numbers keep the `TF/<year>/<sequence>` format.
+Operational planning remains under **Transport Operations > Transport Trips**.
 
-Open files from **Transport Operations > Trip Files** or the sales order's
-**Trip Files** smart button. Sales users can edit Bill of Lading for the orders
-they can access; transport users can work with files in their allowed
-companies. The Trip link is visible to transport users. Files cannot be
-created or deleted manually through these roles, and their generated identity
-and source links cannot be edited.
+The index has Customer Name, Related Sales Order, shipment/trip counts,
+lines awaiting trips, the shipment information, quantities/units and creation
+and update information. Every business column has Show/Hide. Open a File
+Number to see the customer, Sales Order and related trips, plus the detail
+columns: Product, File Type, Clearing Service, Consignee, Bill of Lading,
+Container Number, ETA, ETOL, Shipping Line, Cargo Type, Size, Weight, Cargo Desc.,
+Special Handling Instructions, QTY and Trip. There are no price columns.
+Related trip links use a read-only view accessible to Sales and Data Entry.
 
-Reconfirmation reuses files and preserves their references and Bill of Lading.
-Cancellation retains files. New lines added to a confirmed order receive files;
-duplicating an order creates fresh files only when the copy is confirmed.
-Container Number is a snapshot: later changes on the source line do not replace
-it. Sales lines referenced by a file cannot be deleted. Installing the feature
-does not bulk-create historical files; creating a trip for an older order
-creates the missing file for that line only. Confirmation does not create trips.
+Assign **Shipment Data Entry** in the user's access rights to allow shipment
+edits on files in their allowed companies. This grants read access to the
+source documents and related trips, without general Sales edit or operational
+trip-edit permissions. The file editing channel accepts only the shipment
+fields above, including quantity; it cannot change Unit Price, discounts,
+taxes, file identity or source links. Sales Orders stay locked. Unit Price is
+preserved when quantities or products change; native totals recalculate from
+the quantity. Product changes are refused after a trip, invoice or delivery
+exists. The separate **Edit Confirmed Sales Orders** permission is unchanged.
+
+Shipment fields read live Sales data in both directions. Changes from the
+file or Sales Order appear in file Chatter with the responsible user and
+old/new values. File rows cannot be added, removed or reassigned manually;
+Sales line creation supplies the rows. File creation is serialized per order
+and stale repeatable-read requests retry instead of generating duplicates.
+
+The upgrade retains every existing File Number and its original line rather
+than merging or renumbering historical records. Original Container and Bill
+of Lading snapshots remain available as optional index columns. The legacy
+file's Bill of Lading is carried to the linked Sales line once; subsequent
+migration runs do not overwrite later edits. Newly confirmed orders use the
+grouped layout. Older confirmed orders receive a grouped file when a trip
+first needs one. Cancelling an order retains its files; copying an order
+creates fresh files only on confirmation.
+
+## Sale Orders without Allocation and ETOL (19.0.1.25.0)
+
+**Transport Operations > Dispatch Orders > Sale Orders without Allocation**
+replaces the former Sale Orders Without Truck worklist. It lists confirmed
+product lines with no Vehicle, ungrouped by default. Each row is one sales line
+and shows File Number, File Type, Clearing Service, Sales Order Number, Customer
+Name, Consignee, Product (hidden by default), Product Description, QTY (hidden
+by default), Vehicle, ETA, Cargo Type, Size, Weight, Cargo Desc., Special
+Handling Instructions and ETOL. Every data column has Show/Hide.
+
+**Assign Truck** opens a truck-only dialog and writes the planned Vehicle on the
+selected line. It does not create a trip. An existing unassigned Draft trip receives an
+initial resource assignment; without a trip, no resource reservation is created. The order stays locked and Dispatchers receive no general Sales
+write access. The truck must be active, categorized as Truck, and belong to the
+order's company or be shared. When a trip is later created, the existing trip
+logic snapshots this vehicle as the original Sales truck.
+
+**ETOL (Estimated Time of Loading)** is a new shipment date next to ETA on Sales
+Order lines and File Number shipment rows. Shipment Data Entry can edit it, and
+File Chatter records the change and author like ETA. Trips expose live, read-only
+ETA and ETOL links to the source shipment.
+
+The old Planned Departure and Planned Arrival fields remain in the model for
+compatibility. Their Sales Order form block is hidden; they are available only
+as optional, hidden line columns.
 
 ## Phase 2 / Batch 2: Commercial and Cargo Details
 
@@ -77,7 +161,8 @@ Trips now show two clear tabs in the form, **Commercial** and **Cargo**.
 - Sales line description, container number, shipment reference (SRN), file
   name, consignee, weight, size, sales quantity and unit of measure.
 - The truck at trip creation stays a historical **snapshot**, not a live
-  related field. The original truck is never written back to Sales.
+  related field. An empty Sales Vehicle is filled from the first truck
+  assignment; later replacements keep that commercial snapshot.
 
 The Sales Order and trip show the selected customer's email as a read-only
 value. Changes to that customer's email are reflected on both records.
@@ -244,13 +329,12 @@ directly editable `state` values. Existing trips remain `Draft` on upgrade.
 The intended linear lifecycle is:
 
 - **Draft → Ready:** Requires a still-confirmed Sales Order, nonempty origin
-  and destination, planned departure and arrival (strictly increasing), and
-  exactly one active assignment with an **active Truck-category Fleet truck**
+  and destination and exactly one active assignment with an **active Truck-category Fleet truck**
   and a primary driver. Trailer and co-driver are optional. Inactive or
   misclassified trucks are rejected: categorize legacy trucks as **Truck** in
   Fleet before attempting Ready. Fleet company and driver company must match
   the trip where those values are set.
-- **Ready → In Progress:** Rechecks the planning/resource prerequisites.
+- **Draft / Ready → In Progress:** Rechecks the route/resource prerequisites.
   The current assignment must already be effective. The **Start Trip**
   action stamps `started_at`, and populates `actual_departure_at` with
   current time only if the dispatcher has not supplied it. A future or
@@ -289,14 +373,70 @@ Only dedicated private workflow methods write status or close an assignment;
 direct ORM state/history editing remains blocked.
 
 **Staging acceptance:** After upgrading the module, create or open a Draft
-trip, assign a properly categorized truck and driver, fill the route and
-planned times, and test Mark Ready → Start Trip → Complete Trip. Reopen the
+trip, assign a properly categorized truck and driver, fill the route locations,
+and test Draft → Start Trip → Complete Trip. Verify Actual Start corrections
+respect resource periods and checkpoint times. Reopen the
 record to verify timestamps, released current assignment, last-assigned
 resource panel, and immutable history. Confirm valid resource replacements
 in Ready/In Progress and rejection in terminal states. Test cancellation
 with reason by both Dispatcher and Transport Manager users. Ensure invalid
 transitions, missing prerequisites, invalid chronology and direct state
 writes fail without side effects.
+
+## Quotation and Sales Order shipment columns (19.0.1.21.0)
+
+The line table shows Product, File Type, Clearing Service, Consignee,
+Bill of Lading, Container Number, ETA, ETOL, Shipping Line, Cargo Type, Size,
+Weight, Cargo Desc., Special Handling Instructions, QTY, Unit Price,
+Tax, Amount, Analytical Account and Vehicle, in that order. Analytical Account
+requires the Analytic Accounting group. Other standard columns and the
+planned schedule remain available through the optional columns menu. The
+planned schedule block is no longer shown on the line form. ETA and ETOL are
+shipment dates, separate from the planned trip times.
+
+File Type uses the manager-maintained catalog, initially Transit Import
+and Transit Export. Clearing Service offers Included and Not Included.
+File Type does not filter route templates. Goods product lines require
+a File Type and an active route template linked to the product in the
+order's company. Saving the line and confirming the order both validate
+this rule. Services, sections, notes and down payments are exempt.
+
+Bill of Lading and Container Number on File Number shipment rows read and
+update the linked Sales Order line. Historical snapshots are preserved separately.
+Vehicle is read-only in Sales and fills from the first truck assignment
+when empty. Replacements preserve that commercial truck. The upgrade
+fills empty historical Sales vehicles from their first truck assignment,
+without changing populated vehicles or invoices. Duplicating an order
+clears Vehicle so a separate shipment receives its own assignment.
+
+**Duplicate Line (19.0.1.22.0)** appears beside **Add a product**. It opens a
+modal to select a product line from the same quotation or sales order.
+**Clean Container** clears only Container Number. **Clean All Variables**
+also clears Cargo Type, Size, Weight, Cargo Description and Special Handling
+Instructions, and sets Unit Price to 0. Other shipment and commercial values
+are copied, including the planned schedule; Vehicle stays empty. The copy is
+appended to the order and the source line is unchanged. Trips, assignments,
+deliveries and invoice links are not duplicated. On a confirmed order, the
+copy joins the order's File Number through the standard line-creation flow.
+Sales write access is required; cancelled and locked orders cannot add a copy.
+
+**Confirmed order protection (19.0.1.23.0):** Confirmation automatically locks
+the order. Assign **Edit Confirmed Sales Orders** under the user's Sales access
+rights to authorize selected users to unlock and edit it. Sales managers do
+not receive this permission automatically. The group supplements the user's
+normal document and company access; it does not grant access to other orders.
+After an authorized user unlocks an order, users without the permission still
+cannot change its header, add/edit/delete lines, or duplicate a line. Lock is
+available to the authorized user to finish editing. Draft quotations remain
+editable. The upgrade also locks orders confirmed before this policy.
+
+The server enforces the permission for direct ORM/RPC writes, nested line
+commands, line reassignment and saved default order values. Native invoicing,
+down-payment invoice creation/posting/reset/cancellation/deletion, Chatter,
+and trusted Vehicle backfill remain available without allowing manual Sales
+edits. System-owned down-payment updates use a private object capability that
+cannot be supplied through JSON/RPC context; native accounting access checks
+still apply.
 
 ## Phase 3: Route Templates and Trip Milestones (19.0.1.7.0)
 
@@ -574,8 +714,9 @@ activate alerts for a company.
 
 ## Vehicle Availability assignment (19.0.1.16.0)
 
-**Assign to Trip** opens the initial resource dialog from an active Truck row.
-The truck is preselected, the dispatcher chooses a Draft trip without assignment
+**Assign to Trip** opens the initial resource dialog from an active Truck or
+uncategorized vehicle row. Explicit Trailer categories remain excluded.
+The truck is preselected, the dispatcher chooses a Sales Order and a Draft trip without assignment
 history, and the driver defaults from Fleet with manual override. Same-company
 and shared trucks follow the normal assignment validations and audit history.
 An unassigned Draft trip may use its own reserved Sales truck; trucks assigned
@@ -587,16 +728,18 @@ trip-creation snapshots are not rewritten by operational assignment.
 
 ## Dispatch worklists (19.0.1.14.0)
 
-Under **Transport Operations > Dispatch Lines**, two read-only worklists list the
-confirmed sales order lines a dispatcher still has to act on. Both open one row
-per sales **line** (trips live on lines, not orders) and default to grouping by
-Sales Order.
+Under **Transport Operations > Dispatch Orders**, two read-only worklists list
+the confirmed sales order lines a dispatcher still has to act on. Both open one
+row per sales **line** (trips live on lines, not orders). Both worklists open
+ungrouped with optional data columns.
 
-- **Lines Without Trip** — confirmed product/service lines with no trip.
-  Rows whose line has no truck are highlighted in red.
-- **Lines Without Truck** — confirmed product/service lines with no truck.
-  Draft trips can be created here; operational trucks are assigned from
-  Vehicle Availability or the trip resource dialog before Mark Ready.
+- **Sale Orders - Trip Not Started** — confirmed shipment lines with no trip
+  or an existing Draft/Ready trip. Create Trip opens the saved Draft or existing trip.
+- **Sale Orders without Allocation** — confirmed product lines with no Vehicle.
+  Shows the File Number, shipment columns and ETOL. **Assign Truck** writes the
+  planned truck on the line without creating a trip; operational resources are
+  assigned from Vehicle Availability or the trip resource dialog before
+  Start Trip when needed. An existing unassigned Draft is allocated by Assign Truck.
 
 Search filters **No Trip**, **Has Trip**, **No Truck** and **Has Truck** combine
 with the menu domain, and rows can be grouped by Sales Order or Customer.
@@ -618,20 +761,15 @@ web client caches `/web/action/load` responses on disk, which keeps serving the
 cutoff the action was first loaded with until the module is upgraded or the
 browser site data is cleared.
 
-## Sales Order transport schedule (19.0.1.17.6)
+## Sales line transport schedule
 
-Sales Orders have optional **Planned Departure** and **Planned Arrival**
-datetime fields next to the Client Reference. They are optional and may be
-left empty. A planned arrival earlier than the planned departure is refused on
-the Sales Order.
-
-Every trip created from the order inherits both values. This covers the Sales
-line **Create Trip** button, the **Create Trips** wizard and direct ORM/API
-creation. An explicit trip value wins, including an explicit blank, and each
-trip keeps its creation snapshot: later changes on the Sales Order do not move
-existing trips, and the trip never writes back to Sales. Trips created from an
-order without a schedule keep both fields empty; the existing Ready check still
-requires a planned departure and arrival before a trip can start.
+Sales order lines keep optional **Planned Departure** and **Planned Arrival**
+fields for compatibility. They are hidden from the Sales Order line form and
+remain available only as optional, hidden line columns. Arrival cannot be
+earlier than departure. A new trip still copies these values when they are set
+through import or API. Trips expose ETA and ETOL as read-only source links.
+Planned times are hidden on the trip form and are not required for Ready or Start.
+Later source planned-time changes do not rewrite existing trip snapshots.
 
 ## Scope intentionally deferred
 

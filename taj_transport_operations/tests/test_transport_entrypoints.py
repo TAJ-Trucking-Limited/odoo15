@@ -1,6 +1,9 @@
 """Trip form source selection and Vehicle Availability assignment regressions."""
+import runpy
+
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import tagged
+from odoo.tools import file_path
 
 from .phase3_case import TajTransportPhase3Case
 
@@ -73,11 +76,28 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
     def _vehicle_wizard(self, trip):
         action = self.truck.action_assign_transport_trip()
         return self.env["taj.transport.initial.assignment.wizard"].with_context(action["context"]).create({
-            "trip_id": trip.id, "vehicle_id": self.truck.id,
+            "trip_id": trip.id, "sale_order_id": trip.sale_order_id.id, "vehicle_id": self.truck.id,
             "driver_id": self.driver.id,
         })
 
-    def test_availability_assigns_truck_without_changing_sales_source(self):
+    def test_vehicle_selection_filters_trips_by_sales_order(self):
+        first = self._trip(line=self._sale_line("SELECT1", vehicle_id=False))
+        second = self._trip(line=self._sale_line("SELECT2", vehicle_id=False))
+        action = self.truck.action_assign_transport_trip()
+        wizard = self.env["taj.transport.initial.assignment.wizard"].with_context(
+            action["context"]
+        ).create({"vehicle_id": self.truck.id, "sale_order_id": first.sale_order_id.id, "trip_id": first.id})
+        wizard.sale_order_id = second.sale_order_id
+        wizard._onchange_sale_order_id()
+        self.assertFalse(wizard.trip_id)
+        wizard.trip_id = first
+        with self.assertRaises(UserError):
+            wizard.action_assign_initial_resources()
+        wizard.trip_id = second
+        wizard.action_assign_initial_resources()
+        self.assertEqual(second.current_vehicle_id, self.truck)
+
+    def test_availability_assigns_truck_and_backfills_sales_vehicle(self):
         line = self._sale_line("ASSIGN", vehicle_id=False)
         trip = self._trip(line=line)
         self._vehicle_wizard(trip).action_assign_initial_resources()
@@ -85,8 +105,54 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
         self.assertEqual(trip.current_driver_id, self.driver)
         self.assertEqual(self.truck.transport_availability_state, "assigned")
         self.assertFalse(trip.initial_vehicle_id)
-        self.assertFalse(line.vehicle_id)
+        self.assertEqual(line.vehicle_id, self.truck)
         self.assertEqual(len(trip.assignment_ids), 1)
+
+    def test_duplicating_sales_order_clears_backfilled_vehicle(self):
+        line = self._sale_line("DUPLICATE")
+        duplicate = line.order_id.copy()
+        self.assertFalse(duplicate.order_line.vehicle_id)
+
+    def test_dispatcher_can_backfill_vehicle_without_sales_write_access(self):
+        line = self._sale_line("DISPATCH-BACKFILL", vehicle_id=False)
+        trip = self._trip(line=line)
+        self.env.invalidate_all()
+        self.env["taj.transport.assignment"].with_user(self.dispatcher).create({
+            "trip_id": trip.id, "vehicle_id": self.truck.id, "driver_id": self.driver.id,
+        })
+        self.assertEqual(line.vehicle_id, self.truck)
+
+    def test_upgrade_backfills_empty_vehicle_without_overwriting_source(self):
+        line = self._sale_line("BACKFILL", vehicle_id=False)
+        trip = self._trip(line=line)
+        self._assign(trip)
+        line.vehicle_id = False
+        self.env.flush_all()
+        migrate = runpy.run_path(file_path(
+            "taj_transport_operations/migrations/19.0.1.21.0/post-migration.py"
+        ))["migrate"]
+        migrate(self.env.cr, "19.0.1.20.0")
+        line.invalidate_recordset(["vehicle_id"])
+        self.assertEqual(line.vehicle_id, self.truck)
+        other = self.env["fleet.vehicle"].create({
+            "model_id": self.truck_model.id, "license_plate": "KEEP-SALES-TRUCK",
+        })
+        line.vehicle_id = other
+        self.env.flush_all()
+        migrate(self.env.cr, "19.0.1.20.0")
+        line.invalidate_recordset(["vehicle_id"])
+        self.assertEqual(line.vehicle_id, other)
+
+    def test_uncategorized_vehicle_can_be_assigned_and_marked_ready(self):
+        self.truck.category_id = False
+        trip = self._trip(line=self._sale_line("NO-CATEGORY", vehicle_id=False))
+        self.assertTrue(self.truck.transport_can_assign)
+        self._vehicle_wizard(trip).action_assign_initial_resources()
+        self.assertEqual(trip.current_vehicle_id, self.truck)
+        self.assertFalse(self.truck.category_id)
+        self._plan(trip)
+        trip.action_mark_ready()
+        self.assertEqual(trip.state, "ready")
 
     def test_reserved_truck_can_only_be_assigned_to_its_own_trip(self):
         line = self._sale_line("RESERVED")
@@ -99,8 +165,6 @@ class TestTransportEntrypoints(TajTransportPhase3Case):
         self.assertFalse(reserved_trip.assignment_ids)
         other = self._trip(line=self._sale_line("TARGET", vehicle_id=False))
         wizard = self._vehicle_wizard(other)
-        self.assertIn(reserved_trip, wizard.available_trip_ids)
-        self.assertNotIn(other, wizard.available_trip_ids)
         with self.assertRaises(UserError):
             wizard.action_assign_initial_resources()
         self.assertFalse(other.assignment_ids)

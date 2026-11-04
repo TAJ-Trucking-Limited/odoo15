@@ -4,32 +4,54 @@
         <field name="name">taj.transport.trip.list</field>
         <field name="model">taj.transport.trip</field>
         <field name="arch" type="xml">
-            <list string="Transport Trips" delete="0">
-                <field name="name"/>
-                <field name="sale_order_id"/>
-                <field name="sale_line_id" optional="hide"/>
-                <field name="partner_id"/>
-                <field name="partner_email" optional="hide"/>
-                <field name="transporter_id" optional="show"/>
+            <list string="Trips Summary" delete="0"
+                  decoration-danger="activity_status == 'overdue'"
+                  decoration-success="state == 'completed'"
+                  decoration-info="state in ('draft', 'ready')"
+                  decoration-muted="state == 'cancelled'">
+                <field name="name" optional="show" string="Trip"/>
+                <field name="transport_file_id" optional="show"/>
+                <field name="file_type_id" optional="show"/>
+                <field name="clearing_service" optional="show"/>
+                <field name="sale_order_id" optional="show" string="Sales Order Number"/>
+                <field name="partner_id" optional="show" string="Customer Name"/>
+                <field name="consignee" optional="show"/>
+                <field name="product_id" optional="hide"/>
+                <field name="sale_description" optional="show" string="Product Description"/>
+                <field name="cargo_quantity" optional="hide" string="QTY"/>
+                <field name="current_vehicle_id" optional="show" string="Vehicle"/>
+                <field name="eta" optional="show"/>
+                <field name="etol" optional="show"/>
                 <field name="cargo_type_id" optional="show"/>
-                <field name="transport_reference" optional="hide"/>
-                <field name="initial_vehicle_id" optional="show"/>
-                <field name="current_vehicle_id" optional="show"/>
-                <field name="current_driver_id" optional="hide"/>
+                <field name="size" optional="show"/>
+                <field name="weight" optional="show"/>
+                <field name="cargo_description" optional="show" string="Cargo Desc."/>
+                <field name="special_handling_instructions" optional="show"/>
+                <field name="allocation_date" optional="show"/>
+                <field name="last_milestone_activity" optional="show"/>
+                <field name="last_milestone_at" optional="show"/>
+                <field name="current_driver_id" optional="show" string="Current Driver"/>
+                <field name="milestone_progress" optional="show" widget="progressbar"/>
+                <field name="state" optional="show" string="Trip Status" widget="badge" decoration-info="state in ('draft', 'ready')" decoration-warning="state == 'in_progress'" decoration-success="state == 'completed'" decoration-muted="state == 'cancelled'"/>
+                <field name="activity_status" optional="show" widget="badge" decoration-danger="activity_status == 'overdue'" decoration-success="activity_status == 'recent'"/>
+                <field name="last_activity_at" optional="show"/>
+                <field name="email_position_preview" optional="show" string="Current Position"/>
+                <field name="email_position_map_url" optional="show" string="Map" widget="url" text="View Map"/>
+                <field name="email_position_source" optional="hide" string="Position Source"/>
+                <field name="email_position_updated_at" optional="hide" string="Position Updated At"/>
                 <field name="container_num" optional="show"/>
                 <field name="origin_location" optional="show"/>
                 <field name="destination_location" optional="show"/>
+                <field name="initial_vehicle_id" optional="hide"/>
+                <field name="sale_line_id" optional="hide"/>
+                <field name="partner_email" optional="hide"/>
+                <field name="transporter_id" optional="show"/>
+                <field name="transport_reference" optional="hide"/>
                 <field name="route_id" optional="hide"/>
-                <field name="milestone_progress" optional="hide" widget="progressbar"/>
                 <field name="milestone_open_count" optional="hide"/>
-                <field name="planned_departure_at" optional="hide"/>
-                <field name="planned_arrival_at" optional="hide"/>
-                <field name="state" widget="badge"/>
-                <field name="last_activity_at" optional="show"/>
-                <button name="action_open_record_activity" string="Record Activity"
-                        type="object" icon="fa-pencil"
-                        invisible="state not in ['draft', 'ready', 'in_progress']"/>
-                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+                <field name="actual_departure_at" optional="hide" string="Actual Start"/>
+                <field name="actual_arrival_at" optional="hide"/>
+                <field name="company_id" optional="hide" groups="base.group_multi_company"/>
             </list>
         </field>
     </record>
@@ -48,12 +70,9 @@
                             type="object" class="btn-secondary"
                             groups="taj_transport_operations.group_transport_user"
                             invisible="not id"/>
-                    <button string="Mark Ready" name="action_mark_ready"
+                    <button string="Start Trip" name="action_open_start_trip_wizard"
                             type="object" class="btn-primary"
-                            invisible="state != 'draft'"/>
-                    <button string="Start Trip" name="action_start_trip"
-                            type="object" class="btn-primary"
-                            invisible="state != 'ready'"/>
+                            invisible="state not in ('draft', 'ready')"/>
                     <button string="Complete Trip" name="action_complete_trip"
                             type="object" class="btn-primary"
                             invisible="state != 'in_progress'"/>
@@ -113,6 +132,42 @@
                         </group>
                     </group>
                     <notebook>
+                        <page string="Summary" name="trip_summary">
+                            <group>
+                                <group string="Shipment">
+                                    <field name="transport_file_id" readonly="1"/>
+                                    <field name="file_type_id" readonly="1"/>
+                                    <field name="clearing_service" readonly="1"/>
+                                    <field name="product_id" readonly="1"/>
+                                    <field name="sale_description" string="Product Description" readonly="1"/>
+                                    <field name="consignee" readonly="1"/>
+                                    <field name="container_num" readonly="1"/>
+                                    <field name="eta" readonly="1"/>
+                                    <field name="etol" readonly="1"/>
+                                    <field name="cargo_type_id" readonly="1"/>
+                                    <field name="size" readonly="1"/>
+                                    <field name="weight" readonly="1"/>
+                                    <field name="cargo_quantity" string="QTY" readonly="1"/>
+                                    <field name="cargo_description" readonly="1"/>
+                                    <field name="special_handling_instructions" readonly="1"/>
+                                </group>
+                                <group string="Trip Progress">
+                                    <field name="current_vehicle_id" readonly="1"/>
+                                    <field name="current_driver_id" readonly="1"/>
+                                    <field name="allocation_date" readonly="1"/>
+                                    <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')"/>
+                                    <field name="last_milestone_activity" readonly="1"/>
+                                    <field name="last_milestone_at" readonly="1"/>
+                                    <field name="milestone_progress" widget="progressbar" readonly="1"/>
+                                    <field name="activity_status" widget="badge" readonly="1"/>
+                                    <field name="last_activity_at" readonly="1"/>
+                                    <field name="email_position_preview" string="Current Position" readonly="1"/>
+                                    <field name="email_position_source" readonly="1"/>
+                                    <field name="email_position_updated_at" readonly="1"/>
+                                    <field name="email_position_map_url" widget="url" text="View on Map" readonly="1" invisible="not email_position_map_url"/>
+                                </group>
+                            </group>
+                        </page>
                         <page string="Activity History" name="activity_history" invisible="not id">
                             <group>
                                 <field name="last_activity_at" readonly="1"/>
@@ -131,13 +186,6 @@
                         </page>
                         <page string="Commercial" name="commercial_details">
                             <group>
-                                <group string="Sales Commercial Data (Read Only)">
-                                    <field name="customer_reference" readonly="1"/>
-                                    <field name="source_document" readonly="1"/>
-                                    <field name="price_unit" readonly="1"/>
-                                    <field name="currency_id" readonly="1"/>
-                                    <field name="payment_term_id" readonly="1"/>
-                                </group>
                                 <group string="Operational Commercial Data">
                                     <field name="transporter_id" readonly="state in ('completed', 'cancelled')"
                                            options="{'no_create': True, 'no_create_edit': True}"/>
@@ -195,14 +243,12 @@
                                             invisible="state != 'draft' or (origin_location and destination_location)"/>
                                 </group>
                                 <group string="Schedule">
-                                    <field name="planned_departure_at" readonly="state in ('completed', 'cancelled')"/>
-                                    <field name="planned_arrival_at" readonly="state in ('completed', 'cancelled')"/>
-                                    <field name="actual_departure_at" readonly="state in ('completed', 'cancelled')"/>
+                                    <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')"/>
                                     <field name="actual_arrival_at" readonly="state in ('completed', 'cancelled')"/>
                                 </group>
                             </group>
                             <p class="text-muted">
-                                Enter route details and planned times during planning.
+                                Enter route details during planning.
                                 Actual times are entered manually for now. Selecting a
                                 route template copies its checkpoints into the
                                 Milestones tab; editing the template later never
@@ -435,7 +481,7 @@
     </record>
 
     <record id="action_transport_trip" model="ir.actions.act_window">
-        <field name="name">Transport Trips</field>
+        <field name="name">Trips Summary</field>
         <field name="res_model">taj.transport.trip</field>
         <field name="view_mode">list,form</field>
         <field name="context">{'transport_trip_entry': True}</field>
@@ -447,9 +493,9 @@
     </record>
 
     <menuitem id="menu_transport_operations" name="Transport Operations"
-              groups="taj_transport_operations.group_transport_user" sequence="50"/>
-    <menuitem id="menu_transport_trips" name="Trips" parent="menu_transport_operations"
-              action="action_transport_trip" sequence="10"
+              groups="taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry,sales_team.group_sale_salesman" sequence="50"/>
+    <menuitem id="menu_transport_trips" name="Trips Summary" parent="menu_transport_operations"
+              action="action_transport_trip" sequence="80"
               groups="taj_transport_operations.group_transport_user"/>
     <menuitem id="menu_transport_configuration" name="Configuration"
               parent="menu_transport_operations" sequence="90"

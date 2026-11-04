@@ -8,8 +8,9 @@ from unittest.mock import patch
 
 from odoo import Command, fields
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
+from odoo.tests.common import new_test_user
 
 
 @tagged("post_install", "-at_install")
@@ -215,6 +216,51 @@ class TestTransportSalesAccountingBoundary(AccountTestInvoicingCommon):
         self.assertEqual(trip.initial_vehicle_id, self.truck)
         self.assertEqual(lines.vehicle_id, self.truck)
 
+    def test_salesperson_can_invoice_locked_order_without_edit_permission(self):
+        order, lines = self._sale()
+        salesperson = new_test_user(self.env, login="locked_order_invoicing_salesperson",
+                                    groups="base.group_user,sales_team.group_sale_salesman")
+        order.user_id = salesperson
+        self.assertTrue(order.locked)
+        invoice = order.with_user(salesperson)._create_invoices()
+        self.assertEqual(len(invoice), 1)
+        self.assertEqual(invoice.sudo().amount_untaxed, order.amount_untaxed)
+        self.assertEqual(invoice.sudo().invoice_line_ids.sale_line_ids, lines)
+
+    def test_salesperson_can_create_down_payment_on_locked_order(self):
+        salesperson = new_test_user(self.env, login="locked_order_down_payment_salesperson",
+                                    groups="base.group_user,sales_team.group_sale_salesman")
+        accountant = new_test_user(self.env, login="locked_order_down_payment_accountant",
+                                   groups="base.group_user,sales_team.group_sale_salesman_all_leads,account.group_account_invoice")
+        for method, values, expected in (
+            ("percentage", {"amount": 20}, 500),
+            ("fixed", {"fixed_amount": 300}, 300),
+        ):
+            with self.subTest(method=method):
+                order, lines = self._sale()
+                order.user_id = salesperson
+                wizard = self.env["sale.advance.payment.inv"].with_user(salesperson).create({
+                    "sale_order_ids": [Command.set(order.ids)],
+                    "advance_payment_method": method, **values,
+                })
+                wizard.create_invoices()
+                self.assertTrue(order.locked)
+                self.assertEqual(lines.price_unit, 1250)
+                self.assertEqual(order.invoice_ids.amount_untaxed, expected)
+                down_payments = order.order_line.filtered(lambda line: line.is_downpayment and not line.display_type)
+                with self.assertRaises(AccessError), self.env.cr.savepoint():
+                    down_payments.with_user(salesperson).write({"price_unit": 999})
+                invoice = order.invoice_ids.with_user(accountant)
+                invoice.action_post()
+                self.assertEqual(invoice.state, "posted")
+                invoice.button_draft()
+                invoice.button_cancel()
+                self.assertEqual(invoice.state, "cancel")
+                invoice.unlink()
+                self.assertFalse(down_payments.exists())
+                self.assertTrue(order.locked)
+                self.assertEqual(lines.price_unit, 1250)
+
     def test_invoicing_after_trip_completion_uses_original_sales_line(self):
         order, lines = self._sale()
         before_sales_totals = (order.amount_total, order.amount_tax)
@@ -294,6 +340,7 @@ class TestTransportSalesAccountingBoundary(AccountTestInvoicingCommon):
         tax = self.env["account.tax"].search(tax_domain, limit=1)
         if not tax:
             self.skipTest("No eligible configured Sales VAT tax on this test company.")
+        order.action_unlock()
         order.write({"vat_tax_id": tax.id})
         self.assertTrue(order.vat_percentage_active)
         self.assertEqual(lines.tax_ids, tax)

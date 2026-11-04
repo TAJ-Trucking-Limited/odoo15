@@ -290,7 +290,7 @@ class TestTransportTripFoundation(TransactionCase):
             len(root.xpath("//filter[@name='by_transporter']")), 1
         )
 
-    def test_batch_four_initial_assignment_preserves_truckless_sales_snapshot_and_invoice(self):
+    def test_batch_four_initial_assignment_backfills_vehicle_and_preserves_trip_snapshot(self):
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_no_truck.id,
         })
@@ -351,8 +351,10 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(trip.current_co_driver_id, co_driver)
         self.assertEqual(trip.current_trailer_id, trailer)
         self.assertFalse(trip.initial_vehicle_id)
-        self.assertFalse(self.line_no_truck.vehicle_id)
-        self.assertEqual(self.line_no_truck._prepare_invoice_line(), before_invoice_line)
+        self.assertEqual(self.line_no_truck.vehicle_id, self.truck)
+        self.assertEqual(self.line_no_truck._prepare_invoice_line(), {
+            **before_invoice_line, "vehicle_id": self.truck.id,
+        })
 
         with self.assertRaises(UserError):
             trip.action_open_initial_assignment_wizard()
@@ -660,7 +662,7 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertEqual(current.reason, "Truck breakdown")
         self.assertEqual(current.notes, "Replacement truck sent by dispatcher")
         self.assertEqual(self.line_no_truck._prepare_invoice_line(), before_invoice)
-        self.assertFalse(self.line_no_truck.vehicle_id)
+        self.assertEqual(self.line_no_truck.vehicle_id, self.truck)
         self.assertFalse(trip.initial_vehicle_id)
         self.assertEqual(trip.state, "draft")
         self.assertIn(
@@ -1290,13 +1292,14 @@ class TestTransportTripFoundation(TransactionCase):
         )
         for name in (
             "origin_location", "destination_location",
-            "planned_departure_at", "planned_arrival_at",
             "actual_departure_at", "actual_arrival_at", "route_notes",
         ):
             self.assertEqual(
                 len(root.xpath(f"//page[@name='route_timing']//field[@name='{name}']")),
                 1, name,
             )
+        for name in ("planned_departure_at", "planned_arrival_at"):
+            self.assertFalse(root.xpath(f"//page[@name='route_timing']//field[@name='{name}']"))
 
     def test_batch_two_commercial_source_fields_follow_sales(self):
         self.order.write({
@@ -1408,13 +1411,11 @@ class TestTransportTripFoundation(TransactionCase):
             self.assertEqual(
                 len(root.xpath(f"//page[@name='{name}']")), 1,
             )
-        for name in (
-            "customer_reference", "source_document", "payment_term_id",
-            "cargo_quantity", "cargo_uom_id", "file_name",
-            "sale_description", "price_unit", "currency_id",
-        ):
+        for name in ("customer_reference", "source_document", "payment_term_id", "price_unit", "currency_id"):
+            self.assertFalse(root.xpath(f"//field[@name='{name}']"), name)
+        for name in ("cargo_quantity", "cargo_uom_id", "file_name", "sale_description"):
             self.assertEqual(
-                len(root.xpath(f"//field[@name='{name}'][@readonly='1']")),
+                len(root.xpath(f"//page[@name='cargo_details']//field[@name='{name}'][@readonly='1']")),
                 1,
                 name,
             )
@@ -1423,10 +1424,10 @@ class TestTransportTripFoundation(TransactionCase):
             "cargo_description", "special_handling_instructions",
         ):
             self.assertEqual(
-                len(root.xpath(f"//field[@name='{name}']")), 1, name,
+                len(root.xpath(f"//page[@name='commercial_details' or @name='cargo_details']//field[@name='{name}']")), 1, name,
             )
             self.assertFalse(
-                root.xpath(f"//field[@name='{name}'][@readonly='1']"),
+                root.xpath(f"//page[@name='commercial_details' or @name='cargo_details']//field[@name='{name}'][@readonly='1']"),
                 name,
             )
 

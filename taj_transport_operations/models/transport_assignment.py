@@ -97,7 +97,7 @@ class TajTransportAssignment(models.Model):
                         raise ValidationError(_(
                             "%s is archived in Fleet. Choose an active %s."
                         ) % (vehicle.display_name, kind))
-                    if vehicle.category_id != category:
+                    if vehicle.category_id != category and (kind != "truck" or vehicle.category_id):
                         raise ValidationError(_(
                             "%(vehicle)s has Fleet category %(actual)s; expected "
                             "%(expected)s. A Fleet administrator must correct "
@@ -219,13 +219,27 @@ class TajTransportAssignment(models.Model):
         prepared = [
             self._prepare_assignment_values(entry) for entry in vals_list
         ]
-        return super().create(prepared)
+        assignments = super().create(prepared)
+        assignments._backfill_sale_line_vehicle()
+        return assignments
 
     @api.model
     def _create_from_replacement(self, vals):
         """Private entrypoint: only a locked, authorized replacement uses this."""
         prepared = self._prepare_assignment_values(vals, replacement=True)
-        return super().create([prepared])
+        assignment = super().create([prepared])
+        assignment._backfill_sale_line_vehicle()
+        return assignment
+
+    def _backfill_sale_line_vehicle(self):
+        """Fill an empty commercial truck once; replacements keep its snapshot."""
+        for assignment in self:
+            line = assignment.trip_id.sale_line_id
+            line._lock_transport_vehicle()
+            if assignment.vehicle_id and not line.vehicle_id:
+                # Assignment creation has checked trip write access. Dispatchers
+                # may fill this one field without general Sales write access.
+                line.sudo().write({"vehicle_id": assignment.vehicle_id.id})
 
     def _close_for_replacement(self, effective_to):
         """Only close the current row; keep every other field immutable."""

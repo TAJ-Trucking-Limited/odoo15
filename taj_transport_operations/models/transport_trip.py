@@ -519,8 +519,8 @@ class TajTransportTrip(models.Model):
             "initial_vehicle_id": line.vehicle_id.id or False,
             "origin_location": route.origin_location if (route.origin_location or "").strip() else origin or False,
             "destination_location": route.destination_location if (route.destination_location or "").strip() else destination or False,
-            "planned_departure_at": line.order_id.transport_planned_departure_at or False,
-            "planned_arrival_at": line.order_id.transport_planned_arrival_at or False,
+            "planned_departure_at": line.transport_planned_departure_at or False,
+            "planned_arrival_at": line.transport_planned_arrival_at or False,
         }
 
     @api.onchange("sale_order_id")
@@ -719,20 +719,19 @@ class TajTransportTrip(models.Model):
         return vals
 
     @api.model
-    def _default_schedule_from_sale_order(self, vals, line):
-        """Copy the optional Sales Order schedule unless the caller set it.
+    def _default_schedule_from_sale_line(self, vals, line):
+        """Copy the optional sales line schedule unless the caller set it.
 
         Explicit values (including an explicit blank) win, matching the cargo
         snapshot behaviour. Existing trips are never updated by later edits.
         """
-        order = line.order_id
         if (
             "planned_departure_at" not in vals
-            and order.transport_planned_departure_at
+            and line.transport_planned_departure_at
         ):
-            vals["planned_departure_at"] = order.transport_planned_departure_at
-        if "planned_arrival_at" not in vals and order.transport_planned_arrival_at:
-            vals["planned_arrival_at"] = order.transport_planned_arrival_at
+            vals["planned_departure_at"] = line.transport_planned_departure_at
+        if "planned_arrival_at" not in vals and line.transport_planned_arrival_at:
+            vals["planned_arrival_at"] = line.transport_planned_arrival_at
         return vals
 
     @api.model
@@ -745,6 +744,7 @@ class TajTransportTrip(models.Model):
         ).exists()
         self._validate_sale_line(line)
         line.check_access("read")
+        line._lock_transport_vehicle(creating_trip=True)
         vals = dict(entry)
         if vals.get("sale_order_id") and vals["sale_order_id"] != line.order_id.id:
             raise ValidationError(_("The sales line must belong to the selected Sales Order."))
@@ -757,7 +757,7 @@ class TajTransportTrip(models.Model):
         # caller's values so the product-name fallback can still apply.
         vals = self._apply_explicit_route_locations(vals)
         vals = self._suggest_missing_route_values(vals, line)
-        vals = self._default_schedule_from_sale_order(vals, line)
+        vals = self._default_schedule_from_sale_line(vals, line)
         if vals.get("state", "draft") != "draft":
             raise ValidationError(_("Transport trips must start in Draft."))
         if self._workflow_fields.intersection(vals) - {"state"}:
@@ -789,9 +789,13 @@ class TajTransportTrip(models.Model):
         ])._lock_for_transport_assignment()
         trips = super().create(new_vals_list)
         trips._assign_initial_fleet_defaults()
-        # Older confirmed orders receive a file only for the line used here.
-        # The file's stored trip link then follows the same immutable line.
+        # Older confirmed orders receive a grouped file for their shipment lines.
         self.env["taj.transport.trip.file"]._ensure_for_sale_lines(trips.sale_line_id)
+        for trip in trips:
+            for file in trip.sale_line_id.transport_file_line_ids.sudo().file_id:
+                file._log_shipment_change(_("Linked trip %(trip)s to shipment line #%(line)s.") % {
+                    "trip": trip.name, "line": trip.sale_line_id.id,
+                })
         return trips
 
     def write(self, vals):
@@ -875,14 +879,6 @@ class TajTransportTrip(models.Model):
             raise ValidationError(_("Enter an origin before marking the trip Ready."))
         if not (self.destination_location or "").strip():
             raise ValidationError(_("Enter a destination before marking the trip Ready."))
-        if not self.planned_departure_at or not self.planned_arrival_at:
-            raise ValidationError(_(
-                "Both planned departure and planned arrival are required."
-            ))
-        if self.planned_arrival_at <= self.planned_departure_at:
-            raise ValidationError(_(
-                "Planned arrival must be later than planned departure."
-            ))
         if not assignment.vehicle_id:
             raise ValidationError(_("Assign a truck before marking the trip Ready."))
         if not assignment.driver_id:
@@ -897,9 +893,11 @@ class TajTransportTrip(models.Model):
                 category = self.env.ref(
                     "taj_transport_operations.fleet_category_" + kind,
                 )
-                if not vehicle.active or vehicle.category_id != category:
+                if not vehicle.active or (
+                    vehicle.category_id != category and (kind != "truck" or vehicle.category_id)
+                ):
                     raise ValidationError(_(
-                        "%s must be active and categorized as %s in Fleet."
+                        "%s must be active and have a compatible Fleet category for %s."
                     ) % (vehicle.display_name, kind.title()))
                 if vehicle.company_id and vehicle.company_id != self.company_id:
                     raise ValidationError(_(
@@ -926,11 +924,22 @@ class TajTransportTrip(models.Model):
         })
         return True
 
-    def action_start_trip(self):
+    def action_open_start_trip_wizard(self):
+        self.ensure_one()
+        self.check_access("write")
+        if self.state not in ("draft", "ready"):
+            raise UserError(_("Only trips that have not started can be started."))
+        return {
+            "type": "ir.actions.act_window", "name": _("Start Trip"),
+            "res_model": "taj.transport.start.trip.wizard", "view_mode": "form", "target": "new",
+            "context": {"default_trip_id": self.id},
+        }
+
+    def action_start_trip(self, actual_start_at=None):
         self.ensure_one()
         self._lock_for_transition()
-        if self.state != "ready":
-            raise UserError(_("Only Ready trips can be started."))
+        if self.state not in ("draft", "ready"):
+            raise UserError(_("Only trips that have not started can be started."))
         assignment = self._locked_active_assignment()
         self._validate_ready_requirements(assignment)
         now = fields.Datetime.now()
@@ -942,7 +951,7 @@ class TajTransportTrip(models.Model):
             raise ValidationError(_(
                 "Clear the actual arrival before starting the trip."
             ))
-        departure = self.actual_departure_at or now
+        departure = fields.Datetime.to_datetime(actual_start_at) if actual_start_at else self.actual_departure_at or now
         if departure > now:
             raise ValidationError(_("Actual departure cannot be in the future."))
         if departure < assignment.effective_from:
@@ -954,6 +963,7 @@ class TajTransportTrip(models.Model):
             "started_at": now,
             "actual_departure_at": departure,
         })
+        self._validate_milestone_timeline()
         return True
 
     def action_complete_trip(self):

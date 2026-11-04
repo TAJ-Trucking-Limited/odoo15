@@ -1,4 +1,7 @@
 from . import create_trips_wizard
+from . import duplicate_sale_line_wizard
+from . import assign_truck_wizard
+from . import start_trip_wizard
 from . import trip_route_chooser_wizard
 from . import initial_resource_assignment_wizard
 from . import replace_resource_assignment_wizard
