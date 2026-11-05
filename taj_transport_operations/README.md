@@ -2,6 +2,10 @@
 
 ## Dispatch and Trips Summary (19.0.1.26.0)
 
+The Sale Orders - Trip Not Started worklist uses wider default columns and wraps
+long labels and values. Scroll horizontally to reach the remaining fields;
+column Show/Hide and manual resizing remain available.
+
 ETA is a datetime in version 19.0.1.27.0. Date-only values from earlier versions
 are migrated with a placeholder of 12:00 noon in the Asia/Damascus timezone;
 that placeholder is not a recorded shipment arrival time.

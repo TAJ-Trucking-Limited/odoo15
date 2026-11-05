@@ -166,25 +166,25 @@
         <field name="name">sale.order.line.dispatch.list</field>
         <field name="model">sale.order.line</field>
         <field name="arch" type="xml">
-            <list string="Sale Orders - Trip Not Started" create="0" edit="0" delete="0">
-                <field name="transport_file_id" optional="show"/>
-                <field name="file_type_id" optional="show"/>
-                <field name="clearing_service" optional="show"/>
-                <field name="order_id" optional="show" string="Sales Order Number"/>
-                <field name="order_partner_id" optional="show" string="Customer Name"/>
-                <field name="consignee" optional="show"/>
-                <field name="product_id" optional="hide"/>
-                <field name="name" optional="show" string="Product Description"/>
-                <field name="product_uom_qty" optional="hide" string="QTY"/>
-                <field name="vehicle_id" optional="show"/>
-                <field name="eta" optional="show" string="ETA (Shipment Arrival)"/>
-                <field name="etol" optional="show" string="ETOL (Estimated Loading Date)"/>
-                <field name="cargo_type_id" optional="show"/>
-                <field name="size" optional="show"/>
-                <field name="weight" optional="show"/>
-                <field name="cargo_description" optional="show" string="Cargo Desc."/>
-                <field name="special_handling_instructions" optional="show"/>
-                <field name="allocation_date" optional="show"/>
+            <list string="Sale Orders - Trip Not Started" class="o_taj_dispatch_readable" create="0" edit="0" delete="0">
+                <field name="transport_file_id" optional="show" width="160px"/>
+                <field name="file_type_id" optional="show" width="160px"/>
+                <field name="clearing_service" optional="show" width="150px"/>
+                <field name="order_id" optional="show" string="Sales Order Number" width="160px"/>
+                <field name="order_partner_id" optional="show" string="Customer Name" width="220px"/>
+                <field name="consignee" optional="show" width="220px"/>
+                <field name="product_id" optional="hide" width="220px"/>
+                <field name="name" optional="show" string="Product Description" width="320px"/>
+                <field name="product_uom_qty" optional="hide" string="QTY" width="100px"/>
+                <field name="vehicle_id" optional="show" width="190px"/>
+                <field name="eta" optional="show" string="ETA (Shipment Arrival)" width="190px"/>
+                <field name="etol" optional="show" string="ETOL (Estimated Loading Date)" width="190px"/>
+                <field name="cargo_type_id" optional="show" width="180px"/>
+                <field name="size" optional="show" width="120px"/>
+                <field name="weight" optional="show" width="120px"/>
+                <field name="cargo_description" optional="show" string="Cargo Desc." width="300px"/>
+                <field name="special_handling_instructions" optional="show" width="300px"/>
+                <field name="allocation_date" optional="show" width="190px"/>
                 <button name="action_open_or_create_transport_trip" string="Create Trip"
                         type="object" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user"/>

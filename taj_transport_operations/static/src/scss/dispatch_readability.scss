@@ -1,0 +1,14 @@
+// Keep shipment values readable in the Trip Not Started worklist only.
+.o_taj_dispatch_readable .o_list_table {
+    thead th .text-truncate,
+    tbody > tr > td.o_data_cell,
+    tbody > tr > td.o_data_cell .o_field_widget,
+    tbody > tr > td.o_data_cell .o_many2one,
+    tbody > tr > td.o_data_cell .text-truncate {
+        // Odoo's list cells and Bootstrap's text-truncate apply ellipses.
+        overflow: visible !important;
+        overflow-wrap: anywhere;
+        text-overflow: clip !important;
+        white-space: normal !important;
+    }
+}
