@@ -14,7 +14,7 @@ class SaleOrder(models.Model):
     @api.depends("state")
     @api.depends_context("uid")
     def _compute_transport_confirmed_readonly(self):
-        allowed = self.env.su or self.env.user.has_group("taj_transport_operations.group_edit_confirmed_sale_orders")
+        allowed = self.env.su
         for order in self:
             order.transport_confirmed_readonly = order.state in ("sale", "done") and not allowed
 
@@ -22,10 +22,9 @@ class SaleOrder(models.Model):
         if self.env.context.get("_confirmed_sale_accounting") is _CONFIRMED_SALE_ACCOUNTING:
             return
         if (not self.env.su
-                and not self.env.user.has_group("taj_transport_operations.group_edit_confirmed_sale_orders")
                 and any(order.state in ("sale", "done") for order in self)):
             raise AccessError(_(
-                "You need the Edit Confirmed Sales Orders permission to modify a confirmed sales order."
+                "Confirmed sales orders are locked. Authorized users can use Edit Unit Price on a line."
             ))
 
     def _should_be_locked(self):
@@ -78,12 +77,12 @@ class SaleOrder(models.Model):
         string="Transport Trips",
     )
     trip_file_ids = fields.One2many(
-        "taj.transport.trip.file", "sale_order_id", string="Trips",
+        "taj.transport.trip.file", "sale_order_id", string="Trip File",
         readonly=True, copy=False,
         groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry",
     )
     trip_file_count = fields.Integer(
-        string="Trips", compute="_compute_trip_file_count",
+        string="Trip File", compute="_compute_trip_file_count",
         groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry",
     )
 

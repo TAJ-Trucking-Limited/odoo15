@@ -493,9 +493,10 @@ def prepare(shell_env):
                 time.sleep(1.1)
             trip.action_complete_trip()
         data.flush_all()
-        trip_file = data["taj.transport.trip.file"].search([("sale_line_id", "=", line.id)])
-        if (trip.state != target or len(trip_file) != 1 or trip_file.trip_id != trip
-                or trip_file.sale_order_id != order or trip_file.container_number != line.container_num
+        file_row = data["taj.transport.trip.file.line"].search([("sale_line_id", "=", line.id)])
+        trip_file = file_row.file_id
+        if (trip.state != target or len(trip_file) != 1 or file_row.trip_id != trip
+                or trip_file.sale_order_id != order or file_row.container_num != line.container_num
                 or trip_file.bill_of_lading or order.invoice_ids):
             raise RuntimeError("Prepared records failed consistency checks; rolling back the entire run.")
         if trip.origin_location != route.origin_location or trip.destination_location != route.destination_location:

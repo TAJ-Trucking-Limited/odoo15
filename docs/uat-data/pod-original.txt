@@ -1,0 +1,10 @@
+TAJ TRANSPORT OPERATIONS - UAT DOCUMENT ONLY
+
+Proof of Delivery sample - original version
+Delivery reference: UAT-POD-001
+Customer: UAT Customer A
+Received items: 1 test cargo unit
+Condition: Received for manual software acceptance testing.
+Delivery notes: Original upload; verify the filename and downloaded content.
+
+This is synthetic test data, not an actual delivery record or signature.

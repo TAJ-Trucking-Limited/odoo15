@@ -12,7 +12,7 @@ class TransportTripSummary(models.Model):
     file_type_id = fields.Many2one(related="sale_line_id.file_type_id")
     clearing_service = fields.Selection(related="sale_line_id.clearing_service")
     product_id = fields.Many2one(related="sale_line_id.product_id", string="Product")
-    eta = fields.Date(related="sale_line_id.eta", string="ETA (Shipment Arrival)")
+    eta = fields.Datetime(related="sale_line_id.eta", string="ETA (Shipment Arrival)")
     etol = fields.Date(related="sale_line_id.etol", string="ETOL (Estimated Loading Date)")
     allocation_date = fields.Datetime(related="sale_line_id.allocation_date")
     last_milestone_id = fields.Many2one("taj.transport.milestone", compute="_compute_last_milestone")

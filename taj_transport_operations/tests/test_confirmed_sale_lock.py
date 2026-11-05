@@ -5,7 +5,7 @@ from lxml import etree
 
 from odoo import Command
 from odoo.exceptions import AccessError
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import Form, TransactionCase, tagged
 from odoo.tests.common import new_test_user
 from odoo.tools import file_path
 
@@ -81,24 +81,60 @@ class TestConfirmedSaleLock(TransactionCase):
         with self.assertRaises(AccessError), self.env.cr.savepoint():
             self.env["sale.order.line"].with_user(self.salesperson).create({"product_id": self.product.id})
 
-    def test_permission_allows_unlock_and_edit_but_others_stay_blocked(self):
+    def test_price_permission_allows_only_price_change(self):
         self._confirm()
         self._grant_edit_permission()
         order = self.order.with_user(self.salesperson)
-        order.action_unlock()
-        order.write({"client_order_ref": "Approved change"})
-        self.line.with_user(self.salesperson).write({"price_unit": 150, "container_num": "APPROVED"})
-        wizard = self.env["taj.transport.duplicate.sale.line.wizard"].with_user(self.salesperson).create({
-            "sale_order_id": order.id, "source_line_id": self.line.id, "clean_mode": "all",
+        original_taxes = self.line.tax_ids
+        wizard = self.env["taj.transport.sale.price.wizard"].with_user(self.salesperson).create({
+            "sale_line_id": self.line.id, "price_unit": 150,
         })
-        wizard.action_duplicate()
-        self.assertEqual(len(order.order_line), 2)
+        wizard.action_update_price()
         self.assertEqual(self.line.price_unit, 150)
+        self.assertEqual(self.line.tax_ids, original_taxes)
+        self.assertEqual(self.line.price_subtotal, 150)
+        self.assertTrue(order.locked)
+        self.assertTrue(order.message_ids.filtered(lambda message: "Unit price" in (message.body or "")))
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            order.action_unlock()
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            order.write({"client_order_ref": "Not allowed"})
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.line.with_user(self.salesperson).write({"container_num": "Not allowed"})
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.line.with_user(self.salesperson).with_context(_confirmed_price_write=True).write({"price_unit": 160})
         self.salesperson.group_ids -= self.env.ref("taj_transport_operations.group_edit_confirmed_sale_orders")
         with self.assertRaises(AccessError), self.env.cr.savepoint():
             order.write({"client_order_ref": "Unapproved change"})
         with self.assertRaises(AccessError), self.env.cr.savepoint():
             self.line.with_user(self.salesperson).write({"price_unit": 200})
+
+    def test_price_wizard_rejects_salesperson_without_price_permission(self):
+        self._confirm()
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.env["taj.transport.sale.price.wizard"].with_user(self.salesperson).create({
+                "sale_line_id": self.line.id, "price_unit": 5,
+            })
+        self.assertEqual(self.line.price_unit, 100)
+
+    def test_price_dialog_defaults_to_selected_line_and_current_price(self):
+        self._confirm()
+        self._grant_edit_permission()
+        action = self.line.with_user(self.salesperson).action_open_confirmed_price_wizard()
+        dialog = Form(self.env[action["res_model"]].with_user(self.salesperson).with_context(**action["context"]))
+        self.assertEqual(dialog.sale_line_id.id, self.line.id)
+        self.assertEqual(dialog.price_unit, 100)
+        dialog.price_unit = 120
+        dialog.save().action_update_price()
+        self.assertEqual(self.line.price_unit, 120)
+        self.assertTrue(self.order.locked)
+
+    def test_sales_line_does_not_offer_create_trip(self):
+        view = self.env["sale.order"].get_view(
+            view_id=self.env.ref("sale.view_order_form").id, view_type="form",
+        )
+        arch = etree.fromstring(view["arch"])
+        self.assertFalse(arch.xpath("//field[@name='order_line']/list/button[@string='Create Trip']"))
 
     def test_sales_manager_needs_explicit_permission_too(self):
         order = self._confirm()
@@ -117,13 +153,13 @@ class TestConfirmedSaleLock(TransactionCase):
         self.assertFalse(duplicate.locked)
         duplicate.order_line.write({"price_unit": 90})
 
-    def test_authorized_unlock_button_is_hidden_without_permission(self):
+    def test_unlock_button_is_hidden_even_with_price_permission(self):
         view_id = self.env.ref("sale.view_order_form").id
         view = self.env["sale.order"].with_user(self.salesperson).get_view(view_id=view_id, view_type="form")
-        self.assertFalse(etree.fromstring(view["arch"]).xpath("//button[@name='action_unlock']"))
+        self.assertFalse(etree.fromstring(view["arch"]).xpath("//button[@name='action_unlock'][not(@invisible='1')]"))
         self._grant_edit_permission()
         view = self.env["sale.order"].with_user(self.salesperson).get_view(view_id=view_id, view_type="form")
-        self.assertTrue(etree.fromstring(view["arch"]).xpath("//button[@name='action_unlock']"))
+        self.assertFalse(etree.fromstring(view["arch"]).xpath("//button[@name='action_unlock'][not(@invisible='1')]"))
 
     def test_order_form_locks_all_editable_header_fields(self):
         view = self.env["sale.order"].get_view(

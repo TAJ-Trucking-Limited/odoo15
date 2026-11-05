@@ -1,5 +1,10 @@
 # TAJ Transport Operations — Phase 3 (route templates and trip milestones) UAT
 
+For the current browser-based manual acceptance run, including version
+`19.0.1.11.0`, use [the full module UAT guide](TRANSPORT_FULL_UAT.md).
+The material below is the earlier Phase 3 guide and includes developer-only
+automated test instructions; those are not required for the manual run.
+
 **Scope:** branch of this delivery, TAJ Transport Operations version
 `19.0.1.10.0`, including Vehicle Availability and immediate Draft reservations.
 

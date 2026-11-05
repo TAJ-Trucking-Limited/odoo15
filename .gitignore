@@ -4,3 +4,4 @@ __pycache__/
 .agents/
 .worktrees/
 .DS_Store
+/.claude

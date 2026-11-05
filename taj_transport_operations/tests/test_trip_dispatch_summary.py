@@ -158,6 +158,39 @@ class TestTripDispatchSummary(TransactionCase):
         self.assertEqual(trip.allocation_date, self.line.allocation_date)
         self.assertEqual(trip.consignee, "Receiver")
 
+    def test_eta_keeps_time_across_sales_file_and_trip(self):
+        self.line.write({"eta": "2026-12-01 14:37:00"})
+        trip = self._trip()
+        row = self.line.transport_file_line_ids
+        self.assertEqual(fields.Datetime.to_string(row.eta), "2026-12-01 14:37:00")
+        self.assertEqual(trip.eta, row.eta)
+        row.write({"eta": "2026-12-02 17:45:00"})
+        self.assertEqual(fields.Datetime.to_string(self.line.eta), "2026-12-02 17:45:00")
+        self.assertEqual(trip.eta, self.line.eta)
+        self.assertEqual(self.line.price_unit, 100)
+        self.assertIn("2026-12-02 17:45:00 UTC", self.order.trip_file_ids.etas)
+
+    def test_eta_date_migration_uses_noon_damascus_and_preserves_null(self):
+        spec = spec_from_file_location("eta_migration", Path(__file__).parents[1] / "migrations/19.0.1.27.0/pre-migration.py")
+        migration = module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        cr = self.env.cr
+        cr.execute("SHOW search_path")
+        original_path = cr.fetchone()[0]
+        try:
+            cr.execute("CREATE TEMP TABLE sale_order_line (id integer, eta date) ON COMMIT DROP")
+            cr.execute("INSERT INTO sale_order_line (id, eta) VALUES (1, '2026-12-01'), (2, NULL)")
+            cr.execute("SET LOCAL search_path TO pg_temp, public")
+            migration.migrate(cr, "19.0.1.26.0")
+            migration.migrate(cr, "19.0.1.26.0")
+            cr.execute("SELECT eta FROM sale_order_line ORDER BY id")
+            rows = cr.fetchall()
+            self.assertEqual(fields.Datetime.to_string(rows[0][0]), "2026-12-01 09:00:00")
+            self.assertFalse(rows[1][0])
+        finally:
+            cr.execute("DROP TABLE IF EXISTS pg_temp.sale_order_line")
+            cr.execute("SELECT set_config('search_path', %s, true)", (original_path,))
+
     def test_activity_color_uses_company_inactivity_threshold(self):
         trip = self._trip()
         trip.action_start_trip(actual_start_at=fields.Datetime.now() - timedelta(hours=2))
@@ -240,3 +273,18 @@ class TestTripDispatchSummary(TransactionCase):
         migration.migrate(self.env.cr, "19.0.1.25.0")
         self.line.invalidate_recordset(["allocation_date"])
         self.assertEqual(self.line.allocation_date, assignment.effective_from)
+
+    def test_upgrade_relocks_orders_and_refreshes_legacy_eta_summaries(self):
+        self.line.write({"eta": "2026-12-01 09:00:00"})
+        self.order.action_unlock()
+        file = self.order.trip_file_ids
+        self.env.flush_all()
+        self.env.cr.execute("UPDATE taj_transport_trip_file SET etas = %s WHERE id = %s", ("2026-12-01", file.id))
+        spec = spec_from_file_location("eta_post_migration", Path(__file__).parents[1] / "migrations/19.0.1.27.0/post-migration.py")
+        migration = module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        migration.migrate(self.env.cr, "19.0.1.26.0")
+        self.order.invalidate_recordset(["locked"])
+        file.invalidate_recordset(["etas"])
+        self.assertTrue(self.order.locked)
+        self.assertEqual(file.etas, "2026-12-01 09:00:00 UTC")

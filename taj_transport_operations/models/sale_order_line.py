@@ -4,6 +4,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 from .transport_trip_file import SHIPMENT_FIELDS, _FILE_SHIPMENT_WRITE
 
+_CONFIRMED_PRICE_WRITE = object()
 
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
@@ -60,6 +61,8 @@ class SaleOrderLine(models.Model):
             return value.display_name or ""
         if field.type == "selection":
             return dict(field._description_selection(self.env)).get(value, "")
+        if field.type == "datetime" and value:
+            return "%s UTC" % fields.Datetime.to_string(value)
         return str(value) if value is not False and value is not None else ""
 
     def _write_file_shipment(self, values, row):
@@ -116,6 +119,8 @@ class SaleOrderLine(models.Model):
 
     def _get_protected_fields(self):
         protected = super()._get_protected_fields()
+        if self.env.context.get("_confirmed_price_write") is _CONFIRMED_PRICE_WRITE:
+            return [name for name in protected if name != "price_unit"]
         if self.env.context.get("_file_shipment_write") is _FILE_SHIPMENT_WRITE:
             allowed = set(SHIPMENT_FIELDS) | {
                 "price_unit",
@@ -124,6 +129,19 @@ class SaleOrderLine(models.Model):
             }
             return [name for name in protected if name not in allowed]
         return protected
+
+    def action_open_confirmed_price_wizard(self):
+        self.ensure_one()
+        self.check_access("write")
+        if not self.env.user.has_group("taj_transport_operations.group_edit_confirmed_sale_orders"):
+            raise AccessError(_("Confirmed Sales Order Price Editing permission is required."))
+        if self.order_id.state not in ("sale", "done") or self.display_type or self.is_downpayment:
+            raise UserError(_("Choose a confirmed product line."))
+        return {
+            "type": "ir.actions.act_window", "name": _("Edit Unit Price"),
+            "res_model": "taj.transport.sale.price.wizard", "view_mode": "form", "target": "new",
+            "context": {"default_sale_line_id": self.id, "default_price_unit": self.price_unit},
+        }
 
     @api.depends(
         "product_id",
@@ -158,7 +176,7 @@ class SaleOrderLine(models.Model):
         string="Clearing Service",
     )
     bill_of_lading = fields.Char(string="Bill of Lading")
-    eta = fields.Date(string="ETA")
+    eta = fields.Datetime(string="ETA")
     etol = fields.Date(
         string="ETOL",
         help="Estimated time of loading (estimated loading date).",

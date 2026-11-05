@@ -9,15 +9,11 @@
                 <field name="transport_confirmed_readonly" invisible="1"/>
             </xpath>
             <xpath expr="//button[@name='action_unlock']" position="attributes">
-                <attribute name="groups">taj_transport_operations.group_edit_confirmed_sale_orders</attribute>
+                <attribute name="groups">base.group_no_one</attribute>
+                <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//button[@name='action_cancel']" position="attributes">
                 <attribute name="invisible" add="transport_confirmed_readonly" separator=" or "/>
-            </xpath>
-            <xpath expr="//button[@name='action_unlock']" position="after">
-                <button name="action_lock" type="object" string="Lock"
-                        invisible="locked or state != 'sale'"
-                        groups="taj_transport_operations.group_edit_confirmed_sale_orders"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/control/create[@name='add_product_control']" position="after">
                 <button name="action_open_duplicate_line_wizard" type="object"
@@ -30,7 +26,7 @@
                 <button name="action_view_trip_files" type="object"
                         class="oe_stat_button" icon="fa-folder-open"
                         groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry">
-                    <field name="trip_file_count" widget="statinfo" string="Trips"/>
+                    <field name="trip_file_count" widget="statinfo" string="Trip File"/>
                 </button>
                 <button name="action_view_transport_trips" type="object"
                         class="oe_stat_button" icon="fa-truck"
@@ -45,10 +41,10 @@
             <xpath expr="//field[@name='order_line']/list" position="inside">
                 <field name="transport_trip_count" column_invisible="True"
                        groups="taj_transport_operations.group_transport_user"/>
-                <button name="action_prepare_transport_trip" string="Create Trip"
-                        type="object" icon="fa-truck"
-                        groups="taj_transport_operations.group_transport_user"
-                        invisible="parent.state not in ['sale', 'done'] or display_type not in [False, 'product'] or not product_id or transport_trip_count != 0"/>
+                <button name="action_open_confirmed_price_wizard" string="Edit Unit Price"
+                        type="object" icon="fa-pencil"
+                        groups="taj_transport_operations.group_edit_confirmed_sale_orders"
+                        invisible="parent.state not in ['sale', 'done'] or display_type not in [False, 'product'] or not product_id or is_downpayment"/>
                 <button name="action_prepare_transport_trip" string="Open Trip"
                         type="object" icon="fa-external-link"
                         groups="taj_transport_operations.group_transport_user"

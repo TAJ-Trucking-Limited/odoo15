@@ -2,6 +2,13 @@
 
 ## Dispatch and Trips Summary (19.0.1.26.0)
 
+ETA is a datetime in version 19.0.1.27.0. Date-only values from earlier versions
+are migrated with a placeholder of 12:00 noon in the Asia/Damascus timezone;
+that placeholder is not a recorded shipment arrival time.
+Individual datetime fields display in the user's timezone. The aggregated File
+Number list's ETA text is labelled UTC. The upgrade refreshes those summaries
+and re-locks any previously unlocked confirmed Sales Orders.
+
 - **Dispatch Orders > Sale Orders - Trip Not Started** is an ungrouped shipment
   worklist with configurable columns. It includes confirmed lines without a trip
   and lines whose trip is Draft or Ready. Down payments are excluded from both
@@ -55,10 +62,8 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
   for each line without a started trip. **Sale Orders without Allocation**
   offers **Assign Truck** for confirmed product lines with no planned truck.
   The dispatch action saves and opens a Draft using a matching route template.
-  Sales Order **Create Trip** / **Open Trip** buttons open an unsaved form
-  and are available on product/service lines inside a Sales Order for
-  transport users. Create Trip requires a confirmed order; sections and notes
-  have no trip buttons. The Transport Trips and Trips smart buttons remain available.
+  Sales Order lines offer **Open Trip** for an existing trip. Create Trip is
+  available from Dispatch Orders; the Sales Order line Create Trip button is removed.
 - Trip reference is generated using `TRIP/<year>/<sequence>` on Save.
 - Form creation requires a route template linked to that line's product.
   One active same-company match is preselected; multiple matches require a
@@ -108,7 +113,8 @@ fields above, including quantity; it cannot change Unit Price, discounts,
 taxes, file identity or source links. Sales Orders stay locked. Unit Price is
 preserved when quantities or products change; native totals recalculate from
 the quantity. Product changes are refused after a trip, invoice or delivery
-exists. The separate **Edit Confirmed Sales Orders** permission is unchanged.
+exists. The separate **Edit Confirmed Sales Order Prices** permission allows
+only unit-price changes through its dedicated Sales line action.
 
 Shipment fields read live Sales data in both directions. Changes from the
 file or Sales Order appear in file Chatter with the responsible user and
@@ -420,15 +426,13 @@ deliveries and invoice links are not duplicated. On a confirmed order, the
 copy joins the order's File Number through the standard line-creation flow.
 Sales write access is required; cancelled and locked orders cannot add a copy.
 
-**Confirmed order protection (19.0.1.23.0):** Confirmation automatically locks
-the order. Assign **Edit Confirmed Sales Orders** under the user's Sales access
-rights to authorize selected users to unlock and edit it. Sales managers do
-not receive this permission automatically. The group supplements the user's
-normal document and company access; it does not grant access to other orders.
-After an authorized user unlocks an order, users without the permission still
-cannot change its header, add/edit/delete lines, or duplicate a line. Lock is
-available to the authorized user to finish editing. Draft quotations remain
-editable. The upgrade also locks orders confirmed before this policy.
+**Confirmed order protection:** Confirmation automatically locks the order.
+Assign **Edit Confirmed Sales Order Prices** under the user's Sales access rights
+to authorize selected users to change the unit price using **Edit Unit Price**
+on the line. The order remains locked, and the role does not permit changes to
+other fields or lines. Each price change is recorded in the Sales Order chatter.
+The role supplements normal document and company access and is not granted
+automatically to Sales managers. Draft quotations remain editable.
 
 The server enforces the permission for direct ORM/RPC writes, nested line
 commands, line reassignment and saved default order values. Native invoicing,
