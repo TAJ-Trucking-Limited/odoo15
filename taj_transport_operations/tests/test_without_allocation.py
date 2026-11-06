@@ -143,6 +143,40 @@ class TestWithoutAllocation(TransactionCase):
         self.assertEqual(len(button), 1)
         self.assertEqual(button[0].get("string"), "Assign Truck")
 
+    def test_not_started_worklist_displays_allocated_driver(self):
+        listing = self.env.ref(
+            "taj_transport_operations.view_sale_order_line_dispatch_list"
+        )
+        arch = etree.fromstring(listing.get_combined_arch())
+        columns = [node.get("name") for node in arch.xpath("./field")]
+        self.assertEqual(
+            columns[columns.index("vehicle_id") + 1],
+            "transport_dispatch_driver_id",
+        )
+        form = etree.fromstring(self.env.ref(
+            "taj_transport_operations.view_sale_order_line_dispatch_form"
+        ).get_combined_arch())
+        self.assertTrue(form.xpath("//field[@name='transport_dispatch_driver_id']"))
+
+        default = self.env["res.partner"].create({"name": "Fleet driver"})
+        chosen = self.env["res.partner"].create({"name": "Dispatch driver"})
+        self.truck.driver_id = default
+        self.line.sudo().write({"vehicle_id": self.truck.id})
+        self.line.invalidate_recordset(["transport_dispatch_driver_id"])
+        self.assertEqual(self.line.transport_dispatch_driver_id, default)
+        self.line.sudo().write({
+            "transport_allocated_driver_id": chosen.id,
+            "transport_driver_choice_set": True,
+        })
+        self.line.invalidate_recordset(["transport_dispatch_driver_id"])
+        self.assertEqual(self.line.transport_dispatch_driver_id, chosen)
+        self.line.sudo().write({
+            "transport_allocated_driver_id": False,
+            "transport_driver_choice_set": True,
+        })
+        self.line.invalidate_recordset(["transport_dispatch_driver_id"])
+        self.assertFalse(self.line.transport_dispatch_driver_id)
+
     def test_file_number_is_shown_on_the_sales_line(self):
         self.assertTrue(self.line.transport_file_id)
         self.assertEqual(self.line.transport_file_id, self.order.trip_file_ids)

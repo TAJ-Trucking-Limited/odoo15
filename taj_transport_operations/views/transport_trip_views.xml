@@ -151,7 +151,7 @@
                                     <field name="special_handling_instructions" readonly="1"/>
                                 </group>
                                 <group col="1">
-                                    <group string="Resources">
+                                    <group string="Resources" name="trip_resources_section">
                                         <field name="current_vehicle_id" readonly="1"/>
                                         <field name="current_driver_id" readonly="1"/>
                                     </group>

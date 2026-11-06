@@ -33,7 +33,7 @@
                     <field name="special_handling_instructions" invisible="'special_handling_instructions' not in empty_field_names"/>
                 </group>
                 <group string="Route &amp; Timing"
-                       invisible="'route_id' not in empty_field_names and 'origin_location' not in empty_field_names and 'destination_location' not in empty_field_names and 'route_notes' not in empty_field_names and 'planned_departure_at' not in empty_field_names and 'planned_arrival_at' not in empty_field_names and 'actual_departure_at' not in empty_field_names and 'actual_arrival_at' not in empty_field_names">
+                       invisible="'route_id' not in empty_field_names and 'origin_location' not in empty_field_names and 'destination_location' not in empty_field_names and 'route_notes' not in empty_field_names and 'actual_departure_at' not in empty_field_names and 'actual_arrival_at' not in empty_field_names">
                     <field name="route_id" invisible="'route_id' not in empty_field_names"
                            options="{'no_create': True, 'no_create_edit': True}"/>
                     <p class="text-muted"
@@ -46,8 +46,6 @@
                     <field name="origin_location" invisible="'origin_location' not in empty_field_names"/>
                     <field name="destination_location" invisible="'destination_location' not in empty_field_names"/>
                     <field name="route_notes" invisible="'route_notes' not in empty_field_names"/>
-                    <field name="planned_departure_at" invisible="'planned_departure_at' not in empty_field_names"/>
-                    <field name="planned_arrival_at" invisible="'planned_arrival_at' not in empty_field_names"/>
                     <field name="actual_departure_at" invisible="'actual_departure_at' not in empty_field_names"/>
                     <field name="actual_arrival_at" invisible="'actual_arrival_at' not in empty_field_names"/>
                 </group>

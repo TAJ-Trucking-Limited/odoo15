@@ -5,6 +5,9 @@
         <field name="model">taj.transport.milestone</field>
         <field name="arch" type="xml">
             <list string="Trips" create="0" delete="0" edit="0">
+                <groupby name="vehicle_id">
+                    <field name="transport_group_last_activity_at"/>
+                </groupby>
                 <groupby name="trip_id">
                     <!-- Fetch the Trip's stored activity timestamp once for the
                          group header, not from individual milestone rows. -->

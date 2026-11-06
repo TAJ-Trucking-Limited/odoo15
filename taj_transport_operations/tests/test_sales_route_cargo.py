@@ -241,6 +241,28 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         self.assertEqual(trip.origin_location, "Keep me")
         self.assertEqual(trip.destination_location, "New dest")
 
+    def test_fill_empty_never_offers_planned_departure_or_arrival(self):
+        from lxml import etree
+
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line_a.id,
+        })
+        Wizard = self.env["taj.transport.fill.empty.fields.wizard"].with_context(
+            default_trip_id=trip.id,
+        )
+        defaults = Wizard.default_get(["trip_id", "empty_field_names"])
+        for field in ("planned_departure_at", "planned_arrival_at"):
+            self.assertNotIn(field, defaults["empty_field_names"])
+            self.assertNotIn(field, Wizard._editable_trip_fields)
+            self.assertNotIn(field, Wizard._fields)
+        view = self.env.ref(
+            "taj_transport_operations.view_fill_empty_trip_fields_wizard_form"
+        )
+        arch = etree.fromstring(view.get_combined_arch())
+        self.assertFalse(arch.xpath(
+            "//field[@name='planned_departure_at' or @name='planned_arrival_at']"
+        ))
+
     def test_fill_empty_route_assignment_overwrites_locations(self):
         trip = self.env["taj.transport.trip"].create({
             "sale_line_id": self.line_a.id,

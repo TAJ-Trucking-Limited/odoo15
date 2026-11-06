@@ -41,20 +41,31 @@ function pageFieldSpecs(page) {
 class TripFormCompiler extends FormCompiler {
     compileGroup(element, params) {
         const group = super.compileGroup(element, params);
-        if (element.getAttribute("name") !== "trip_progress_section") {
+        const section = element.getAttribute("name");
+        const destinations = {
+            trip_progress_section: {
+                label: "Go to Milestones tab",
+                handler: "__comp__.openMilestonesTab",
+            },
+            trip_resources_section: {
+                label: "Go to Resources tab",
+                handler: "__comp__.openResourcesTab",
+            },
+        };
+        const destination = destinations[section];
+        if (!destination) {
             return group;
         }
 
-        // Attach the arrow to the real Odoo group heading, not as an
-        // additional field row. The button switches notebook pages client-side.
+        // Append to the existing group heading, so no extra form row appears.
         const heading = group.querySelector('[t-set-slot="title"] .o_horizontal_separator');
         if (heading) {
             const arrow = createElement("button", {
                 type: "button",
-                class: "btn btn-link btn-sm p-0 ms-2 o_taj_milestone_jump",
-                title: "Go to Milestones",
-                "aria-label": "Go to Milestones tab",
-                "t-on-click": "__comp__.openMilestonesTab",
+                class: "btn btn-link btn-sm p-0 ms-2 o_taj_section_jump",
+                title: destination.label,
+                "aria-label": destination.label,
+                "t-on-click": destination.handler,
             });
             arrow.appendChild(createElement("i", {
                 class: "fa fa-arrow-right",
@@ -90,15 +101,23 @@ class TripFormCompiler extends FormCompiler {
 }
 
 class TripFormRenderer extends FormRenderer {
-    openMilestonesTab(event) {
+    openTripTab(event, name) {
         event.preventDefault();
-        // Use Odoo's tab click so its notebook state and page validation stay
-        // in sync; do not navigate away from the current Trip record.
+        // Click the actual Odoo notebook tab, preserving its active page and
+        // form state instead of navigating away from the Trip.
         const notebook = event.currentTarget.closest(".o_notebook");
         const tab = notebook?.querySelector(
-            '.o_notebook_headers a[role="tab"][name="trip_milestones"]'
+            `.o_notebook_headers a[role="tab"][name="${name}"]`
         );
         tab?.click();
+    }
+
+    openMilestonesTab(event) {
+        this.openTripTab(event, "trip_milestones");
+    }
+
+    openResourcesTab(event) {
+        this.openTripTab(event, "trip_resources");
     }
 
     tripTabTitle(title, page) {

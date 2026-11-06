@@ -35,6 +35,20 @@ class TestTripActivity(TajTransportPhase3Case):
         with self.assertRaises(AccessError):
             activity.with_user(self.dispatcher).write({"description": "Changed"})
 
+    def test_vehicle_group_last_activity_is_latest_visible_trip_activity(self):
+        first = self._started_trip(tag="ACTIVITY-GROUP-1")
+        truck = first.milestone_ids[:1].vehicle_id
+        self.assertTrue(truck)
+        self.assertFalse(truck.with_user(self.dispatcher).transport_group_last_activity_at)
+        self.env["taj.transport.trip.activity.wizard"].with_user(self.dispatcher).create({
+            "trip_id": first.id, "description": "Driver updated operations",
+        }).action_submit()
+        truck.invalidate_recordset(["transport_group_last_activity_at"])
+        self.assertEqual(
+            truck.with_user(self.dispatcher).transport_group_last_activity_at,
+            first.last_activity_at,
+        )
+
     def test_blank_submission_does_not_reset_clock(self):
         trip = self._started_trip(tag="BLANK")
         wizard = self.env["taj.transport.trip.activity.wizard"].create({

@@ -22,6 +22,33 @@ class SaleOrderLine(models.Model):
         help="The Assign Truck dialog explicitly selected a driver (or no driver).",
     )
 
+    transport_dispatch_driver_id = fields.Many2one(
+        "res.partner", string="Driver", compute="_compute_transport_dispatch_driver_id",
+        readonly=True,
+        help="Driver selected during allocation; if a Trip has Resources, "
+             "show their assigned driver instead. Older lines fall back "
+             "to the Fleet truck's default driver.",
+    )
+
+    @api.depends(
+        "vehicle_id", "vehicle_id.driver_id", "transport_allocated_driver_id",
+        "transport_driver_choice_set", "transport_trip_ids.state",
+        "transport_trip_ids.current_assignment_id.driver_id",
+    )
+    def _compute_transport_dispatch_driver_id(self):
+        for line in self:
+            open_trip = line.transport_trip_ids.filtered(
+                lambda trip: trip.state in ("draft", "ready")
+                and trip.current_assignment_id
+            )[:1]
+            if open_trip:
+                line.transport_dispatch_driver_id = open_trip.current_assignment_id.driver_id
+            elif line.transport_driver_choice_set:
+                # A deliberately blank driver choice must stay blank.
+                line.transport_dispatch_driver_id = line.transport_allocated_driver_id
+            else:
+                line.transport_dispatch_driver_id = line.vehicle_id.driver_id
+
     def _lock_transport_vehicle(self, creating_trip=False):
         """Serialize first allocation with assignment backfill and trip creation."""
         self.check_access("read")

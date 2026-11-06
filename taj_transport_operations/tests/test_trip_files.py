@@ -49,6 +49,7 @@ class TestTripFiles(TransactionCase):
         sections = columns[1].xpath("./group")
         self.assertEqual([node.get("string") for node in sections],
                          ["Resources", "Trip Progress"])
+        self.assertEqual(sections[0].get("name"), "trip_resources_section")
         self.assertEqual(sections[1].get("name"), "trip_progress_section")
         self.assertEqual(
             [node.get("name") for node in sections[0].xpath("./field")],

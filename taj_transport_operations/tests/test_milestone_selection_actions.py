@@ -35,6 +35,9 @@ class TestMilestoneSelectionActions(TajTransportPhase3Case):
         self.assertEqual(len(
             root.xpath("./groupby[@name='trip_id']/field[@name='last_activity_at']")
         ), 1)
+        self.assertEqual(len(
+            root.xpath("./groupby[@name='vehicle_id']/field[@name='transport_group_last_activity_at']")
+        ), 1)
         # The grouped list displays the Trip's stored activity date, not an
         # aggregate of Milestone arrival/departure timestamps.
         self.assertTrue(self.env["taj.transport.trip"]._fields["last_activity_at"].store)
@@ -56,7 +59,11 @@ class TestMilestoneSelectionActions(TajTransportPhase3Case):
         ), 1)
         self.assertEqual(len(
             template.xpath("//Field[@record='group.record']")
-        ), 1)
+        ), 2)
+        self.assertEqual(
+            [node.get("name") for node in template.xpath("//Field[@record='group.record']")],
+            ["'last_activity_at'", "'transport_group_last_activity_at'"],
+        )
 
     def test_open_trip_accepts_multiple_milestones_on_one_trip(self):
         selected = self._milestones()[:2]

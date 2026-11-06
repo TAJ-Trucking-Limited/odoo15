@@ -17,6 +17,37 @@ class FleetVehicle(models.Model):
     _inherit = "fleet.vehicle"
 
     is_transport_trailer = fields.Boolean(compute="_compute_is_transport_trailer")
+
+    transport_group_last_activity_at = fields.Datetime(
+        string="Last Activity Recorded",
+        compute="_compute_transport_group_last_activity_at",
+        groups="taj_transport_operations.group_transport_user",
+        help="Most recent recorded activity among trips associated with "
+             "this truck's visible milestones in your allowed companies.",
+    )
+
+    @api.depends_context("uid", "allowed_company_ids")
+    def _compute_transport_group_last_activity_at(self):
+        # Use milestone vehicle assignments, not the vehicle's *current*
+        # driver or the Trip's creation truck, so grouped historical rows
+        # agree with the truck under which Odoo displays them. ORM record
+        # rules and allowed companies apply; do not sudo this search.
+        latest = {vehicle.id: False for vehicle in self}
+        if self.ids:
+            milestones = self.env["taj.transport.milestone"].search([
+                ("vehicle_id", "in", self.ids),
+                ("company_id", "in", self.env.companies.ids),
+                ("trip_id.last_activity_at", "!=", False),
+            ])
+            for milestone in milestones:
+                timestamp = milestone.trip_id.last_activity_at
+                vehicle_id = milestone.vehicle_id.id
+                current = latest[vehicle_id]
+                if timestamp and (not current or timestamp > current):
+                    latest[vehicle_id] = timestamp
+        for vehicle in self:
+            vehicle.transport_group_last_activity_at = latest[vehicle.id]
+
     transport_can_assign = fields.Boolean(
         compute="_compute_transport_can_assign",
         groups="taj_transport_operations.group_transport_user",

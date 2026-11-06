@@ -11,7 +11,6 @@ class TajTransportFillEmptyFieldsWizard(models.TransientModel):
         "transporter_id", "transport_reference",
         "cargo_type_id", "cargo_description", "special_handling_instructions",
         "route_id", "origin_location", "destination_location", "route_notes",
-        "planned_departure_at", "planned_arrival_at",
         "actual_departure_at", "actual_arrival_at",
         "pod_file", "pod_notes",
     )
@@ -54,8 +53,6 @@ class TajTransportFillEmptyFieldsWizard(models.TransientModel):
     origin_location = fields.Char(string="Origin")
     destination_location = fields.Char(string="Destination")
     route_notes = fields.Text(string="Route Instructions")
-    planned_departure_at = fields.Datetime(string="Planned Departure")
-    planned_arrival_at = fields.Datetime(string="Planned Arrival")
     actual_departure_at = fields.Datetime(string="Actual Departure")
     actual_arrival_at = fields.Datetime(string="Actual Arrival")
     pod_file = fields.Binary(string="Proof of Delivery")

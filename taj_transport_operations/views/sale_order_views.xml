@@ -180,6 +180,7 @@
                 <field name="name" optional="show" string="Product Description" width="320px"/>
                 <field name="product_uom_qty" optional="hide" string="QTY" width="100px"/>
                 <field name="vehicle_id" optional="show" width="190px"/>
+                <field name="transport_dispatch_driver_id" optional="show" width="190px" readonly="1"/>
                 <field name="eta" optional="show" string="ETA (Shipment Arrival)" width="190px"/>
                 <field name="etol" optional="show" string="ETOL (Estimated Loading Date)" width="190px"/>
                 <field name="cargo_type_id" optional="show" width="180px"/>
@@ -283,6 +284,7 @@
                             <field name="transport_file_id"/>
                             <field name="file_type_id"/>
                             <field name="vehicle_id"/>
+                            <field name="transport_dispatch_driver_id" readonly="1"/>
                         </group>
                         <group>
                             <field name="etol"/>
