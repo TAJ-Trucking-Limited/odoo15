@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- The Trips menu lists milestones grouped by Truck > Trip. Only trip
+         headers show the parent Trip's last recorded activity timestamp. -->
+    <t t-inherit="web.ListRenderer.GroupRow" t-inherit-mode="extension">
+        <xpath expr="//t[@t-esc='group.count']" position="after">
+            <span t-if="group.groupByField.name === 'trip_id' &amp;&amp; group.record &amp;&amp; group.record.data &amp;&amp; group.record.data.last_activity_at !== undefined"
+                  class="ms-3 small fw-normal text-muted o_taj_trip_group_last_activity">
+                Last Activity:
+                <t t-if="group.record.data.last_activity_at">
+                    <Field name="'last_activity_at'" record="group.record"/>
+                </t>
+                <t t-else="">—</t>
+            </span>
+        </xpath>
+    </t>
+</templates>

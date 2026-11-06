@@ -27,6 +27,37 @@ class TestMilestoneSelectionActions(TajTransportPhase3Case):
         self.assertTrue(all(button.get("type") == "object" for button in buttons))
         self.assertTrue(all(button.get("display") != "always" for button in buttons))
 
+    def test_grouped_trips_show_parent_last_activity_date(self):
+        from pathlib import Path
+
+        view = self.env.ref("taj_transport_operations.view_transport_milestone_list")
+        root = etree.fromstring(view.get_combined_arch())
+        self.assertEqual(len(
+            root.xpath("./groupby[@name='trip_id']/field[@name='last_activity_at']")
+        ), 1)
+        # The grouped list displays the Trip's stored activity date, not an
+        # aggregate of Milestone arrival/departure timestamps.
+        self.assertTrue(self.env["taj.transport.trip"]._fields["last_activity_at"].store)
+        trip = self._milestones("GROUP-ACTIVITY")[:1].trip_id
+        self.assertFalse(trip.last_activity_at)
+        self.env["taj.transport.trip.activity.wizard"].with_user(self.dispatcher).create({
+            "trip_id": trip.id,
+            "description": "Reached the checkpoint",
+        }).action_submit()
+        self.assertTrue(trip.last_activity_at)
+
+        asset = (
+            Path(__file__).resolve().parents[1]
+            / "static" / "src" / "xml" / "milestone_group_header.xml"
+        )
+        template = etree.parse(str(asset))
+        self.assertEqual(len(
+            template.xpath("//t[@t-inherit='web.ListRenderer.GroupRow']")
+        ), 1)
+        self.assertEqual(len(
+            template.xpath("//Field[@record='group.record']")
+        ), 1)
+
     def test_open_trip_accepts_multiple_milestones_on_one_trip(self):
         selected = self._milestones()[:2]
         action = selected.action_open_trip()
