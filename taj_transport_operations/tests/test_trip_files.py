@@ -8,6 +8,19 @@ from odoo.tests.common import new_test_user
 
 @tagged("post_install", "-at_install")
 class TestTripFiles(TransactionCase):
+    def test_trip_summary_uses_full_views_not_file_number_views(self):
+        full_list = self.env.ref("taj_transport_operations.view_transport_trip_list")
+        full_form = self.env.ref("taj_transport_operations.view_transport_trip_form")
+        related_form = self.env.ref("taj_transport_operations.view_file_related_trip_form")
+        action = self.env.ref("taj_transport_operations.action_transport_trip")
+        self.assertEqual(action.views, [(full_list.id, "list"), (full_form.id, "form")])
+        self.assertEqual(self.env["taj.transport.trip"].get_view(view_type="form")["id"], full_form.id)
+        self.assertIn('name="trip_summary"', full_form.arch_db)
+        self.assertIn('name="action_open_start_trip_wizard"', full_form.arch_db)
+        self.assertIn('edit="0"', related_form.arch_db)
+        self.assertNotIn('name="planned_departure_at"', related_form.arch_db)
+        self.assertNotIn('name="planned_arrival_at"', related_form.arch_db)
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
