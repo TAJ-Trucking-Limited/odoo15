@@ -217,7 +217,8 @@ class TestDispatchReadiness(TransactionCase):
             )
             & self._our_lines()
         )
-        self.assertEqual(lines, self._our_lines())
+        self.assertEqual(lines, self.trucked_line | self.other_line)
+        self.assertNotIn(self.truckless_line, lines)
 
         trip = self.env["taj.transport.trip"].create(
             {"sale_line_id": self.trucked_line.id}
@@ -231,7 +232,7 @@ class TestDispatchReadiness(TransactionCase):
             & self._our_lines()
         )
         self.assertIn(self.trucked_line, lines)
-        self.assertIn(self.truckless_line, lines)
+        self.assertNotIn(self.truckless_line, lines)
         self.assertIn(self.other_line, lines)
 
     def test_without_truck_action_ignores_trucked_lines(self):
@@ -245,7 +246,7 @@ class TestDispatchReadiness(TransactionCase):
 
     def test_cutoff_date_hides_older_orders_from_every_worklist(self):
         actions = {
-            "without_trip": self._our_lines(),
+            "without_trip": self.trucked_line | self.other_line,
             "without_truck": self.truckless_line,
         }
         for suffix, expected in actions.items():
@@ -318,7 +319,7 @@ class TestDispatchReadiness(TransactionCase):
         self.assertEqual(
             self.env["sale.order.line"].search(safe_eval(action["domain"]))
             & self._our_lines(),
-            self._our_lines(),
+            self.trucked_line | self.other_line,
         )
 
     def test_dispatcher_can_read_the_worklists(self):

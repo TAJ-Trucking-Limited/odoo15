@@ -343,7 +343,7 @@
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
         <field name="search_view_id" ref="view_sale_order_line_dispatch_search"/>
-        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('is_downpayment', '=', False), '|', ('transport_trip_ids', '=', False), ('transport_trip_ids.state', 'in', ['draft', 'ready'])]</field>
+        <field name="domain">[('order_id.state', 'in', ['sale', 'done']), ('display_type', 'in', [False, 'product']), ('product_id', '!=', False), ('is_downpayment', '=', False), ('vehicle_id', '!=', False), '|', ('transport_trip_ids', '=', False), ('transport_trip_ids.state', 'in', ['draft', 'ready'])]</field>
         <field name="context">{}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Every confirmed shipment has started its trip.</p>

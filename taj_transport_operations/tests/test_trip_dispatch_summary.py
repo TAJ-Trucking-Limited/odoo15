@@ -111,9 +111,11 @@ class TestTripDispatchSummary(TransactionCase):
         for action in ("action_sale_order_line_without_truck", "action_sale_order_line_without_trip"):
             self.assertFalse(self._queue_has_line(action, downpayment))
 
-    def test_not_started_queue_includes_draft_until_actual_start(self):
-        self.assertTrue(self._queue_has_line("action_sale_order_line_without_trip"))
+    def test_not_started_queue_requires_truck_until_actual_start(self):
+        self.assertFalse(self._queue_has_line("action_sale_order_line_without_trip"))
         trip = self._trip()
+        self.assertFalse(self._queue_has_line("action_sale_order_line_without_trip"))
+        self.line.sudo().write({"vehicle_id": self.trucks[0].id})
         self.assertTrue(self._queue_has_line("action_sale_order_line_without_trip"))
         self.assertEqual(self.line.action_open_or_create_transport_trip()["res_id"], trip.id)
         trip.action_start_trip()
