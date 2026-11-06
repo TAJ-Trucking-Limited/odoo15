@@ -184,6 +184,43 @@ class SaleOrderLine(models.Model):
     shipping_line = fields.Char(string="Shipping Line")
 
     @api.model
+    def _suggest_route_file_type(self, product_tmpl, company):
+        """Suggest a type only when all active product routes agree.
+
+        Never guess between differently classified routes; blank legacy
+        routes also make the choice ambiguous. Explicit Sales choices win.
+        """
+        FileType = self.env["taj.transport.file.type"]
+        if not product_tmpl or not company:
+            return FileType
+        routes = self.env["taj.transport.route"].sudo().search([
+            ("product_tmpl_id", "=", product_tmpl.id),
+            ("company_id", "=", company.id),
+            ("active", "=", True),
+        ])
+        if not routes:
+            return FileType
+        types = routes.mapped("file_type_id")
+        if (
+            len(types) == 1
+            and types.active
+            and all(route.file_type_id == types for route in routes)
+        ):
+            return types
+        return FileType
+
+    @api.onchange("product_id", "product_template_id", "order_id")
+    def _onchange_route_file_type(self):
+        for line in self:
+            if line.display_type not in (False, "product") or line.is_downpayment:
+                continue
+            template = line.product_id.product_tmpl_id or line.product_template_id
+            company = line.order_id.company_id or self.env.company
+            # The user may change this selection afterward. Do not use a
+            # computed/related field, which would overwrite manual choices.
+            line.file_type_id = self._suggest_route_file_type(template, company)
+
+    @api.model
     def action_open_duplicate_line_wizard(self):
         order = self.env["sale.order"].browse(self.env.context.get("order_id")).exists()
         if not order:
@@ -224,19 +261,13 @@ class SaleOrderLine(models.Model):
                     _("Select a File Type for Goods product %(product)s.")
                     % {"product": line.product_id.display_name}
                 )
-            # Sales users only need an existence check, not access to route maintenance.
-            if (
-                not self.env["taj.transport.route"]
-                .sudo()
-                .search_count(
-                    [
-                        ("product_tmpl_id", "=", line.product_id.product_tmpl_id.id),
-                        ("company_id", "=", line.company_id.id),
-                        ("active", "=", True),
-                    ],
-                    limit=1,
-                )
-            ):
+            # Sales users need not have route-maintenance read access.
+            routes = self.env["taj.transport.route"].sudo().search([
+                ("product_tmpl_id", "=", line.product_id.product_tmpl_id.id),
+                ("company_id", "=", line.company_id.id),
+                ("active", "=", True),
+            ])
+            if not routes:
                 raise ValidationError(
                     _(
                         "Goods product %(product)s needs an active Route Template "
@@ -247,6 +278,38 @@ class SaleOrderLine(models.Model):
                         "company": line.company_id.display_name,
                     }
                 )
+            # Unclassified legacy templates are compatible with any chosen
+            # File Type; classified templates must agree with the Sales line.
+            if not any(
+                not route.file_type_id or route.file_type_id == line.file_type_id
+                for route in routes
+            ):
+                raise ValidationError(
+                    _(
+                        "No active Route Template for Goods product %(product)s "
+                        "matches File Type %(file_type)s. Choose a matching "
+                        "File Type or configure a matching Route Template."
+                    )
+                    % {
+                        "product": line.product_id.display_name,
+                        "file_type": line.file_type_id.display_name,
+                    }
+                )
+
+    @api.constrains("file_type_id")
+    def _check_existing_trip_route_file_type(self):
+        # File Numbers can change shipment fields after confirmation. Do not
+        # let that path silently conflict with a trip's selected route.
+        for line in self:
+            if any(
+                trip.route_id.file_type_id
+                and trip.route_id.file_type_id != line.file_type_id
+                for trip in line.transport_trip_ids
+            ):
+                raise ValidationError(_(
+                    "The File Type cannot differ from the Route Template "
+                    "of an existing transport trip."
+                ))
 
     transport_planned_departure_at = fields.Datetime(
         string="Planned Departure",
@@ -376,13 +439,37 @@ class SaleOrderLine(models.Model):
             raise UserError(_("Allocation Date is recorded automatically."))
         default_vehicle = self.default_get(["vehicle_id"]).get("vehicle_id")
         vals_list = [dict(vals) for vals in vals_list]
-        for vals in vals_list:
-            vals["allocation_date"] = fields.Datetime.now() if vals.get("vehicle_id", default_vehicle) else False
         default_order_id = (
             self.default_get(["order_id"]).get("order_id")
             if any("order_id" not in vals for vals in vals_list)
             else False
         )
+        for vals in vals_list:
+            vals["allocation_date"] = (
+                fields.Datetime.now()
+                if vals.get("vehicle_id", default_vehicle) else False
+            )
+            if (
+                "file_type_id" not in vals
+                and "default_file_type_id" not in self.env.context
+                and vals.get("display_type") in (False, None, "product")
+                and not vals.get("is_downpayment")
+            ):
+                template = (
+                    self.env["product.template"].browse(vals["product_template_id"])
+                    if vals.get("product_template_id")
+                    else self.env["product.product"].browse(
+                        vals.get("product_id")
+                    ).product_tmpl_id
+                )
+                order = self.env["sale.order"].browse(
+                    vals.get("order_id") or default_order_id
+                )
+                file_type = self._suggest_route_file_type(
+                    template, order.company_id or self.env.company
+                )
+                if file_type:
+                    vals["file_type_id"] = file_type.id
         order_ids = [vals.get("order_id", default_order_id) for vals in vals_list]
         self.env["sale.order"].browse(
             [order_id for order_id in order_ids if order_id]

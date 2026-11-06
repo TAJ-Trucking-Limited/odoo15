@@ -2,7 +2,7 @@
 
 from lxml import etree
 
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 from odoo.tests.common import new_test_user
 
@@ -58,12 +58,88 @@ class TestSaleLineColumns(TransactionCase):
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             line.file_type_id = False
 
-    def test_file_type_does_not_filter_routes(self):
-        route = self._route(
-            file_type_id=self.env.ref(
-                "taj_transport_operations.file_type_transit_export"
-            ).id
+    def test_file_type_defaults_from_single_matching_route(self):
+        route = self._route(file_type_id=self.file_type.id)
+        line = self._line()
+        self.assertEqual(line.file_type_id, self.file_type)
+        self.assertEqual(
+            self.env["taj.transport.route"]._matching_for_sale_line(line), route
         )
+        # The inline quotation form uses the same suggestion.
+        unsaved = self.env["sale.order.line"].new({
+            "order_id": self.order.id,
+            "product_id": self.goods.id,
+        })
+        unsaved._onchange_route_file_type()
+        self.assertEqual(unsaved.file_type_id, self.file_type)
+        # This is an editable default, not a related/computed field.
+        unsaved.file_type_id = self.env.ref(
+            "taj_transport_operations.file_type_transit_export"
+        )
+        self.assertNotEqual(unsaved.file_type_id, self.file_type)
+
+    def test_manual_file_type_change_must_have_matching_route(self):
+        import_route = self._route(file_type_id=self.file_type.id)
+        export = self.env.ref(
+            "taj_transport_operations.file_type_transit_export"
+        )
+        line = self._line()
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            line.file_type_id = export
+        export_route = self.env["taj.transport.route"].create({
+            "name": "Goods export route",
+            "product_tmpl_id": self.goods.product_tmpl_id.id,
+            "company_id": self.order.company_id.id,
+            "file_type_id": export.id,
+        })
+        line.file_type_id = export
+        self.assertEqual(line.file_type_id, export)
+        self.assertEqual(
+            self.env["taj.transport.route"]._matching_for_sale_line(line),
+            export_route,
+        )
+        Trip = self.env["taj.transport.trip"]
+        with self.assertRaises(UserError), self.env.cr.savepoint():
+            Trip._require_matching_route_for_sale_line(line, import_route)
+        self.order.action_confirm()
+        # Direct API creates must respect the same type rule.
+        with self.assertRaisesRegex(ValidationError, "File Type"), self.env.cr.savepoint():
+            Trip.create({"sale_line_id": line.id, "route_id": import_route.id})
+        trip = Trip.create({"sale_line_id": line.id, "route_id": export_route.id})
+        with self.assertRaisesRegex(ValidationError, "File Type"), self.env.cr.savepoint():
+            trip.write({"route_id": import_route.id})
+        # Even a privileged shipment update cannot desynchronize an existing trip.
+        with self.assertRaisesRegex(ValidationError, "File Type"), self.env.cr.savepoint():
+            line.sudo().write({"file_type_id": self.file_type.id})
+
+    def test_mixed_route_types_do_not_pick_an_ambiguous_default(self):
+        self._route(file_type_id=self.file_type.id)
+        export = self.env.ref(
+            "taj_transport_operations.file_type_transit_export"
+        )
+        self.env["taj.transport.route"].create({
+            "name": "Goods export route",
+            "product_tmpl_id": self.goods.product_tmpl_id.id,
+            "company_id": self.order.company_id.id,
+            "file_type_id": export.id,
+        })
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self._line()
+        line = self._line(file_type_id=export.id)
+        self.assertEqual(line.file_type_id, export)
+
+    def test_same_file_type_across_multiple_routes_is_unambiguous(self):
+        self._route(file_type_id=self.file_type.id)
+        self.env["taj.transport.route"].create({
+            "name": "Second goods import route",
+            "product_tmpl_id": self.goods.product_tmpl_id.id,
+            "company_id": self.order.company_id.id,
+            "file_type_id": self.file_type.id,
+        })
+        self.assertEqual(self._line().file_type_id, self.file_type)
+
+    def test_legacy_unclassified_route_stays_usable_for_manual_type(self):
+        route = self._route()
         line = self._line(file_type_id=self.file_type.id)
         self.assertEqual(
             self.env["taj.transport.route"]._matching_for_sale_line(line), route

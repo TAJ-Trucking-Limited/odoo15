@@ -96,14 +96,20 @@ class TajTransportRoute(models.Model):
         if not sale_line or not sale_line.product_id:
             return self.browse()
         company = sale_line.company_id or sale_line.order_id.company_id
-        routes = self.search(
-            [
-                ("product_tmpl_id", "=", sale_line.product_id.product_tmpl_id.id),
-                ("company_id", "=", company.id),
-                ("active", "=", True),
+        domain = [
+            ("product_tmpl_id", "=", sale_line.product_id.product_tmpl_id.id),
+            ("company_id", "=", company.id),
+            ("active", "=", True),
+        ]
+        # An unclassified legacy template remains usable, but explicitly
+        # classified templates must match the Sales line's selected File Type.
+        if sale_line.file_type_id:
+            domain += [
+                "|",
+                ("file_type_id", "=", False),
+                ("file_type_id", "=", sale_line.file_type_id.id),
             ]
-        )
-        return routes._filtered_access("read")
+        return self.search(domain)._filtered_access("read")
 
 
 class TajTransportRouteLine(models.Model):

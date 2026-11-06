@@ -487,6 +487,19 @@ class TajTransportTrip(models.Model):
         for trip in self:
             trip._validate_sale_line(trip.sale_line_id)
 
+    @api.constrains("route_id", "sale_line_id")
+    def _check_route_file_type(self):
+        # Also protects direct API trip creates/route edits, not just the
+        # Sales buttons that use _require_matching_route_for_sale_line.
+        for trip in self:
+            route_type = trip.route_id.file_type_id
+            line_type = trip.sale_line_id.file_type_id
+            if route_type and line_type and route_type != line_type:
+                raise ValidationError(_(
+                    "The trip's Route Template File Type must match the "
+                    "Sales line File Type."
+                ))
+
     @api.constrains("sale_order_id", "sale_line_id")
     def _check_sale_order_line_match(self):
         for trip in self:
@@ -664,6 +677,21 @@ class TajTransportTrip(models.Model):
             ) % {
                 "route": route.display_name,
                 "product": line.product_id.display_name,
+            })
+        if (
+            line.file_type_id
+            and route.file_type_id
+            and route.file_type_id != line.file_type_id
+        ):
+            raise UserError(_(
+                "Route template %(route)s has File Type %(route_type)s, "
+                "but sales line %(line)s uses %(line_type)s. Choose a "
+                "matching route or change the sales line's File Type."
+            ) % {
+                "route": route.display_name,
+                "route_type": route.file_type_id.display_name,
+                "line": line.display_name,
+                "line_type": line.file_type_id.display_name,
             })
         return route
 
