@@ -160,7 +160,14 @@ class TajTransportPhase3Case(TransactionCase):
         )
         checkpoints = self._default_checkpoints() if specs is None else specs
         for index, spec in enumerate(checkpoints):
-            self.env["taj.transport.route.line"].create(
+            lines = self.env["taj.transport.route.line"]
+            if not spec.get("milestone_type_id"):
+                # Simulate checkpoints already present before Checkpoint
+                # Type became mandatory; normal UI/API creates are guarded.
+                lines = lines.sudo().with_context(
+                    _import_legacy_untyped_checkpoint=True
+                )
+            lines.create(
                 {
                     "route_id": route.id,
                     "sequence": (index + 1) * 10,

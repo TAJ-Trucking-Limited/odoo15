@@ -76,7 +76,7 @@
                 <group>
                     <field name="trip_id" readonly="1"/>
                     <field name="name" placeholder="e.g. Extra stop at Nakonde"/>
-                    <field name="milestone_type_id"
+                    <field name="milestone_type_id" required="1"
                            options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="planned_offset_hours"/>
                     <field name="notes"/>

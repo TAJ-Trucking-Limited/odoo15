@@ -56,6 +56,7 @@ class TestMilestoneGenerationConcurrency(BaseCase):
                     "route_id": route.id,
                     "sequence": index * 10,
                     "name": checkpoint_name,
+                    "milestone_type_id": env.ref("taj_transport_operations.milestone_type_loading").id,
                 }
             )
         return route

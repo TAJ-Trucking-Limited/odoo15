@@ -34,6 +34,36 @@ class TestRouteTemplates(TajTransportPhase3Case):
     # ------------------------------------------------------------------
     # A. Template maintenance and permissions
     # ------------------------------------------------------------------
+    def test_new_route_checkpoint_requires_type_and_legacy_row_is_editable(self):
+        route = self._route("Required type route", [])
+        with self.assertRaisesRegex(ValidationError, "Checkpoint Type"), self.env.cr.savepoint():
+            self.env["taj.transport.route.line"].with_user(self.manager).create({
+                "route_id": route.id,
+                "name": "Missing classification",
+            })
+        typed = self.env["taj.transport.route.line"].with_user(self.manager).create({
+            "route_id": route.id,
+            "name": "New checkpoint with type",
+            "milestone_type_id": self.type_border.id,
+        })
+        self.assertEqual(typed.milestone_type_id, self.type_border)
+
+        form = etree.fromstring(
+            self.env.ref("taj_transport_operations.view_transport_route_form").get_combined_arch()
+        )
+        selected = form.xpath(
+            "//field[@name='line_ids']//field[@name='milestone_type_id']"
+        )
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0].get("required"), "1")
+
+        legacy = self._route("Old checkpoint route", [{"name": "Old blank type"}])
+        self.assertFalse(legacy.line_ids.milestone_type_id)
+        legacy.line_ids.with_user(self.manager).write({
+            "milestone_type_id": self.type_loading.id,
+        })
+        self.assertEqual(legacy.line_ids.milestone_type_id, self.type_loading)
+
     def test_route_template_keeps_ordered_checkpoints(self):
         route = self._route("Dar es Salaam - Lusaka")
         self.assertEqual(
@@ -81,6 +111,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
                 {
                     "route_id": route.id,
                     "name": "loading",
+                    "milestone_type_id": self.type_loading.id,
                 }
             )
         # The same checkpoint name on another template is legitimate.
@@ -134,6 +165,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
                 {
                     "route_id": route.id,
                     "name": "Dispatcher checkpoint",
+                    "milestone_type_id": self.type_loading.id,
                 }
             )
         # A Transport Manager maintains the template and its checkpoints.
@@ -151,6 +183,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             {
                 "route_id": manager_route.id,
                 "name": "Manager checkpoint",
+                "milestone_type_id": self.type_loading.id,
             }
         )
         self.assertEqual(manager_route.line_count, 1)
@@ -353,6 +386,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             {
                 "route_id": route.id,
                 "name": "New checkpoint",
+                "milestone_type_id": self.type_loading.id,
                 "sequence": 40,
             }
         )
@@ -427,6 +461,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
                 {
                     "trip_id": trip.id,
                     "name": "loading",
+                    "milestone_type_id": self.type_loading.id,
                     "sequence": 99,
                 }
             )
@@ -457,6 +492,156 @@ class TestRouteTemplates(TajTransportPhase3Case):
         self.assertEqual(trip.milestone_ids.mapped("name"), ["W1", "W2"])
 
     # ------------------------------------------------------------------
+    # B2. Late checkpoint type: fill blanks without rewriting trip history
+    # ------------------------------------------------------------------
+    def test_late_checkpoint_type_populates_only_missing_draft_snapshots(self):
+        route = self._route("Late classification", [
+            {"name": "Border"},
+            {"name": "Destination"},
+        ])
+        first = self._trip(route, tag="LATE-TYPE-1")
+        second = self._trip(route, tag="LATE-TYPE-2")
+        manual = first._add_manual_milestone({
+            "name": "Manually planned stop",
+            "milestone_type_id": self.type_loading.id,
+        })
+        border = route.line_ids.filtered(lambda line: line.name == "Border")
+        for trip in (first, second):
+            self.assertFalse(self._milestone(trip, "Border").milestone_type_id)
+            self.assertFalse(self._milestone(trip, "Border").type_name)
+
+        # Simulate saving the Checkpoints One2many on the Route Template
+        # form (not editing the Trip or checkpoint directly).
+        route.with_user(self.manager).write({
+            "line_ids": [Command.update(border.id, {
+                "milestone_type_id": self.type_border.id,
+            })],
+        })
+        for trip in (first, second):
+            checkpoint = self._milestone(trip, "Border")
+            checkpoint.invalidate_recordset(["milestone_type_id", "type_name"])
+            self.assertEqual(checkpoint.milestone_type_id, self.type_border)
+            self.assertEqual(checkpoint.type_name, self.type_border.name)
+            self.assertFalse(self._milestone(trip, "Destination").milestone_type_id)
+            self.assertEqual(checkpoint.template_line_id, border)
+        self.assertEqual(manual.milestone_type_id, self.type_loading)
+        self.assertFalse(first.milestone_ids.filtered(
+            lambda row: row.name == "Destination"
+        ).mapped("type_name"))
+
+        # Later template edits must not rewrite the filled snapshot.
+        border.with_user(self.manager).write({
+            "milestone_type_id": self.type_offloading.id,
+            "name": "Border renamed",
+        })
+        for trip in (first, second):
+            checkpoint = self._milestone(trip, "Border")
+            self.assertEqual(checkpoint.milestone_type_id, self.type_border)
+            self.assertEqual(checkpoint.type_name, self.type_border.name)
+            self.assertEqual(checkpoint.name, "Border")
+        # Direct edits to a milestone's protected type remain forbidden.
+        with self.assertRaises(UserError):
+            self._milestone(first, "Border").sudo().write({
+                "milestone_type_id": self.type_offloading.id,
+            })
+
+    def test_late_type_does_not_replace_existing_checkpoint_type(self):
+        route = self._route("Already classified snapshot", [
+            {"name": "Preclassified", "milestone_type_id": self.type_loading.id},
+            {"name": "Blank"},
+        ])
+        trip = self._trip(route, tag="KEEP-TYPE")
+        initial = self._milestone(trip, "Preclassified")
+        route.line_ids.filtered(
+            lambda line: line.name == "Preclassified"
+        ).with_user(self.manager).write({
+            "milestone_type_id": self.type_offloading.id,
+        })
+        self.assertEqual(initial.milestone_type_id, self.type_loading)
+        self.assertEqual(initial.type_name, self.type_loading.name)
+        # Clearing a previously chosen type must not erase a trip snapshot.
+        route.line_ids.filtered(
+            lambda line: line.name == "Preclassified"
+        ).with_user(self.manager).write({"milestone_type_id": False})
+        self.assertEqual(initial.milestone_type_id, self.type_loading)
+        self.assertEqual(initial.type_name, self.type_loading.name)
+
+    def test_late_type_fills_pending_ready_and_in_progress_checkpoints(self):
+        for state in ("ready", "in_progress"):
+            with self.subTest(state=state):
+                route = self._route("Late type " + state, [{"name": "Gate"}])
+                trip = (
+                    self._ready_trip(route, tag="LATE-READY")
+                    if state == "ready"
+                    else self._started_trip(route, tag="LATE-PROGRESS")
+                )
+                checkpoint = self._milestone(trip, "Gate")
+                self.assertEqual(checkpoint.state, "pending")
+                route.line_ids.with_user(self.manager).write({
+                    "milestone_type_id": self.type_border.id,
+                })
+                checkpoint.invalidate_recordset(["milestone_type_id", "type_name"])
+                self.assertEqual(checkpoint.milestone_type_id, self.type_border)
+                self.assertEqual(checkpoint.type_name, self.type_border.name)
+
+    def test_late_type_never_changes_recorded_checkpoint_events(self):
+        route = self._route("Already recorded checkpoint", [
+            {"name": "Arrived checkpoint"},
+            {"name": "Unrecorded checkpoint"},
+        ])
+        trip = self._ready_trip(route, tag="LATE-RECORDED")
+        recorded = self._milestone(trip, "Arrived checkpoint")
+        self._record(
+            recorded, "arrival",
+            event_at=fields.Datetime.now() - timedelta(minutes=10),
+        )
+        history_ids = recorded.event_ids.ids
+        self.assertTrue(history_ids)
+        route.line_ids.filtered(
+            lambda line: line.name == "Arrived checkpoint"
+        ).with_user(self.manager).write({
+            "milestone_type_id": self.type_border.id,
+        })
+        recorded.invalidate_recordset(["milestone_type_id", "type_name"])
+        self.assertFalse(recorded.milestone_type_id)
+        self.assertFalse(recorded.type_name)
+        self.assertEqual(recorded.event_ids.ids, history_ids)
+
+        route.line_ids.filtered(
+            lambda line: line.name == "Unrecorded checkpoint"
+        ).with_user(self.manager).write({
+            "milestone_type_id": self.type_loading.id,
+        })
+        untouched = self._milestone(trip, "Unrecorded checkpoint")
+        self.assertEqual(untouched.milestone_type_id, self.type_loading)
+
+    def test_late_type_does_not_change_completed_or_cancelled_trips(self):
+        completed_route = self._route(
+            "Completed with missing type", [{"name": "Final checkpoint"}]
+        )
+        completed = self._completed_trip(completed_route, tag="LATE-COMPLETED")
+        self.assertEqual(completed.state, "completed")
+        completed_route.line_ids.with_user(self.manager).write({
+            "milestone_type_id": self.type_border.id,
+        })
+        completed_checkpoint = self._milestone(completed, "Final checkpoint")
+        self.assertFalse(completed_checkpoint.milestone_type_id)
+        self.assertFalse(completed_checkpoint.type_name)
+
+        cancelled_route = self._route(
+            "Cancelled with missing type", [{"name": "Cancelled checkpoint"}]
+        )
+        cancelled = self._trip(cancelled_route, tag="LATE-CANCELLED")
+        self._cancel_trip(cancelled)
+        self.assertEqual(cancelled.state, "cancelled")
+        cancelled_route.line_ids.with_user(self.manager).write({
+            "milestone_type_id": self.type_border.id,
+        })
+        cancelled_checkpoint = self._milestone(cancelled, "Cancelled checkpoint")
+        self.assertFalse(cancelled_checkpoint.milestone_type_id)
+        self.assertFalse(cancelled_checkpoint.type_name)
+
+    # ------------------------------------------------------------------
     # C. Template change and regeneration policy
     # ------------------------------------------------------------------
     def test_switching_template_before_operations_replaces_unrecorded_copies(self):
@@ -470,7 +655,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             ],
         )
         trip = self._trip(route_a, tag="SWITCH")
-        manual = trip._add_manual_milestone({"name": "Manual variance stop"})
+        manual = trip._add_manual_milestone({"name": "Manual variance stop", "milestone_type_id": self.type_loading.id})
         trip.write({"route_id": route_b.id})
         self.assertEqual(trip.route_id, route_b)
         self.assertEqual(trip.generated_route_id, route_b)
@@ -507,7 +692,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
     def test_regeneration_wizard_reports_scope_and_keeps_manual_checkpoints(self):
         route = self._route("Regeneration route", [{"name": "R1"}, {"name": "R2"}])
         trip = self._planned_trip(route, tag="REGEN")
-        manual = trip._add_manual_milestone({"name": "Weighbridge stop"})
+        manual = trip._add_manual_milestone({"name": "Weighbridge stop", "milestone_type_id": self.type_loading.id})
         wizard = self.env["taj.transport.regenerate.milestones.wizard"].create(
             {
                 "trip_id": trip.id,
@@ -727,7 +912,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             self.assertFalse(trip.milestone_ids)
             # The sanctioned alternative stays available: the variance is
             # added by hand, and a trip without a plan keeps working.
-            manual = trip._add_manual_milestone({"name": "Variance %s" % state})
+            manual = trip._add_manual_milestone({"name": "Variance %s" % state, "milestone_type_id": self.type_loading.id})
             self.assertEqual(manual.state, "pending")
             self.assertEqual(trip.state, state)
 
@@ -756,7 +941,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
     def test_clearing_the_template_keeps_manually_added_checkpoints(self):
         route = self._route("Manual keeps template", [{"name": "M1"}])
         trip = self._trip(route, tag="CLEARM")
-        manual = trip._add_manual_milestone({"name": "Weighbridge stop"})
+        manual = trip._add_manual_milestone({"name": "Weighbridge stop", "milestone_type_id": self.type_loading.id})
         trip.write({"route_id": False})
         self.assertFalse(trip.route_id)
         self.assertFalse(trip.generated_route_id)
@@ -952,7 +1137,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
 
     def test_a_failed_generation_rolls_back_the_template_assignment(self):
         trip = self._trip(tag="ATOMIC")
-        manual = trip._add_manual_milestone({"name": "Loading"})
+        manual = trip._add_manual_milestone({"name": "Loading", "milestone_type_id": self.type_loading.id})
         route = self._route(
             "Clashing template",
             [{"name": "Loading"}, {"name": "Border"}],

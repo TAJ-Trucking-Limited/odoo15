@@ -216,7 +216,7 @@ class TestTripDispatchSummary(TransactionCase):
     def test_summary_latest_checkpoint_and_actual_start_correction(self):
         trip = self._trip()
         trip.action_start_trip(actual_start_at=fields.Datetime.now() - timedelta(hours=2))
-        checkpoint = trip._add_manual_milestone({"name": "Dar es Salaam Port", "latitude": -6.8, "longitude": 39.3})
+        checkpoint = trip._add_manual_milestone({"name": "Dar es Salaam Port", "milestone_type_id": self.env.ref("taj_transport_operations.milestone_type_loading").id, "latitude": -6.8, "longitude": 39.3})
         arrived = fields.Datetime.now() - timedelta(hours=1)
         checkpoint._record_arrival(arrived)
         self.assertEqual(trip.last_milestone_id, checkpoint)
@@ -225,13 +225,13 @@ class TestTripDispatchSummary(TransactionCase):
         self.assertIn("-6.8,39.3", trip.email_position_map_url)
         with self.assertRaises(ValidationError):
             trip.write({"actual_departure_at": arrived + timedelta(minutes=5)})
-        partial = trip._add_manual_milestone({"name": "Unknown longitude", "latitude": -6.8})
+        partial = trip._add_manual_milestone({"name": "Unknown longitude", "milestone_type_id": self.env.ref("taj_transport_operations.milestone_type_loading").id, "latitude": -6.8})
         partial._record_arrival(arrived + timedelta(minutes=10))
         self.assertFalse(trip.email_position_map_url)
 
     def test_dispatch_views_and_trip_filters(self):
         trip = self._trip()
-        checkpoint = trip._add_manual_milestone({"name": "Loading"})
+        checkpoint = trip._add_manual_milestone({"name": "Loading", "milestone_type_id": self.env.ref("taj_transport_operations.milestone_type_loading").id})
         def in_menu(action_name):
             action = self.env.ref("taj_transport_operations." + action_name)
             return bool(self.env["taj.transport.milestone"].search(

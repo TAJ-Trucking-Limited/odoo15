@@ -2,6 +2,7 @@
 
 import { registry } from "@web/core/registry";
 import { isHtmlEmpty } from "@web/core/utils/html";
+import { createElement } from "@web/core/utils/xml";
 import { FormCompiler } from "@web/views/form/form_compiler";
 import { FormRenderer } from "@web/views/form/form_renderer";
 import { formView } from "@web/views/form/form_view";
@@ -38,6 +39,32 @@ function pageFieldSpecs(page) {
 }
 
 class TripFormCompiler extends FormCompiler {
+    compileGroup(element, params) {
+        const group = super.compileGroup(element, params);
+        if (element.getAttribute("name") !== "trip_progress_section") {
+            return group;
+        }
+
+        // Attach the arrow to the real Odoo group heading, not as an
+        // additional field row. The button switches notebook pages client-side.
+        const heading = group.querySelector('[t-set-slot="title"] .o_horizontal_separator');
+        if (heading) {
+            const arrow = createElement("button", {
+                type: "button",
+                class: "btn btn-link btn-sm p-0 ms-2 o_taj_milestone_jump",
+                title: "Go to Milestones",
+                "aria-label": "Go to Milestones tab",
+                "t-on-click": "__comp__.openMilestonesTab",
+            });
+            arrow.appendChild(createElement("i", {
+                class: "fa fa-arrow-right",
+                "aria-hidden": "true",
+            }));
+            heading.appendChild(arrow);
+        }
+        return group;
+    }
+
     compileNotebook(element, params) {
         // Capture modifiers before the normal compiler transforms the nodes.
         const pages = new Map(
@@ -63,6 +90,17 @@ class TripFormCompiler extends FormCompiler {
 }
 
 class TripFormRenderer extends FormRenderer {
+    openMilestonesTab(event) {
+        event.preventDefault();
+        // Use Odoo's tab click so its notebook state and page validation stay
+        // in sync; do not navigate away from the current Trip record.
+        const notebook = event.currentTarget.closest(".o_notebook");
+        const tab = notebook?.querySelector(
+            '.o_notebook_headers a[role="tab"][name="trip_milestones"]'
+        );
+        tab?.click();
+    }
+
     tripTabTitle(title, page) {
         if (page.name === "activity_history") {
             return title;

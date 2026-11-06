@@ -50,7 +50,7 @@
                                 <list editable="bottom" delete="1">
                                     <field name="sequence" widget="handle"/>
                                     <field name="name" placeholder="Checkpoint name"/>
-                                    <field name="milestone_type_id"
+                                    <field name="milestone_type_id" required="1"
                                            options="{'no_create': True, 'no_create_edit': True}"/>
                                     <field name="planned_offset_days" optional="show"/>
                                     <field name="planned_offset_hours" optional="show"/>
@@ -61,8 +61,11 @@
                             </field>
                             <p class="text-muted">
                                 Checkpoints are copied into a trip when the trip
-                                selects this route. Editing the template later
-                                never changes trips that were already generated.
+                                selects this route. New checkpoints require a
+                                Checkpoint Type. Filling a previously missing type
+                                updates only untouched, pending checkpoints on
+                                open trips; other planning changes do not
+                                rewrite generated milestones.
                                 Planned offsets can be entered in days or hours;
                                 one day equals 24 hours.
                                 Coordinates are optional planning data for the

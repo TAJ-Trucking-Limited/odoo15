@@ -155,7 +155,7 @@
                                         <field name="current_vehicle_id" readonly="1"/>
                                         <field name="current_driver_id" readonly="1"/>
                                     </group>
-                                    <group string="Trip Progress">
+                                    <group string="Trip Progress" name="trip_progress_section">
                                         <field name="allocation_date" readonly="1"/>
                                         <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')"/>
                                         <field name="last_milestone_activity" readonly="1"/>

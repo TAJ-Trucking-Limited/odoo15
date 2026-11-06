@@ -3,8 +3,9 @@
 Generation policy (deliberate, documented and tested):
 
 * Selecting a route template copies its ordered checkpoints into the trip as
-  independent milestone records. The copy is a snapshot: editing the template
-  later never rewrites a trip that was already generated.
+  independent milestone records. The copy is a snapshot: later template edits
+  never re-plan it, except a missing type can be filled for untouched, pending
+  milestones on non-closed trips.
 * Checkpoints are planned while the trip is in Draft only. Once the trip is
   Ready its plan is in operational use, so the template can neither be
   changed, regenerated nor cleared: route variances are covered by adding a
@@ -464,6 +465,8 @@ class TajTransportTrip(models.Model):
                 )
                 % ", ".join(rejected)
             )
+        if not vals.get("milestone_type_id"):
+            raise ValidationError(_("Checkpoint Type is required to add a checkpoint."))
         self._milestone_generation_lock()
         if self.state in ("completed", "cancelled"):
             raise UserError(

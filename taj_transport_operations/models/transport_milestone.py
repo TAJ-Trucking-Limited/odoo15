@@ -1,8 +1,9 @@
 """Trip milestone records: snapshotted checkpoints, manual workflow, audit.
 
 Milestone rows are created by copying a route template's checkpoint
-definition. The copy is a *snapshot*: later template edits never rewrite a
-trip's checkpoints. Operational events (arrival and departure)
+definition. The copy is a *snapshot*: later template edits do not re-plan
+trips. The single exception fills missing checkpoint types on untouched
+pending milestones of open trips. Operational events (arrival and departure)
 are recorded manually through the dedicated workflow methods in this file;
 direct field writes are rejected server-side and the audit trail lives in
 ``taj.transport.milestone.event``.
@@ -119,8 +120,9 @@ class TajTransportMilestone(models.Model):
         readonly=True,
         ondelete="set null",
         copy=False,
-        help="Traceability only. The milestone keeps its own snapshot, so "
-        "editing or removing the template line changes nothing here.",
+        help="Traceability of the original template checkpoint. Other planning "
+        "fields remain snapshotted; a missing type can be filled on untouched "
+        "pending milestones of open trips.",
     )
     sequence = fields.Integer(default=10)
     name = fields.Char(
@@ -320,6 +322,55 @@ class TajTransportMilestone(models.Model):
                 milestone.trip_id.name,
                 milestone.name,
             )
+
+    # ------------------------------------------------------------------
+    # One-way completion of missing template checkpoint types
+    # ------------------------------------------------------------------
+    @api.model
+    def _backfill_missing_checkpoint_types(self, template_lines):
+        """Fill missing type snapshots only on untouched pending checkpoints.
+
+        Called after a manager first assigns a type to a previously untyped
+        route checkpoint. A trip row lock serializes this small metadata
+        correction with arrival/departure, completion and cancellation.
+        Completed/cancelled trips and all recorded checkpoints remain immutable.
+        Ordinary writes to these protected fields stay forbidden.
+        """
+        Milestone = self.sudo()
+        for line in template_lines:
+            checkpoint_type = line.milestone_type_id
+            if not checkpoint_type:
+                continue
+
+            domain = [
+                ("template_line_id", "=", line.id),
+                ("company_id", "=", line.company_id.id),
+                ("milestone_type_id", "=", False),
+                ("type_name", "=", False),
+                ("state", "=", "pending"),
+                ("actual_arrival_at", "=", False),
+                ("actual_departure_at", "=", False),
+                ("confirmed_at", "=", False),
+                ("event_ids", "=", False),
+                ("trip_id.state", "not in", ("completed", "cancelled")),
+            ]
+            trips = Milestone.search(domain).mapped("trip_id").sorted("id")
+            for trip in trips:
+                trip._lock_for_transition()
+                if trip.state in ("completed", "cancelled"):
+                    continue
+
+                # Re-read after acquiring the trip lock: a concurrent
+                # checkpoint event or lifecycle transition may have changed
+                # eligibility since the initial search.
+                pending = Milestone.search(domain + [("trip_id", "=", trip.id)])
+                if pending:
+                    # Bypass the general read-only snapshot guard only from
+                    # this narrow internal reconciliation path.
+                    super(TajTransportMilestone, pending).write({
+                        "milestone_type_id": checkpoint_type.id,
+                        "type_name": checkpoint_type.name,
+                    })
 
     # ------------------------------------------------------------------
     # Direct write / delete protection

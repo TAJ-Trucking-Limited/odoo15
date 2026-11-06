@@ -23,6 +23,7 @@ class TajTransportMilestoneAddWizard(models.TransientModel):
     milestone_type_id = fields.Many2one(
         "taj.transport.milestone.type",
         string="Checkpoint Type",
+        required=True,
         ondelete="restrict",
     )
     planned_offset_hours = fields.Float(
@@ -36,6 +37,8 @@ class TajTransportMilestoneAddWizard(models.TransientModel):
         trip = self.trip_id.exists()
         if not trip:
             raise UserError(_("The trip no longer exists."))
+        if not self.milestone_type_id:
+            raise UserError(_("Choose a Checkpoint Type before adding the checkpoint."))
         milestone = trip._add_manual_milestone(
             {
                 "name": self.name,

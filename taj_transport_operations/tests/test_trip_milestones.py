@@ -51,6 +51,36 @@ class TestTripMilestones(TajTransportPhase3Case):
     # ------------------------------------------------------------------
     # Manual workflow
     # ------------------------------------------------------------------
+    def test_new_manual_checkpoint_requires_a_type_in_api_and_wizard(self):
+        trip = self._checkpoint_trip("REQUIRED-MANUAL-TYPE", state="draft")
+        original_count = len(trip.milestone_ids)
+        with self.assertRaisesRegex(ValidationError, "Checkpoint Type"), self.env.cr.savepoint():
+            trip._add_manual_milestone({"name": "Untyped stop"})
+        wizard = self.env["taj.transport.milestone.add.wizard"].new({
+            "trip_id": trip.id,
+            "name": "Untyped wizard stop",
+        })
+        with self.assertRaisesRegex(UserError, "Checkpoint Type"), self.env.cr.savepoint():
+            wizard.action_add_checkpoint()
+        view = etree.fromstring(
+            self.env.ref(
+                "taj_transport_operations.view_trip_milestone_add_wizard_form"
+            ).get_combined_arch()
+        )
+        fields_found = view.xpath("//field[@name='milestone_type_id']")
+        self.assertEqual(len(fields_found), 1)
+        self.assertEqual(fields_found[0].get("required"), "1")
+
+        wizard = self.env["taj.transport.milestone.add.wizard"].create({
+            "trip_id": trip.id,
+            "name": "Classified wizard stop",
+            "milestone_type_id": self.type_border.id,
+        })
+        wizard.action_add_checkpoint()
+        milestone = self._milestone(trip, "Classified wizard stop")
+        self.assertEqual(milestone.milestone_type_id, self.type_border)
+        self.assertEqual(len(trip.milestone_ids), original_count + 1)
+
     def test_checkpoints_cannot_be_recorded_before_the_trip_is_ready(self):
         trip = self._checkpoint_trip("DRAFTONLY", state="draft")
         milestone = self._milestone(trip, "Loading")
@@ -463,7 +493,7 @@ class TestTripMilestones(TajTransportPhase3Case):
                 event_at=fields.Datetime.now() - timedelta(hours=1),
             )
         with self.assertRaises(UserError):
-            trip._add_manual_milestone({"name": "Too late checkpoint"})
+            trip._add_manual_milestone({"name": "Too late checkpoint", "milestone_type_id": self.type_loading.id})
         corrected = fields.Datetime.now() - timedelta(hours=3)
         self.assertTrue(
             self._manager_milestone(border)._correct_timestamp(
@@ -487,7 +517,7 @@ class TestTripMilestones(TajTransportPhase3Case):
         with self.assertRaises(UserError):
             self._record(border, "arrival")
         with self.assertRaises(UserError):
-            trip._add_manual_milestone({"name": "Late checkpoint"})
+            trip._add_manual_milestone({"name": "Late checkpoint", "milestone_type_id": self.type_loading.id})
         with self.assertRaises(UserError):
             self._manager_milestone(border)._correct_timestamp(
                 "actual_arrival_at",

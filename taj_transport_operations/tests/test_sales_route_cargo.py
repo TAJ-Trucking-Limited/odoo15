@@ -70,6 +70,7 @@ class TestSalesRouteAndCargoDefaults(TransactionCase):
         cls.env["taj.transport.route.line"].create({
             "route_id": cls.route_a.id,
             "name": "A1",
+            "milestone_type_id": cls.env.ref("taj_transport_operations.milestone_type_loading").id,
             "sequence": 10,
         })
         cls.route_b1 = cls.env["taj.transport.route"].create({

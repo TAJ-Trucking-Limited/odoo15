@@ -1,8 +1,8 @@
 """Reusable route templates and their ordered checkpoint definitions.
 
-A template only *describes* the expected checkpoints. Trips copy the
-definition into their own milestone records, so editing a template never
-changes a trip that was already generated (see ``taj.transport.milestone``).
+A template describes the expected checkpoints. Trips copy independent milestone
+snapshots; the only later propagation is a missing Checkpoint Type filled on
+an untouched, pending milestone of an open trip.
 """
 
 from odoo import _, api, fields, models
@@ -149,7 +149,9 @@ class TajTransportRouteLine(models.Model):
         "taj.transport.milestone.type",
         string="Checkpoint Type",
         ondelete="restrict",
-        help="Optional classification maintained by the Transport Manager.",
+        help="Optional classification maintained by the Transport Manager. "
+             "When first assigned, fills only untyped, untouched, pending "
+             "milestones on open trips generated from this checkpoint.",
     )
     requires_confirmation = fields.Boolean(
         string="Legacy Confirmation Requirement", readonly=True,
@@ -188,6 +190,40 @@ class TajTransportRouteLine(models.Model):
         # Update Hours both while editing the form and when saving Days.
         for line in self:
             line.planned_offset_hours = line.planned_offset_days * 24.0
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # Existing legacy template rows may remain untyped for later
+        # correction, but new checkpoints must be classified at creation.
+        # Only superuser-driven migrations/tests may deliberately import an
+        # old untyped checkpoint; ordinary RPC users cannot bypass this.
+        legacy_import = (
+            self.env.su
+            and self.env.context.get("_import_legacy_untyped_checkpoint")
+        )
+        if not legacy_import and any(
+            not vals.get("milestone_type_id") for vals in vals_list
+        ):
+            raise ValidationError(
+                _("Checkpoint Type is required when adding a new checkpoint.")
+            )
+        return super().create(vals_list)
+
+    def write(self, vals):
+        # A newly specified type completes missing planning metadata on
+        # existing trips. Never propagate changing or clearing a type already
+        # configured on the template, nor any other template edits.
+        missing_before = (
+            self.filtered(lambda line: not line.milestone_type_id)
+            if vals.get("milestone_type_id")
+            else self.browse()
+        )
+        result = super().write(vals)
+        if missing_before:
+            self.env["taj.transport.milestone"]._backfill_missing_checkpoint_types(
+                missing_before
+            )
+        return result
 
     @api.constrains("route_id", "name")
     def _check_unique_name_per_route(self):
