@@ -75,8 +75,12 @@ class SaleOrderLine(models.Model):
             or self.env.user.has_group(
                 "taj_transport_operations.group_shipment_data_entry"
             )
+            or self.env.user.has_group(
+                "taj_transport_operations.group_transport_user"
+            )
+            or self.env.user.has_group("base.group_system")
         ):
-            raise AccessError(_("Shipment Data Entry permission is required."))
+            raise AccessError(_("Shipment editing permission is required."))
         if (
             set(values) - set(SHIPMENT_FIELDS)
             or row.sale_line_id != self
@@ -220,7 +224,6 @@ class SaleOrderLine(models.Model):
             # computed/related field, which would overwrite manual choices.
             line.file_type_id = self._suggest_route_file_type(template, company)
 
-    @api.model
     def action_open_duplicate_line_wizard(self):
         order = self.env["sale.order"].browse(self.env.context.get("order_id")).exists()
         if not order:

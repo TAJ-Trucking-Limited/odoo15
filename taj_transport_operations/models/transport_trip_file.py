@@ -144,8 +144,13 @@ class TajTransportTripFile(models.Model):
     @api.depends("sale_order_id.state")
     @api.depends_context("uid")
     def _compute_can_edit_shipments(self):
-        allowed = self.env.su or self.env.user.has_group(
-            "taj_transport_operations.group_shipment_data_entry"
+        allowed = self.env.su or any(
+            self.env.user.has_group(group)
+            for group in (
+                "taj_transport_operations.group_shipment_data_entry",
+                "taj_transport_operations.group_transport_user",
+                "base.group_system",
+            )
         )
         for file in self:
             file.can_edit_shipments = allowed and file.sale_order_id.state != "cancel"

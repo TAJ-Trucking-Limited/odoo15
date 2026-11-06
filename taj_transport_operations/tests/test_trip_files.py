@@ -298,6 +298,39 @@ class TestTripFiles(TransactionCase):
             groups="base.group_user,taj_transport_operations.group_shipment_data_entry",
         )
 
+    def test_dispatcher_edits_file_form_and_updates_confirmed_sales_line(self):
+        order = self._order()
+        self._confirm(order)
+        dispatcher = new_test_user(
+            self.env,
+            login="file_form_dispatcher_edit",
+            company_id=self.env.company.id,
+            groups="base.group_user,taj_transport_operations.group_transport_user",
+        )
+        file = order.trip_file_ids.with_user(dispatcher)
+        row = file.line_ids[:1]
+        source = row.sale_line_id
+        old_price = source.price_unit
+        self.assertTrue(order.locked)
+        self.assertTrue(file.can_edit_shipments)
+        file.write({
+            "line_ids": [Command.update(row.id, {
+                "bill_of_lading": "DISPATCH-BL-EDIT",
+                "container_num": "DISPATCH-CONT-EDIT",
+                "cargo_description": "Updated from File Number",
+                "product_uom_qty": 3,
+            })],
+        })
+        self.assertEqual(source.bill_of_lading, "DISPATCH-BL-EDIT")
+        self.assertEqual(source.container_num, "DISPATCH-CONT-EDIT")
+        self.assertEqual(source.cargo_description, "Updated from File Number")
+        self.assertEqual(source.product_uom_qty, 3)
+        self.assertEqual(source.price_unit, old_price)
+        self.assertTrue(order.locked)
+        self.assertIn("DISPATCH-CONT-EDIT", file.container_number)
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            file.write({"line_ids": [Command.update(row.id, {"price_unit": 1})]})
+
     def test_data_entry_updates_source_without_unlocking_or_changing_price(self):
         order = self._order()
         self._confirm(order)

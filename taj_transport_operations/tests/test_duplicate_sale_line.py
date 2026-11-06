@@ -2,6 +2,7 @@
 from lxml import etree
 
 from odoo.exceptions import AccessError, UserError
+from odoo.service.model import call_kw
 from odoo.tests import TransactionCase, tagged
 from odoo.tests.common import new_test_user
 from odoo.tools.safe_eval import safe_eval
@@ -67,6 +68,25 @@ class TestDuplicateSaleLine(TransactionCase):
         wizard = self.env[action["res_model"]].with_context(action["context"]).new({})
         self.assertEqual(wizard.sale_order_id, self.order)
         self.assertFalse(wizard.source_line_id)
+
+    def test_duplicate_control_button_rpc_dispatch(self):
+        # A One2many <control> object button sends an ids argument through
+        # call_kw. @api.model incorrectly treats it as a method argument.
+        action = call_kw(
+            self.env["sale.order.line"],
+            "action_open_duplicate_line_wizard",
+            [[]],
+            {"context": {"order_id": self.order.id}},
+        )
+        self.assertEqual(action["res_model"], "taj.transport.duplicate.sale.line.wizard")
+        self.assertEqual(action["context"]["default_sale_order_id"], self.order.id)
+        with self.assertRaises(UserError):
+            call_kw(
+                self.env["sale.order.line"],
+                "action_open_duplicate_line_wizard",
+                [[]],
+                {"context": {}},
+            )
 
     def test_clean_container_preserves_other_values_and_original(self):
         duplicate = self._duplicate("container")
