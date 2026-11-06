@@ -12,14 +12,16 @@ class TestTripFiles(TransactionCase):
         full_list = self.env.ref("taj_transport_operations.view_transport_trip_list")
         full_form = self.env.ref("taj_transport_operations.view_transport_trip_form")
         related_form = self.env.ref("taj_transport_operations.view_file_related_trip_form")
+        related_list = self.env.ref("taj_transport_operations.view_file_related_trip_list")
         action = self.env.ref("taj_transport_operations.action_transport_trip")
         self.assertEqual(action.views, [(full_list.id, "list"), (full_form.id, "form")])
         self.assertEqual(self.env["taj.transport.trip"].get_view(view_type="form")["id"], full_form.id)
         self.assertIn('name="trip_summary"', full_form.arch_db)
         self.assertIn('name="action_open_start_trip_wizard"', full_form.arch_db)
         self.assertIn('edit="0"', related_form.arch_db)
-        self.assertNotIn('name="planned_departure_at"', related_form.arch_db)
-        self.assertNotIn('name="planned_arrival_at"', related_form.arch_db)
+        for field in ("planned_departure_at", "planned_arrival_at"):
+            self.assertIn(f'name="{field}"', related_form.arch_db)
+            self.assertIn(f'name="{field}" optional="hide"', related_list.arch_db)
 
     @classmethod
     def setUpClass(cls):
