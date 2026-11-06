@@ -87,7 +87,6 @@ class TestAutomaticFleetDefaults(TajTransportPhase3Case):
         foreign = self.env["res.company"].create({"name": "Foreign truck company"})
         for label, values in (
             ("archived", {"active": False}),
-            ("uncategorized", {"category_id": False}),
             ("trailer", {"category_id": self.env.ref("taj_transport_operations.fleet_category_trailer").id}),
             ("foreign", {"company_id": foreign.id}),
         ):
@@ -100,8 +99,14 @@ class TestAutomaticFleetDefaults(TajTransportPhase3Case):
                 trip = self._trip(line=line)
                 self.assertFalse(trip.assignment_ids)
                 self.assertEqual(trip.initial_vehicle_id, truck)
-                with self.assertRaisesRegex(UserError, "active, categorized"), self.env.cr.savepoint():
+                with self.assertRaisesRegex(UserError, "must be active"), self.env.cr.savepoint():
                     trip.action_apply_initial_fleet_defaults()
+
+    def test_uncategorized_truck_can_receive_automatic_trip_assignment(self):
+        self.truck.category_id = False
+        trip = self._trip(line=self._source("UNCATEGORIZED"))
+        self.assertEqual(trip.current_vehicle_id, self.truck)
+        self.assertTrue(trip.current_assignment_id)
 
     def test_missing_truck_stays_unassigned(self):
         trip = self._trip(line=self._sale_line("MISSING", vehicle_id=False))

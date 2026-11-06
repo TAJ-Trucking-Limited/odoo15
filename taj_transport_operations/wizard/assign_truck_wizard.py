@@ -1,6 +1,6 @@
 """Assign a planned truck to a sales order line without creating a trip."""
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 
@@ -46,6 +46,24 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         ),
     )
 
+    driver_id = fields.Many2one(
+        "res.partner", string="Driver", compute="_compute_driver_id",
+        store=True, readonly=False, precompute=True,
+        domain="[('active', '=', True), '|', ('company_id', '=', False), ('company_id', '=', company_id)]",
+        help="Defaults to the Fleet truck driver. You can choose another driver "
+             "or leave it empty; your choice is kept when creating the Trip later.",
+    )
+
+    @api.depends("vehicle_id")
+    def _compute_driver_id(self):
+        for wizard in self:
+            driver = wizard.vehicle_id.driver_id
+            company = wizard.company_id or self.env.company
+            wizard.driver_id = driver if (
+                driver and driver.active
+                and (not driver.company_id or driver.company_id == company)
+            ) else False
+
     def action_assign_truck(self):
         self.ensure_one()
         line = self.sale_line_id
@@ -79,6 +97,17 @@ class TajTransportAssignTruckWizard(models.TransientModel):
                     "Choose an active Truck from the sales order's company or a shared truck."
                 )
             )
+        driver = self.driver_id
+        if driver:
+            driver.check_access("read")
+            if (
+                not driver.active
+                or (driver.company_id and driver.company_id != line.company_id)
+            ):
+                raise UserError(_(
+                    "Choose an active driver from the Sales Order's company "
+                    "or a shared contact."
+                ))
         # Match assignment's trip -> source line lock order. Recheck after the
         # lock so a stale dialog or a retried request cannot replace a truck.
         trips = line.transport_trip_ids
@@ -91,14 +120,18 @@ class TajTransportAssignTruckWizard(models.TransientModel):
             trip = trips.ensure_one()
             if trip.state != "draft" or trip.assignment_ids:
                 raise UserError(_("Use the trip's resource workflow to change its allocation."))
-            driver = vehicle.driver_id
-            if driver and (not driver.active or (driver.company_id and driver.company_id != trip.company_id)):
-                driver = self.env["res.partner"]
             self.env["taj.transport.assignment"].create({
                 "trip_id": trip.id, "vehicle_id": vehicle.id,
                 "driver_id": driver.id, "effective_from": fields.Datetime.now(),
                 "reason": _("Assigned from Sales allocation worklist"),
             })
         else:
-            line.sudo().write({"vehicle_id": vehicle.id})
+            # Save the driver's explicit choice alongside the first truck.
+            # A later Trip uses this snapshot instead of Fleet's possibly
+            # changed driver. False is an intentional no-driver selection.
+            line.sudo().write({
+                "vehicle_id": vehicle.id,
+                "transport_allocated_driver_id": driver.id or False,
+                "transport_driver_choice_set": True,
+            })
         return {"type": "ir.actions.act_window_close"}

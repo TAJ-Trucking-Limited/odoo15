@@ -15,11 +15,14 @@
                     <group>
                         <field name="company_id" invisible="1"/>
                         <field name="vehicle_id" options="{'no_create': True}"/>
+                        <field name="driver_id" options="{'no_create': True}"/>
                     </group>
                 </group>
                 <p class="text-muted">
-                    Assigns the first truck to the Sales line. If an unassigned
-                    Draft trip already exists, its resources are assigned too.
+                    Assigns the first truck and selected driver to the Sales line.
+                    The driver defaults from Fleet but can be changed. If a Draft
+                    trip exists, the selection is recorded as its initial resources;
+                    otherwise the driver choice is saved for later trip creation.
                     This action does not create a trip or replace an existing truck.
                 </p>
                 <footer>

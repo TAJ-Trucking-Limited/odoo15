@@ -357,7 +357,11 @@ class TajTransportTrip(models.Model):
             "context": {
                 "default_trip_id": self.id,
                 "default_vehicle_id": self.initial_vehicle_id.id or False,
-                "default_driver_id": self.initial_vehicle_id.driver_id.id or False,
+                "default_driver_id": (
+                    self.sale_line_id.transport_allocated_driver_id.id
+                    if self.sale_line_id.transport_driver_choice_set
+                    else self.initial_vehicle_id.driver_id.id
+                ) or False,
             },
         }
 
@@ -377,13 +381,15 @@ class TajTransportTrip(models.Model):
                 continue
             vehicle = trip.initial_vehicle_id
             if (
-                not vehicle or not vehicle.active or vehicle.category_id != category
+                not vehicle or not vehicle.active
+                or (vehicle.category_id and vehicle.category_id != category)
                 or (vehicle.company_id and vehicle.company_id != trip.company_id)
             ):
                 if required:
                     raise UserError(_(
-                        "The original Sales truck needs to be active, categorized "
-                        "as Truck, and belong to this trip's company or be shared. "
+                        "The original Sales truck must be active, have the Truck "
+                        "category or no category, and belong to this trip's "
+                        "company or be shared. "
                         "Use Assign Initial Resources to select it manually."
                     ))
                 continue
@@ -413,7 +419,14 @@ class TajTransportTrip(models.Model):
                 if required:
                     raise UserError(_("This truck is reserved by another Draft trip. Use Assign Initial Resources or choose a different truck."))
                 continue
-            driver = vehicle.driver_id if vehicle.driver_id else False
+            line = trip.sale_line_id
+            # Preserve the driver's explicit selection made on the Sales
+            # allocation worklist, including an intentionally empty choice.
+            driver = (
+                line.transport_allocated_driver_id
+                if line.transport_driver_choice_set
+                else vehicle.driver_id
+            )
             if driver and driver.active and driver.company_id and driver.company_id != trip.company_id:
                 driver = False
             elif driver and not driver.active:

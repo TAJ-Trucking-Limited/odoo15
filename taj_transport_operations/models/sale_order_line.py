@@ -13,6 +13,14 @@ class SaleOrderLine(models.Model):
         string="Allocation Date", readonly=True, copy=False,
         help="Time the Sales line first received a truck. Replacements preserve this date.",
     )
+    transport_allocated_driver_id = fields.Many2one(
+        "res.partner", string="Driver at Allocation", readonly=True, copy=False,
+        help="Driver selected with the first Sales truck, used when a Trip is created later.",
+    )
+    transport_driver_choice_set = fields.Boolean(
+        readonly=True, copy=False,
+        help="The Assign Truck dialog explicitly selected a driver (or no driver).",
+    )
 
     def _lock_transport_vehicle(self, creating_trip=False):
         """Serialize first allocation with assignment backfill and trip creation."""

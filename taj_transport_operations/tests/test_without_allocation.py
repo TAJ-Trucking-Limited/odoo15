@@ -183,6 +183,115 @@ class TestWithoutAllocation(TransactionCase):
         self.assertEqual(self.line.vehicle_id, unclassified)
         self.assertFalse(self.line.transport_trip_ids)
 
+    def test_driver_defaults_from_fleet_and_is_editable_in_wizard(self):
+        default_driver = self.env["res.partner"].create({
+            "name": "Fleet default driver",
+        })
+        replacement = self.env["res.partner"].create({
+            "name": "Manually selected driver",
+        })
+        self.truck.driver_id = default_driver
+        arch = etree.fromstring(
+            self.env.ref(
+                "taj_transport_operations.view_assign_truck_wizard_form"
+            ).get_combined_arch()
+        )
+        self.assertEqual(len(arch.xpath("//field[@name='driver_id']")), 1)
+        wizard = self.env["taj.transport.assign.truck.wizard"].new({
+            "sale_line_id": self.line.id,
+            "vehicle_id": self.truck.id,
+        })
+        self.assertEqual(wizard.driver_id, default_driver)
+        wizard.driver_id = replacement
+        self.assertEqual(wizard.driver_id, replacement)
+
+    def test_fleet_default_driver_survives_wizard_save_and_trip_creation(self):
+        fleet_driver = self.env["res.partner"].create({
+            "name": "Fleet preset driver",
+        })
+        self.truck.driver_id = fleet_driver
+        wizard = self._wizard(vehicle_id=self.truck.id)
+        self.assertEqual(wizard.driver_id, fleet_driver)
+        wizard.action_assign_truck()
+        self.assertEqual(self.line.transport_allocated_driver_id, fleet_driver)
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        self.assertEqual(trip.current_assignment_id.driver_id, fleet_driver)
+
+    def test_manual_driver_is_kept_until_trip_is_created(self):
+        fleet_driver = self.env["res.partner"].create({
+            "name": "Fleet driver",
+        })
+        chosen_driver = self.env["res.partner"].create({
+            "name": "Selected driver",
+        })
+        self.truck.driver_id = fleet_driver
+        self._wizard(
+            vehicle_id=self.truck.id, driver_id=chosen_driver.id,
+        ).action_assign_truck()
+        self.assertEqual(self.line.vehicle_id, self.truck)
+        self.assertEqual(self.line.transport_allocated_driver_id, chosen_driver)
+        self.assertTrue(self.line.transport_driver_choice_set)
+        self.assertFalse(self.line.transport_trip_ids)
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        self.assertEqual(trip.current_assignment_id.vehicle_id, self.truck)
+        self.assertEqual(trip.current_assignment_id.driver_id, chosen_driver)
+        self.assertEqual(self.truck.driver_id, fleet_driver)
+
+    def test_empty_manual_driver_stays_empty_when_trip_is_created(self):
+        fleet_driver = self.env["res.partner"].create({
+            "name": "Fleet driver with manual blank",
+        })
+        self.truck.driver_id = fleet_driver
+        self._wizard(vehicle_id=self.truck.id, driver_id=False).action_assign_truck()
+        self.assertTrue(self.line.transport_driver_choice_set)
+        self.assertFalse(self.line.transport_allocated_driver_id)
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        self.assertEqual(trip.current_assignment_id.vehicle_id, self.truck)
+        self.assertFalse(trip.current_assignment_id.driver_id)
+
+    def test_existing_draft_trip_uses_selected_driver(self):
+        original = self.env["res.partner"].create({
+            "name": "Original driver",
+        })
+        chosen = self.env["res.partner"].create({
+            "name": "New draft trip driver",
+        })
+        self.truck.driver_id = original
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        self.assertFalse(trip.assignment_ids)
+        self._wizard(
+            vehicle_id=self.truck.id, driver_id=chosen.id,
+        ).action_assign_truck()
+        self.assertEqual(trip.current_assignment_id.driver_id, chosen)
+        self.assertEqual(trip.current_assignment_id.vehicle_id, self.truck)
+        self.assertEqual(self.line.vehicle_id, self.truck)
+        self.assertEqual(self.line.transport_trip_ids, trip)
+
+    def test_assign_truck_rejects_inactive_or_other_company_driver(self):
+        invalid = self.env["res.partner"].create({"name": "Inactive driver"})
+        invalid.active = False
+        other_company = self.env["res.company"].create({
+            "name": "Driver's foreign company",
+        })
+        foreign = self.env["res.partner"].create({
+            "name": "Foreign driver", "company_id": other_company.id,
+        })
+        for driver in (invalid, foreign):
+            with self.subTest(driver=driver.name), self.assertRaises(UserError):
+                self._wizard(
+                    vehicle_id=self.truck.id, driver_id=driver.id,
+                ).action_assign_truck()
+            self.assertFalse(self.line.vehicle_id)
+            self.assertFalse(self.line.transport_driver_choice_set)
+
     def test_assign_truck_writes_the_line_without_a_trip(self):
         action = self.line.action_open_assign_truck_wizard()
         self.assertEqual(action["res_model"], "taj.transport.assign.truck.wizard")
