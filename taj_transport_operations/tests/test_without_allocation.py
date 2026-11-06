@@ -145,6 +145,44 @@ class TestWithoutAllocation(TransactionCase):
         self.assertTrue(self.line.transport_file_id)
         self.assertEqual(self.line.transport_file_id, self.order.trip_file_ids)
 
+    def test_assign_truck_form_loads_selected_sale_line_and_company(self):
+        action = self.line.action_open_assign_truck_wizard()
+        view = self.env.ref(
+            "taj_transport_operations.view_assign_truck_wizard_form"
+        )
+        arch = etree.fromstring(view.get_combined_arch())
+        source = arch.xpath("./form/field[@name='sale_line_id']")
+        self.assertEqual(len(source), 1)
+        self.assertEqual(source[0].get("invisible"), "1")
+        Wizard = self.env["taj.transport.assign.truck.wizard"].with_context(
+            action["context"]
+        )
+        defaults = Wizard.default_get(["sale_line_id"])
+        self.assertEqual(defaults["sale_line_id"], self.line.id)
+        wizard = Wizard.new(defaults)
+        self.assertEqual(wizard.sale_order_id, self.order)
+        self.assertEqual(wizard.product_id, self.product)
+        self.assertEqual(wizard.company_id, self.order.company_id)
+
+    def test_assign_truck_accepts_active_uncategorized_fleet_vehicle(self):
+        unclassified = self.env["fleet.vehicle"].create({
+            "model_id": self.truck_model.id,
+            "license_plate": "ALLOC-UNCATEGORIZED",
+            "category_id": False,
+        })
+        self.assertFalse(unclassified.category_id)
+        Wizard = self.env["taj.transport.assign.truck.wizard"]
+        domain = safe_eval(
+            Wizard._fields["vehicle_id"].domain(Wizard),
+            {"company_id": self.order.company_id.id},
+        )
+        candidates = self.env["fleet.vehicle"].search(domain)
+        self.assertIn(unclassified, candidates)
+        self.assertIn(self.truck, candidates)
+        self._wizard(vehicle_id=unclassified.id).action_assign_truck()
+        self.assertEqual(self.line.vehicle_id, unclassified)
+        self.assertFalse(self.line.transport_trip_ids)
+
     def test_assign_truck_writes_the_line_without_a_trip(self):
         action = self.line.action_open_assign_truck_wizard()
         self.assertEqual(action["res_model"], "taj.transport.assign.truck.wizard")

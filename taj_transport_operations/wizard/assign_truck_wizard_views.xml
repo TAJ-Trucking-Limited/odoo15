@@ -5,6 +5,7 @@
         <field name="model">taj.transport.assign.truck.wizard</field>
         <field name="arch" type="xml">
             <form string="Assign Truck">
+                <field name="sale_line_id" invisible="1"/>
                 <group>
                     <group>
                         <field name="sale_order_id"/>

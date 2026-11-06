@@ -39,8 +39,9 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         string="Truck",
         required=True,
         domain=lambda self: (
-            "[('active', '=', True), ('category_id', '=', %s), '|', "
-            "('company_id', '=', False), ('company_id', '=', company_id)]"
+            "[('active', '=', True), '|', ('category_id', '=', False), "
+            "('category_id', '=', %s), '|', ('company_id', '=', False), "
+            "('company_id', '=', company_id)]"
             % self.env.ref("taj_transport_operations.fleet_category_truck").id
         ),
     )
@@ -68,8 +69,9 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         vehicle.check_access("read")
         category = self.env.ref("taj_transport_operations.fleet_category_truck")
         if (
-            not vehicle.active
-            or vehicle.category_id != category
+            not vehicle
+            or not vehicle.active
+            or (vehicle.category_id and vehicle.category_id != category)
             or (vehicle.company_id and vehicle.company_id != line.order_id.company_id)
         ):
             raise UserError(
