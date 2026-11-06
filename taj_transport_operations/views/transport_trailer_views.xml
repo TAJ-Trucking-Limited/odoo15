@@ -14,11 +14,12 @@
                        decoration-warning="transport_availability_state == 'assigned'"
                        decoration-success="transport_availability_state == 'standby'"/>
                 <field name="transport_trip_ids" widget="many2many_tags"/>
+                <field name="transport_planned_sale_line_count" optional="show"/>
                 <field name="driver_id" string="Fleet Driver" optional="hide"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="active" optional="hide"/>
                 <field name="transport_can_assign" column_invisible="True"/>
-                <button name="action_assign_transport_trip" string="Assign to Trip"
+                <button name="action_assign_transport_trip" string="Assign Truck"
                         type="object" icon="fa-plus"
                         groups="taj_transport_operations.group_transport_user"
                         invisible="not transport_can_assign"/>

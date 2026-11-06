@@ -61,28 +61,54 @@ class FleetVehicle(models.Model):
     def _compute_transport_can_assign(self):
         category = self.env.ref("taj_transport_operations.fleet_category_truck")
         for vehicle in self:
-            reserved = vehicle.transport_trip_ids.filtered(
-                lambda trip: trip.state == "draft" and not trip.assignment_ids
-            )
             vehicle.transport_can_assign = bool(
                 vehicle.active and (not vehicle.category_id or vehicle.category_id == category)
-                and (vehicle.transport_availability_state == "standby" or reserved)
-                and vehicle.transport_availability_state != "busy"
+                and vehicle.transport_availability_state == "standby"
             )
 
+    transport_planned_sale_line_count = fields.Integer(
+        string="Planned Sales Lines",
+        compute="_compute_transport_planned_sale_line_count",
+        groups="taj_transport_operations.group_transport_user",
+        help="Confirmed Sales shipment lines already allocated to this truck "
+             "but not yet turned into Trips. These are planning allocations, "
+             "not active assignments; Availability reflects actual Trips.",
+    )
+
+    @api.depends_context("uid", "allowed_company_ids")
+    def _compute_transport_planned_sale_line_count(self):
+        # Deliberately no sudo: a dispatcher only sees counts for Sales lines
+        # permitted by their active companies and record rules.
+        counts = {}
+        if self.ids:
+            grouped = self.env["sale.order.line"]._read_group([
+                ("vehicle_id", "in", self.ids),
+                ("order_id.state", "in", ("sale", "done")),
+                ("transport_trip_ids", "=", False),
+                ("is_downpayment", "=", False),
+                ("product_id", "!=", False),
+            ], ["vehicle_id"], ["__count"])
+            counts = {vehicle.id: count for vehicle, count in grouped if vehicle}
+        for vehicle in self:
+            vehicle.transport_planned_sale_line_count = counts.get(vehicle.id, 0)
+
     def action_assign_transport_trip(self):
+        """Open Sales-line allocation, never Trip resource assignment."""
         self.ensure_one()
         self.check_access("read")
+        if not (
+            self.env.su
+            or self.env.user.has_group("taj_transport_operations.group_transport_user")
+        ):
+            raise ValidationError(_("Transport Operations access is required."))
         if not self.transport_can_assign:
-            raise ValidationError(_("Choose an active available Truck, or a truck reserved for an unassigned Draft trip."))
+            raise ValidationError(_("Choose an active standby Truck for Sales allocation."))
         return {
-            "type": "ir.actions.act_window", "name": _("Assign Truck to Trip"),
-            "res_model": "taj.transport.initial.assignment.wizard",
+            "type": "ir.actions.act_window",
+            "name": _("Assign Truck to Sales Order"),
+            "res_model": "taj.transport.vehicle.sale.allocation.wizard",
             "view_mode": "form", "target": "new",
-            "context": {
-                "default_vehicle_id": self.id,
-                "select_trip_for_vehicle": True,
-            },
+            "context": {"default_vehicle_id": self.id},
         }
 
     def _lock_for_transport_assignment(self):

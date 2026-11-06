@@ -20,12 +20,6 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
             values["sale_order_id"] = self.env["taj.transport.trip"].browse(trip_id).sale_order_id.id
         return values
 
-    @api.onchange("sale_order_id")
-    def _onchange_sale_order_id(self):
-        if self.env.context.get("select_trip_for_vehicle") and self.trip_id.sale_order_id != self.sale_order_id:
-            self.trip_id = False
-
-
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck",
         domain=lambda self: "[('active', '=', True), '|', ('category_id', '=', False), ('category_id', '=', %s), '|', "
@@ -76,27 +70,6 @@ class TajTransportInitialAssignmentWizard(models.TransientModel):
                 "This trip is already assigned. Replacement is handled "
                 "separately to preserve the history."
             ))
-        if self.env.context.get("select_trip_for_vehicle"):
-            if not self.sale_order_id or trip.sale_order_id != self.sale_order_id:
-                raise UserError(_("Choose a trip belonging to the selected Sales Order."))
-            vehicle = self.vehicle_id
-            vehicle.check_access("read")
-            vehicle._lock_for_transport_assignment()
-            if (not vehicle or not vehicle.active
-                    or (vehicle.category_id and vehicle.category_id != self.env.ref("taj_transport_operations.fleet_category_truck"))):
-                raise UserError(_("Select an active Truck."))
-            # Check all companies without exposing another company's trip.
-            occupied = self.env["taj.transport.assignment"].sudo().search_count([
-                ("effective_to", "=", False),
-                ("trip_id.state", "in", ["draft", "ready", "in_progress"]),
-                "|", ("vehicle_id", "=", vehicle.id), ("trailer_id", "=", vehicle.id),
-            ])
-            reserved = self.env["taj.transport.trip"].sudo().search_count([
-                ("state", "=", "draft"), ("assignment_ids", "=", False),
-                ("initial_vehicle_id", "=", vehicle.id), ("id", "!=", trip.id),
-            ])
-            if occupied or reserved:
-                raise UserError(_("This truck is assigned or reserved for another trip. Refresh Vehicle Availability."))
         self.env["taj.transport.assignment"].create({
             "trip_id": trip.id,
             "vehicle_id": self.vehicle_id.id or False,
