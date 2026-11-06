@@ -641,6 +641,65 @@ class TestRouteTemplates(TajTransportPhase3Case):
         self.assertFalse(cancelled_checkpoint.milestone_type_id)
         self.assertFalse(cancelled_checkpoint.type_name)
 
+    def test_upgrade_repairs_types_already_set_on_templates(self):
+        """Exercise the post-migration entrypoint, not only the write hook."""
+        from pathlib import Path
+        from runpy import run_path
+
+        route = self._route("Preexisting template classification", [
+            {"name": "Start without type"},
+            {"name": "Finish without type"},
+        ])
+        draft = self._trip(route, tag="LEGACY-DRAFT")
+        completed = self._completed_trip(route, tag="LEGACY-COMPLETED")
+        active = self._started_trip(route, tag="LEGACY-ACTIVE")
+        arrived = self._milestone(active, "Start without type")
+        self._record(
+            arrived, "arrival",
+            event_at=fields.Datetime.now() - timedelta(minutes=10),
+        )
+        event_ids = arrived.event_ids.ids
+        self.assertTrue(event_ids)
+
+        # Simulate types filled before the new sync behavior was installed:
+        # an update to the template is NOT triggered when a module upgrades.
+        self.env["taj.transport.route.line"].flush_model(["milestone_type_id"])
+        self.env.cr.execute(
+            "UPDATE taj_transport_route_line SET milestone_type_id = %s "
+            "WHERE route_id = %s",
+            (self.type_border.id, route.id),
+        )
+        route.line_ids.invalidate_recordset(["milestone_type_id"])
+        self.assertEqual(route.line_ids.mapped("milestone_type_id"), self.type_border)
+        self.assertFalse(self._milestone(draft, "Start without type").milestone_type_id)
+
+        migration = run_path(str(
+            Path(__file__).resolve().parents[1]
+            / "migrations" / "19.0.1.40.0" / "post-migration.py"
+        ))
+        migration["migrate"](self.env.cr, "19.0.1.39.0")
+        # The migration is idempotent if a deployment retries the update.
+        migration["migrate"](self.env.cr, "19.0.1.39.0")
+        for checkpoint in draft.milestone_ids:
+            checkpoint.invalidate_recordset(["milestone_type_id", "type_name"])
+            self.assertEqual(checkpoint.milestone_type_id, self.type_border)
+            self.assertEqual(checkpoint.type_name, self.type_border.name)
+
+        pending = self._milestone(active, "Finish without type")
+        pending.invalidate_recordset(["milestone_type_id", "type_name"])
+        self.assertEqual(pending.milestone_type_id, self.type_border)
+        self.assertEqual(pending.type_name, self.type_border.name)
+        arrived.invalidate_recordset(["milestone_type_id", "type_name"])
+        self.assertFalse(arrived.milestone_type_id)
+        self.assertFalse(arrived.type_name)
+        self.assertEqual(arrived.event_ids.ids, event_ids)
+
+        for checkpoint in completed.milestone_ids:
+            checkpoint.invalidate_recordset(["milestone_type_id", "type_name"])
+            self.assertFalse(checkpoint.milestone_type_id)
+            self.assertFalse(checkpoint.type_name)
+        self.assertEqual(completed.state, "completed")
+
     # ------------------------------------------------------------------
     # C. Template change and regeneration policy
     # ------------------------------------------------------------------

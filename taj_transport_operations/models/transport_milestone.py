@@ -372,6 +372,30 @@ class TajTransportMilestone(models.Model):
                         "type_name": checkpoint_type.name,
                     })
 
+    @api.model
+    def _backfill_existing_checkpoint_types(self):
+        """Reconcile legacy snapshots whose template type predates the fix.
+
+        On module upgrade, template types may already be populated, meaning
+        route-line.write() will not be called again. Reuse the narrowly scoped
+        type completion path, including its trip locks and history guards.
+        Safe to run repeatedly; already-typed milestones are ignored.
+        """
+        missing = self.sudo().search([
+            ("template_line_id", "!=", False),
+            ("milestone_type_id", "=", False),
+            ("type_name", "=", False),
+            ("state", "=", "pending"),
+            ("actual_arrival_at", "=", False),
+            ("actual_departure_at", "=", False),
+            ("confirmed_at", "=", False),
+            ("event_ids", "=", False),
+            ("trip_id.state", "not in", ("completed", "cancelled")),
+        ])
+        lines = missing.mapped("template_line_id").filtered("milestone_type_id")
+        if lines:
+            self._backfill_missing_checkpoint_types(lines)
+
     # ------------------------------------------------------------------
     # Direct write / delete protection
     # ------------------------------------------------------------------
