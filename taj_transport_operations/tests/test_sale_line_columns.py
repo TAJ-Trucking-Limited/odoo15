@@ -210,7 +210,6 @@ class TestSaleLineColumns(TransactionCase):
                 "bill_of_lading",
                 "container_num",
                 "eta",
-                "etol",
                 "shipping_line",
                 "cargo_type_id",
                 "size",

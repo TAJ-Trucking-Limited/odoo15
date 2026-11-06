@@ -119,6 +119,22 @@ class TestDuplicateSaleLine(TransactionCase):
         self.assertEqual(self.line.cargo_description, "Machinery")
         self.assertEqual(self.line.price_unit, 321)
 
+    def test_analytical_account_is_always_cleared_on_duplicate(self):
+        plan = self.env["account.analytic.plan"].create({
+            "name": "Duplicated shipment test plan",
+        })
+        account = self.env["account.analytic.account"].create({
+            "name": "Original shipment analytical account",
+            "plan_id": plan.id,
+        })
+        self.line.analytic_account_id = account
+        self.line.analytic_distribution = {str(account.id): 100}
+        for mode in ("container", "all"):
+            duplicated = self._duplicate(mode)
+            self.assertFalse(duplicated.analytic_account_id)
+            self.assertFalse(duplicated.analytic_distribution)
+            self.assertEqual(self.line.analytic_account_id, account)
+
     def test_rejects_source_from_another_order_and_nonproduct_lines(self):
         other = self.env["sale.order"].create({"partner_id": self.customer.id})
         note = self.env["sale.order.line"].create({

@@ -505,7 +505,7 @@
         <field name="act_window_id" ref="action_transport_trip"/>
     </record>
 
-    <menuitem id="menu_transport_operations" name="Transport Operations"
+    <menuitem id="menu_transport_operations" name="TAJ Operations"
               groups="taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry,sales_team.group_sale_salesman" sequence="50"/>
     <menuitem id="menu_transport_trips" name="Trips Summary" parent="menu_transport_operations"
               action="action_transport_trip" sequence="80"

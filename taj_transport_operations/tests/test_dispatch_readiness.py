@@ -135,6 +135,34 @@ class TestDispatchReadiness(TransactionCase):
             self.assertEqual(buttons[0].get("type"), "object")
             self.assertNotEqual(buttons[0].get("display"), "always")
 
+    def test_dispatch_form_views_have_actions_for_individual_lines(self):
+        cases = (
+            ("action_sale_order_line_without_trip",
+             "view_sale_order_line_dispatch_list",
+             "view_sale_order_line_dispatch_form",
+             "action_create_selected_transport_trip"),
+            ("action_sale_order_line_without_truck",
+             "view_sale_order_line_without_allocation_list",
+             "view_sale_order_line_without_allocation_form",
+             "action_assign_selected_truck"),
+        )
+        for action_name, list_name, form_name, button_name in cases:
+            action = self.env.ref("taj_transport_operations." + action_name)
+            listing = self.env.ref("taj_transport_operations." + list_name)
+            form = self.env.ref("taj_transport_operations." + form_name)
+            self.assertEqual(action.views, [
+                (listing.id, "list"), (form.id, "form"),
+            ])
+            arch = etree.fromstring(
+                self.env["sale.order.line"].get_view(
+                    view_id=form.id, view_type="form",
+                )["arch"]
+            )
+            self.assertEqual(len(
+                arch.xpath(f"./header/button[@name='{button_name}']")
+            ), 1)
+            self.assertTrue(arch.xpath("//field[@name='etol']"))
+
     def test_worklist_selection_buttons_use_existing_single_line_actions(self):
         dispatcher = new_test_user(
             self.env,
@@ -326,3 +354,4 @@ class TestDispatchReadiness(TransactionCase):
             parent.parent_id,
             self.env.ref("taj_transport_operations.menu_transport_operations"),
         )
+        self.assertEqual(parent.parent_id.name, "TAJ Operations")

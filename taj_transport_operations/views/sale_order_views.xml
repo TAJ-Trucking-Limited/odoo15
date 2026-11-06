@@ -57,7 +57,6 @@
                     <field name="clearing_service"/>
                     <field name="bill_of_lading"/>
                     <field name="eta"/>
-                    <field name="etol"/>
                     <field name="shipping_line"/>
                     <field name="vehicle_id" readonly="1"/>
                 </group>
@@ -93,7 +92,6 @@
                 <field name="bill_of_lading" optional="show" invisible="display_type not in [False, 'product']"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='container_num']" position="move"/>
                 <field name="eta" optional="show" invisible="display_type not in [False, 'product']"/>
-                <field name="etol" optional="show" invisible="display_type not in [False, 'product']"/>
                 <field name="shipping_line" optional="show" invisible="display_type not in [False, 'product']"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='cargo_type_id']" position="move"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='size']" position="move"/>
@@ -263,6 +261,82 @@
         </field>
     </record>
 
+    <!-- Dedicated read-only dispatch forms keep operational actions visible
+         without granting write access to confirmed Sales Orders. -->
+    <record id="view_sale_order_line_dispatch_form" model="ir.ui.view">
+        <field name="name">sale.order.line.dispatch.form</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <form string="Sales Shipment - Trip Not Started" create="0" edit="0" delete="0">
+                <header>
+                    <button name="action_create_selected_transport_trip"
+                            type="object" string="Create Trip" class="btn-primary"
+                            groups="taj_transport_operations.group_transport_user"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="order_id"/>
+                            <field name="order_partner_id"/>
+                            <field name="product_id"/>
+                            <field name="name"/>
+                            <field name="transport_file_id"/>
+                            <field name="file_type_id"/>
+                            <field name="vehicle_id"/>
+                        </group>
+                        <group>
+                            <field name="etol"/>
+                            <field name="eta"/>
+                            <field name="cargo_type_id"/>
+                            <field name="size"/>
+                            <field name="weight"/>
+                            <field name="container_num"/>
+                            <field name="cargo_description"/>
+                            <field name="special_handling_instructions"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_sale_order_line_without_allocation_form" model="ir.ui.view">
+        <field name="name">sale.order.line.without.allocation.form</field>
+        <field name="model">sale.order.line</field>
+        <field name="arch" type="xml">
+            <form string="Sales Shipment - Without Allocation" create="0" edit="0" delete="0">
+                <header>
+                    <button name="action_assign_selected_truck"
+                            type="object" string="Assign Truck" class="btn-primary"
+                            invisible="vehicle_id"
+                            groups="taj_transport_operations.group_transport_user"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="order_id"/>
+                            <field name="order_partner_id"/>
+                            <field name="product_id"/>
+                            <field name="name"/>
+                            <field name="transport_file_id"/>
+                            <field name="vehicle_id"/>
+                        </group>
+                        <group>
+                            <field name="etol"/>
+                            <field name="eta"/>
+                            <field name="cargo_type_id"/>
+                            <field name="container_num"/>
+                            <field name="size"/>
+                            <field name="weight"/>
+                            <field name="cargo_description"/>
+                            <field name="special_handling_instructions"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
     <record id="action_sale_order_line_without_trip" model="ir.actions.act_window">
         <field name="name">Sale Orders - Trip Not Started</field>
         <field name="res_model">sale.order.line</field>
@@ -289,6 +363,33 @@
             <p class="o_view_nocontent_smiling_face">Every confirmed sales line has a truck allocated.</p>
             <p>Assign Truck fills the first Sales truck and assigns an existing unassigned Draft trip. It does not create a trip.</p>
         </field>
+    </record>
+
+    <!-- Pin both worklists to their own List and Form. The form buttons
+         otherwise disappear into Odoo's generic Sales line view. -->
+    <record id="action_without_trip_list_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_sale_order_line_dispatch_list"/>
+        <field name="act_window_id" ref="action_sale_order_line_without_trip"/>
+    </record>
+    <record id="action_without_trip_form_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_sale_order_line_dispatch_form"/>
+        <field name="act_window_id" ref="action_sale_order_line_without_trip"/>
+    </record>
+    <record id="action_without_truck_list_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_sale_order_line_without_allocation_list"/>
+        <field name="act_window_id" ref="action_sale_order_line_without_truck"/>
+    </record>
+    <record id="action_without_truck_form_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_sale_order_line_without_allocation_form"/>
+        <field name="act_window_id" ref="action_sale_order_line_without_truck"/>
     </record>
 
     <!-- The menus run these server actions instead of the window actions above.

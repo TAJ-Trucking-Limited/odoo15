@@ -54,6 +54,71 @@ class TajTransportAssignTruckWizard(models.TransientModel):
              "or leave it empty; your choice is kept when creating the Trip later.",
     )
 
+    @api.model
+    def _default_etol(self):
+        line_id = self.env.context.get("default_sale_line_id")
+        if not line_id:
+            return False
+        line = self.env["sale.order.line"].browse(line_id).exists()
+        return line.etol if line else False
+
+    etol = fields.Date(
+        string="ETOL (Estimated Loading Date)", default=_default_etol,
+        help="Required for dispatch allocation. Saved back to the Sales "
+             "Order shipment line when assigning the truck.",
+    )
+    sale_order_conflict_note = fields.Char(
+        compute="_compute_truck_warnings",
+        string="Other Sales Orders",
+    )
+    in_progress_trip_note = fields.Char(
+        compute="_compute_truck_warnings",
+        string="In Progress Trips",
+    )
+
+    @api.depends("vehicle_id", "sale_line_id")
+    def _compute_truck_warnings(self):
+        SaleLine = self.env["sale.order.line"].sudo()
+        Trip = self.env["taj.transport.trip"].sudo()
+        for wizard in self:
+            wizard.sale_order_conflict_note = False
+            wizard.in_progress_trip_note = False
+            truck = wizard.vehicle_id
+            source = wizard.sale_line_id
+            if not truck or not source:
+                continue
+            source.check_access("read")
+            # Only count within the selected sale's company. Do not expose
+            # record identities or another company's confidential shipment.
+            others = SaleLine.search([
+                ("vehicle_id", "=", truck.id),
+                ("id", "!=", source.id),
+                ("order_id.company_id", "=", source.company_id.id),
+                ("order_id.state", "in", ("draft", "sent", "sale", "done")),
+                ("product_id", "!=", False),
+            ])
+            uncompleted = others.filtered(
+                lambda line: not any(
+                    trip.state == "completed" for trip in line.transport_trip_ids
+                )
+            )
+            if uncompleted:
+                wizard.sale_order_conflict_note = _(
+                    "Warning: This truck is already on %(count)s other Sales "
+                    "Order line(s) without a completed trip.",
+                    count=len(uncompleted),
+                )
+            # Fleet availability is global for shared trucks too. Show only
+            # a generic occupancy warning, never another company's Trip IDs.
+            in_progress = Trip.search_count([
+                ("state", "=", "in_progress"),
+                ("current_assignment_id.vehicle_id", "=", truck.id),
+            ])
+            if in_progress:
+                wizard.in_progress_trip_note = _(
+                    "Warning: This truck already has an In Progress trip."
+                )
+
     @api.depends("vehicle_id")
     def _compute_driver_id(self):
         for wizard in self:
@@ -108,6 +173,8 @@ class TajTransportAssignTruckWizard(models.TransientModel):
                     "Choose an active driver from the Sales Order's company "
                     "or a shared contact."
                 ))
+        if not self.etol:
+            raise UserError(_("ETOL is required before assigning a truck."))
         # Match assignment's trip -> source line lock order. Recheck after the
         # lock so a stale dialog or a retried request cannot replace a truck.
         trips = line.transport_trip_ids
@@ -116,6 +183,13 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         line._lock_transport_vehicle()
         if line.vehicle_id:
             raise UserError(_("This line already has a truck. Refresh the worklist."))
+        # The Sale Order is locked. Route the ETOL update through the same
+        # audited, field-limited shipment editor used by File Numbers.
+        if line.etol != self.etol:
+            file_row = line.transport_file_line_ids
+            if len(file_row) != 1:
+                raise UserError(_("The Sales line needs its File Number shipment row before allocation."))
+            line._write_file_shipment({"etol": self.etol}, file_row)
         if trips:
             trip = trips.ensure_one()
             if trip.state != "draft" or trip.assignment_ids:
@@ -124,6 +198,11 @@ class TajTransportAssignTruckWizard(models.TransientModel):
                 "trip_id": trip.id, "vehicle_id": vehicle.id,
                 "driver_id": driver.id, "effective_from": fields.Datetime.now(),
                 "reason": _("Assigned from Sales allocation worklist"),
+            })
+            # Keep the Sales allocation snapshot consistent with Resources.
+            line.sudo().write({
+                "transport_allocated_driver_id": driver.id or False,
+                "transport_driver_choice_set": True,
             })
         else:
             # Save the driver's explicit choice alongside the first truck.

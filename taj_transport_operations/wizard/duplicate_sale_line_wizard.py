@@ -38,6 +38,10 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
             "sequence": max(order.order_line.mapped("sequence"), default=0) + 1,
             "container_num": False,
             "vehicle_id": False,
+            # Each duplicated shipment needs fresh analytical allocation,
+            # regardless of the selected cargo cleaning mode.
+            "analytic_account_id": False,
+            "analytic_distribution": False,
             "price_unit": source.price_unit,
             "transport_planned_departure_at": source.transport_planned_departure_at,
             "transport_planned_arrival_at": source.transport_planned_arrival_at,

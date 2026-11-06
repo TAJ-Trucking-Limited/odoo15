@@ -16,8 +16,15 @@
                         <field name="company_id" invisible="1"/>
                         <field name="vehicle_id" options="{'no_create': True}"/>
                         <field name="driver_id" options="{'no_create': True}"/>
+                        <field name="etol" required="1"/>
                     </group>
                 </group>
+                <div class="alert alert-warning" role="alert" invisible="not sale_order_conflict_note">
+                    <field name="sale_order_conflict_note" readonly="1" nolabel="1"/>
+                </div>
+                <div class="alert alert-warning" role="alert" invisible="not in_progress_trip_note">
+                    <field name="in_progress_trip_note" readonly="1" nolabel="1"/>
+                </div>
                 <p class="text-muted">
                     Assigns the first truck and selected driver to the Sales line.
                     The driver defaults from Fleet but can be changed. If a Draft

@@ -55,6 +55,7 @@ class TestWithoutAllocation(TransactionCase):
                 "name": "Freight without truck",
                 "product_uom_qty": 1,
                 "price_unit": 100,
+                "etol": "2026-11-10",
             }
         )
         cls.order.action_confirm()
@@ -74,6 +75,7 @@ class TestWithoutAllocation(TransactionCase):
         return Wizard.create(
             {
                 "sale_line_id": self.line.id,
+                "etol": self.line.etol,
                 **values,
             }
         )
@@ -157,8 +159,9 @@ class TestWithoutAllocation(TransactionCase):
         Wizard = self.env["taj.transport.assign.truck.wizard"].with_context(
             action["context"]
         )
-        defaults = Wizard.default_get(["sale_line_id"])
+        defaults = Wizard.default_get(["sale_line_id", "etol"])
         self.assertEqual(defaults["sale_line_id"], self.line.id)
+        self.assertEqual(defaults["etol"], self.line.etol)
         wizard = Wizard.new(defaults)
         self.assertEqual(wizard.sale_order_id, self.order)
         self.assertEqual(wizard.product_id, self.product)
@@ -291,6 +294,110 @@ class TestWithoutAllocation(TransactionCase):
                 ).action_assign_truck()
             self.assertFalse(self.line.vehicle_id)
             self.assertFalse(self.line.transport_driver_choice_set)
+
+    def test_allocation_requires_etol_and_saves_dispatch_changes(self):
+        dispatcher = new_test_user(
+            self.env, login="etol_dispatcher",
+            company_id=self.env.company.id,
+            groups="base.group_user,taj_transport_operations.group_transport_user",
+        )
+        with self.assertRaisesRegex(UserError, "ETOL"), self.env.cr.savepoint():
+            self._wizard(
+                dispatcher, vehicle_id=self.truck.id, etol=False,
+            ).action_assign_truck()
+        self.assertFalse(self.line.vehicle_id)
+        changed = date(2026, 12, 12)
+        self._wizard(
+            dispatcher, vehicle_id=self.truck.id, etol=changed,
+        ).action_assign_truck()
+        self.line.invalidate_recordset(["etol"])
+        self.assertEqual(self.line.etol, changed)
+        self.assertEqual(self.line.transport_file_line_ids.etol, changed)
+        self.assertEqual(self.line.vehicle_id, self.truck)
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        self.assertEqual(trip.etol, changed)
+        self.assertEqual(trip.current_assignment_id.vehicle_id, self.truck)
+
+    def test_allocated_truck_conflict_blocks_trip_instead_of_losing_resources(self):
+        other = self.env["sale.order"].create({"partner_id": self.customer.id})
+        other_line = self.env["sale.order.line"].create({
+            "order_id": other.id,
+            "product_id": self.product.id,
+            "name": "Existing allocated trip",
+            "product_uom_qty": 1,
+            "price_unit": 100,
+            "vehicle_id": self.truck.id,
+        })
+        other.action_confirm()
+        occupied = self.env["taj.transport.trip"].create({
+            "sale_line_id": other_line.id,
+        })
+        self.assertEqual(occupied.current_vehicle_id, self.truck)
+        self._wizard(vehicle_id=self.truck.id).action_assign_truck()
+        with self.assertRaisesRegex(UserError, "already assigned"), self.env.cr.savepoint():
+            self.env["taj.transport.trip"].create({"sale_line_id": self.line.id})
+        self.assertFalse(self.line.transport_trip_ids)
+        self.assertEqual(self.line.vehicle_id, self.truck)
+
+    def test_allocation_shows_other_open_sales_order_warning(self):
+        other = self.env["sale.order"].create({"partner_id": self.customer.id})
+        self.env["sale.order.line"].create({
+            "order_id": other.id,
+            "product_id": self.product.id,
+            "name": "Other draft Sales shipment",
+            "product_uom_qty": 1,
+            "price_unit": 100,
+            "vehicle_id": self.truck.id,
+        })
+        wizard = self.env["taj.transport.assign.truck.wizard"].new({
+            "sale_line_id": self.line.id,
+            "vehicle_id": self.truck.id,
+        })
+        self.assertIn("other Sales Order", wizard.sale_order_conflict_note)
+        self.assertFalse(wizard.in_progress_trip_note)
+
+    def test_allocation_warns_about_in_progress_trip(self):
+        other = self.env["sale.order"].create({"partner_id": self.customer.id})
+        other_line = self.env["sale.order.line"].create({
+            "order_id": other.id,
+            "product_id": self.product.id,
+            "name": "Busy truck shipment",
+            "product_uom_qty": 1,
+            "price_unit": 100,
+            "vehicle_id": self.truck.id,
+        })
+        other.action_confirm()
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": other_line.id,
+        })
+        self.assertEqual(trip.current_assignment_id.vehicle_id, self.truck)
+        # This test checks only the warning query. Set up the lifecycle
+        # status directly without requiring unrelated milestone fixtures.
+        self.env.flush_all()
+        self.env.cr.execute(
+            "UPDATE taj_transport_trip SET state = %s WHERE id = %s",
+            ("in_progress", trip.id),
+        )
+        trip.invalidate_recordset(["state"])
+        wizard = self.env["taj.transport.assign.truck.wizard"].new({
+            "sale_line_id": self.line.id,
+            "vehicle_id": self.truck.id,
+        })
+        self.assertIn("In Progress", wizard.in_progress_trip_note)
+
+    def test_allocation_form_shows_etol_and_warning_fields(self):
+        root = etree.fromstring(
+            self.env.ref(
+                "taj_transport_operations.view_assign_truck_wizard_form"
+            ).get_combined_arch()
+        )
+        self.assertEqual(
+            root.xpath("//field[@name='etol']")[0].get("required"), "1"
+        )
+        self.assertTrue(root.xpath("//field[@name='sale_order_conflict_note']"))
+        self.assertTrue(root.xpath("//field[@name='in_progress_trip_note']"))
 
     def test_assign_truck_writes_the_line_without_a_trip(self):
         action = self.line.action_open_assign_truck_wizard()

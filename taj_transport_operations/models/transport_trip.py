@@ -380,12 +380,15 @@ class TajTransportTrip(models.Model):
                     ))
                 continue
             vehicle = trip.initial_vehicle_id
+            strict_allocation = bool(
+                vehicle and trip.sale_line_id.transport_driver_choice_set
+            )
             if (
                 not vehicle or not vehicle.active
                 or (vehicle.category_id and vehicle.category_id != category)
                 or (vehicle.company_id and vehicle.company_id != trip.company_id)
             ):
-                if required:
+                if required or strict_allocation:
                     raise UserError(_(
                         "The original Sales truck must be active, have the Truck "
                         "category or no category, and belong to this trip's "
@@ -404,8 +407,8 @@ class TajTransportTrip(models.Model):
                 other_trips = active_assignment.mapped("trip_id").filtered(lambda t: t.id != trip.id)
                 if other_trips:
                     trip.message_post(body=_("Automatic assignment skipped: truck is already assigned to another trip."))
-                    if required:
-                        raise UserError(_("This truck is already assigned to another trip. Use Assign Initial Resources to choose a different available truck."))
+                    if required or strict_allocation:
+                        raise UserError(_("This truck is already assigned to another trip. Select a different truck for this Sales line before creating the Trip."))
                     continue
             # Check for Draft reservations by other trips (truck reserved but not yet assigned)
             other_reservations = self.env["taj.transport.trip"].sudo().search([
@@ -416,8 +419,8 @@ class TajTransportTrip(models.Model):
             ])
             if other_reservations:
                 trip.message_post(body=_("Automatic assignment skipped: truck is reserved by another Draft trip."))
-                if required:
-                    raise UserError(_("This truck is reserved by another Draft trip. Use Assign Initial Resources or choose a different truck."))
+                if required or strict_allocation:
+                    raise UserError(_("This truck is reserved by another Draft trip. Select a different truck for this Sales line before creating the Trip."))
                 continue
             line = trip.sale_line_id
             # Preserve the driver's explicit selection made on the Sales
@@ -427,9 +430,16 @@ class TajTransportTrip(models.Model):
                 if line.transport_driver_choice_set
                 else vehicle.driver_id
             )
-            if driver and driver.active and driver.company_id and driver.company_id != trip.company_id:
-                driver = False
-            elif driver and not driver.active:
+            if driver and (
+                not driver.active
+                or (driver.company_id and driver.company_id != trip.company_id)
+            ):
+                if strict_allocation:
+                    raise UserError(_(
+                        "The driver selected in Dispatch is no longer active or "
+                        "belongs to another company. Review the allocation before "
+                        "creating this Trip."
+                    ))
                 driver = False
             self.env["taj.transport.assignment"].create({
                 "trip_id": trip.id,
