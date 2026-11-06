@@ -1,5 +1,7 @@
 """Trip File generation, source identity, late trip links and Sales access."""
 
+from lxml import etree
+
 from odoo import Command
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
@@ -22,6 +24,45 @@ class TestTripFiles(TransactionCase):
         for field in ("planned_departure_at", "planned_arrival_at"):
             self.assertIn(f'name="{field}"', related_form.arch_db)
             self.assertIn(f'name="{field}" optional="hide"', related_list.arch_db)
+
+    def test_trip_form_operation_summary_resources_and_hidden_sales_fields(self):
+        view = self.env.ref("taj_transport_operations.view_transport_trip_form")
+        arch = etree.fromstring(
+            self.env["taj.transport.trip"].get_view(
+                view_id=view.id, view_type="form",
+            )["arch"]
+        )
+
+        operation = arch.xpath("//page[@name='commercial_details']")
+        self.assertEqual(len(operation), 1)
+        self.assertEqual(operation[0].get("string"), "Operation")
+
+        # These remain on the Sales source but are not displayed on a Trip.
+        self.assertFalse(arch.xpath("//field[@name='file_name' or @name='srn']"))
+
+        summary = arch.xpath("//page[@name='trip_summary']")
+        self.assertEqual(len(summary), 1)
+        columns = summary[0].xpath("./group/group")
+        self.assertEqual(len(columns), 2)
+        self.assertEqual(columns[0].get("string"), "Shipment")
+        self.assertEqual(columns[1].get("col"), "1")
+        sections = columns[1].xpath("./group")
+        self.assertEqual([node.get("string") for node in sections],
+                         ["Resources", "Trip Progress"])
+        self.assertEqual(
+            [node.get("name") for node in sections[0].xpath("./field")],
+            ["current_vehicle_id", "current_driver_id"],
+        )
+        self.assertEqual(
+            [node.get("name") for node in sections[1].xpath("./field")],
+            [
+                "allocation_date", "actual_departure_at",
+                "last_milestone_activity", "last_milestone_at",
+                "milestone_progress", "activity_status", "last_activity_at",
+                "email_position_preview", "email_position_source",
+                "email_position_updated_at",
+            ],
+        )
 
     @classmethod
     def setUpClass(cls):
