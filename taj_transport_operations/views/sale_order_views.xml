@@ -167,6 +167,11 @@
         <field name="model">sale.order.line</field>
         <field name="arch" type="xml">
             <list string="Sale Orders - Trip Not Started" class="o_taj_dispatch_readable" create="0" edit="0" delete="0">
+                <header>
+                    <button name="action_create_selected_transport_trip" type="object"
+                            string="Create Trip" class="btn-primary"
+                            groups="taj_transport_operations.group_transport_user"/>
+                </header>
                 <field name="transport_file_id" optional="show" width="160px"/>
                 <field name="file_type_id" optional="show" width="160px"/>
                 <field name="clearing_service" optional="show" width="150px"/>
@@ -197,6 +202,11 @@
         <field name="model">sale.order.line</field>
         <field name="arch" type="xml">
             <list string="Sale Orders without Allocation" create="0" edit="0" delete="0">
+                <header>
+                    <button name="action_assign_selected_truck" type="object"
+                            string="Assign Truck" class="btn-primary"
+                            groups="taj_transport_operations.group_transport_user"/>
+                </header>
                 <field name="transport_file_id" optional="show"/>
                 <field name="file_type_id" optional="show"
                        options="{'no_create': True, 'no_create_edit': True}"/>

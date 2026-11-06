@@ -2,8 +2,10 @@
 
 from datetime import timedelta
 
+from lxml import etree
+
 from odoo import fields
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 from odoo.tests.common import new_test_user
 from odoo.tools.safe_eval import safe_eval
@@ -112,6 +114,73 @@ class TestDispatchReadiness(TransactionCase):
         self.assertEqual(action["context"]["default_sale_order_id"], self.order.id)
         self.assertNotIn("res_id", action)
         self.assertFalse(self.truckless_line.transport_trip_ids)
+
+    def test_worklist_selection_buttons_are_in_correct_list_headers(self):
+        cases = (
+            ("view_sale_order_line_dispatch_list",
+             "action_create_selected_transport_trip", "Create Trip"),
+            ("view_sale_order_line_without_allocation_list",
+             "action_assign_selected_truck", "Assign Truck"),
+        )
+        for view_name, method, label in cases:
+            view_id = self.env.ref(f"taj_transport_operations.{view_name}").id
+            arch = self.env["sale.order.line"].get_view(
+                view_id=view_id, view_type="list"
+            )["arch"]
+            buttons = etree.fromstring(arch).xpath(
+                f"./header/button[@name='{method}']"
+            )
+            self.assertEqual(len(buttons), 1, view_name)
+            self.assertEqual(buttons[0].get("string"), label)
+            self.assertEqual(buttons[0].get("type"), "object")
+            self.assertNotEqual(buttons[0].get("display"), "always")
+
+    def test_worklist_selection_buttons_use_existing_single_line_actions(self):
+        dispatcher = new_test_user(
+            self.env,
+            login="dispatch_selection_user",
+            groups="base.group_user,taj_transport_operations.group_transport_user",
+        )
+        line = self.truckless_line.with_user(dispatcher)
+        allocation = line.action_assign_selected_truck()
+        self.assertEqual(allocation["res_model"], "taj.transport.assign.truck.wizard")
+        self.assertEqual(allocation["context"]["default_sale_line_id"], line.id)
+        self.assertFalse(line.vehicle_id)
+        self.env["taj.transport.route"].create({
+            "name": "Dispatch selection route",
+            "company_id": self.order.company_id.id,
+            "product_tmpl_id": self.product.product_tmpl_id.id,
+        })
+        creation = line.action_create_selected_transport_trip()
+        self.assertEqual(creation["res_model"], "taj.transport.trip")
+        self.assertEqual(creation["res_id"], line.transport_trip_ids.id)
+        self.assertEqual(len(line.transport_trip_ids), 1)
+        repeat = line.action_create_selected_transport_trip()
+        self.assertEqual(repeat["res_id"], creation["res_id"])
+        self.assertEqual(len(line.transport_trip_ids), 1)
+
+    def test_selection_buttons_reject_multiple_lines_and_unauthorized_users(self):
+        dispatcher = new_test_user(
+            self.env,
+            login="dispatch_selection_multi",
+            groups="base.group_user,taj_transport_operations.group_transport_user",
+        )
+        selected = (self.truckless_line | self.trucked_line).with_user(dispatcher)
+        for method in ("action_create_selected_transport_trip", "action_assign_selected_truck"):
+            with self.subTest(method=method), self.assertRaises(UserError):
+                getattr(selected, method)()
+        self.assertFalse(self.truckless_line.transport_trip_ids)
+        with self.assertRaises(UserError):
+            self.trucked_line.with_user(dispatcher).action_assign_selected_truck()
+        salesperson = new_test_user(
+            self.env,
+            login="dispatch_selection_salesperson",
+            groups="base.group_user,sales_team.group_sale_salesman",
+        )
+        with self.assertRaises(AccessError):
+            self.truckless_line.with_user(salesperson).action_assign_selected_truck()
+        with self.assertRaises(AccessError):
+            self.truckless_line.with_user(salesperson).action_create_selected_transport_trip()
 
     def test_not_started_action_keeps_confirmed_draft_trips(self):
         lines = (

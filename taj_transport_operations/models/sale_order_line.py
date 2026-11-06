@@ -376,6 +376,27 @@ class SaleOrderLine(models.Model):
             # Distinguish repeated product/truck/container combinations.
             line.display_name = "%s [#%s]" % (label, line.id)
 
+    def _check_single_dispatch_selection(self):
+        if not self.env.user.has_group(
+            "taj_transport_operations.group_transport_user"
+        ):
+            raise AccessError(_("Transport Operations access is required."))
+        if len(self) != 1:
+            raise UserError(_("Select exactly one shipment line to continue."))
+        self.check_access("read")
+
+    def action_create_selected_transport_trip(self):
+        """Selection toolbar on the not-started dispatch worklist."""
+        self._check_single_dispatch_selection()
+        return self.action_open_or_create_transport_trip()
+
+    def action_assign_selected_truck(self):
+        """Selection toolbar on the unallocated dispatch worklist."""
+        self._check_single_dispatch_selection()
+        if self.vehicle_id:
+            raise UserError(_("This line already has a truck. Refresh the worklist."))
+        return self.action_open_assign_truck_wizard()
+
     def action_open_assign_truck_wizard(self):
         self.ensure_one()
         self.check_access("read")
