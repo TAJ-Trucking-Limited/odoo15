@@ -4,7 +4,7 @@ from datetime import date
 
 from lxml import etree
 
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 from odoo.tests.common import new_test_user
 from odoo.tools.safe_eval import safe_eval
@@ -518,3 +518,42 @@ class TestWithoutAllocation(TransactionCase):
         row.write({"etol": date(2026, 12, 2)})
         self.line.invalidate_recordset(["etol"])
         self.assertEqual(self.line.etol, date(2026, 12, 2))
+
+    def test_dispatcher_can_edit_etol_without_allocation(self):
+        dispatcher = new_test_user(self.env, login="etol_inline_dispatcher",
+            company_id=self.env.company.id,
+            groups="base.group_user,taj_transport_operations.group_transport_user")
+        line = self.line.with_user(dispatcher)
+        line.write({"etol": "2026-12-15"})
+        self.assertEqual(line.etol, date(2026, 12, 15))
+        self.assertFalse(line.vehicle_id or line.transport_trip_ids or line.allocation_date)
+        self.assertTrue(self.line.transport_file_id.message_ids.filtered(lambda m: "ETOL" in (m.body or "")))
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            line.write({"etol": "2026-12-16", "price_unit": 1})
+        line.write({"etol": False})
+        self.assertFalse(line.etol)
+        self._wizard(dispatcher, vehicle_id=self.truck.id, etol="2026-12-20").action_assign_truck()
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            line.write({"etol": "2026-12-21"})
+
+    def test_inline_etol_rejects_unauthorized_cancelled_and_foreign_company(self):
+        dispatcher = new_test_user(self.env, login="etol_security_dispatcher",
+            company_id=self.env.company.id,
+            groups="base.group_user,taj_transport_operations.group_transport_user")
+        salesperson = new_test_user(self.env, login="etol_security_sales",
+            company_id=self.env.company.id,
+            groups="base.group_user,sales_team.group_sale_salesman_all_leads")
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.line.with_user(salesperson).with_context(_file_shipment_write=True).write({'etol': '2026-12-25'})
+        company = self.env['res.company'].create({'name': 'Foreign shipment company'})
+        foreign_order = self.env['sale.order'].with_company(company).create({
+            'partner_id': self.customer.id, 'company_id': company.id})
+        foreign_line = self.env['sale.order.line'].with_company(company).create({
+            'order_id': foreign_order.id, 'product_id': self.product.id, 'price_unit': 100})
+        foreign_order.action_confirm()
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            foreign_line.with_user(dispatcher).write({'etol': '2026-12-25'})
+        self.order.action_unlock()
+        self.order.action_cancel()
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.line.with_user(dispatcher).write({'etol': '2026-12-25'})

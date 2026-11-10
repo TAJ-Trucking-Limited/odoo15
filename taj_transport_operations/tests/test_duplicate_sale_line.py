@@ -69,6 +69,13 @@ class TestDuplicateSaleLine(TransactionCase):
         self.assertEqual(wizard.sale_order_id, self.order)
         self.assertFalse(wizard.source_line_id)
 
+    def test_clear_mode_labels_match_the_cargo_clearing_behavior(self):
+        labels = dict(self.env["taj.transport.duplicate.sale.line.wizard"]._fields["clean_mode"].selection)
+        self.assertEqual(labels, {
+            "container": "Clear Container",
+            "all": "Clear All Variables",
+        })
+
     def test_duplicate_control_button_rpc_dispatch(self):
         # A One2many <control> object button sends an ids argument through
         # call_kw. @api.model incorrectly treats it as a method argument.
@@ -91,10 +98,11 @@ class TestDuplicateSaleLine(TransactionCase):
     def test_clean_container_preserves_other_values_and_original(self):
         duplicate = self._duplicate("container")
         self.assertFalse(duplicate.container_num)
+        self.assertFalse(duplicate.weight)
         self.assertEqual(duplicate.price_unit, 321)
         for name in (
             "product_id", "file_type_id", "clearing_service", "consignee", "bill_of_lading",
-            "eta", "shipping_line", "cargo_type_id", "size", "weight", "cargo_description",
+            "eta", "shipping_line", "cargo_type_id", "size", "cargo_description",
             "special_handling_instructions", "product_uom_qty", "product_uom_id", "discount",
             "tax_ids", "file_name", "srn", "transport_planned_departure_at", "transport_planned_arrival_at",
         ):
@@ -102,6 +110,7 @@ class TestDuplicateSaleLine(TransactionCase):
         self.assertGreater(duplicate.sequence, self.line.sequence)
         self.assertFalse(duplicate.vehicle_id)
         self.assertEqual(self.line.container_num, "CONT-123")
+        self.assertEqual(self.line.weight, "22000")
         self.assertEqual(self.line.vehicle_id, self.truck)
 
     def test_clean_all_clears_shipment_fields_and_sets_price_and_amount_to_zero(self):

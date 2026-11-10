@@ -1,3 +1,5 @@
+from ast import literal_eval
+
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
@@ -24,7 +26,7 @@ class SaleOrder(models.Model):
         if (not self.env.su
                 and any(order.state in ("sale", "done") for order in self)):
             raise AccessError(_(
-                "Confirmed sales orders are locked. Authorized users can use Edit Unit Price on a line."
+                "Confirmed sales orders are locked. The analytical account can be edited; authorized users can also use Edit Unit Price."
             ))
 
     def _should_be_locked(self):
@@ -38,6 +40,19 @@ class SaleOrder(models.Model):
             # Include fields supplied by other Sales addons, preserving native modifiers.
             for node in arch.xpath(".//field[not(ancestor::field)]"):
                 field = self._fields.get(node.get("name"))
+                if node.get("name") == "order_line":
+                    # Keep the one2many editable so its analytical account cell can be saved.
+                    node.set("readonly", "state == 'cancel'")
+                    for child in node.xpath("./list//field | ./form//field"):
+                        if child.get("name") != "analytic_account_id":
+                            readonly = child.get("readonly", "False")
+                            if readonly not in ("1", "True"):
+                                child.set("readonly", "(%s) or parent.locked or parent.transport_confirmed_readonly" % readonly)
+                    options = literal_eval(node.get("options", "{}"))
+                    editable_order = [("state", "not in", ["sale", "done"]), ("locked", "=", False)]
+                    options.update(create=editable_order, delete=editable_order)
+                    node.set("options", repr(options))
+                    continue
                 if field and not field.readonly:
                     readonly = node.get("readonly", "False")
                     node.set("readonly", "(%s) or locked or transport_confirmed_readonly" % readonly)
@@ -56,6 +71,23 @@ class SaleOrder(models.Model):
         return lines.with_env(self.env)
 
     def write(self, vals):
+        # Accept only updates to existing own lines, and only the requested field.
+        if set(vals) == {"order_line"} and any(order.state in ("sale", "done") for order in self):
+            self.check_access("write")
+            commands = vals["order_line"]
+            if not commands or any(
+                len(command) != 3 or command[0] != 1
+                or not isinstance(command[2], dict)
+                or set(command[2]) != {"analytic_account_id"}
+                for command in commands
+            ):
+                raise AccessError(_("Only analytical account changes to existing lines are allowed."))
+            lines = self.env["sale.order.line"].browse([command[1] for command in commands]).exists()
+            if len(lines) != len(set(command[1] for command in commands)) or any(line.order_id not in self for line in lines):
+                raise AccessError(_("The line must belong to this Sales Order."))
+            for command in commands:
+                lines.browse(command[1]).write(command[2])
+            return True
         # Confirmation may lock the order without granting permission to edit it.
         if vals and vals != {"locked": True}:
             self._check_confirmed_sale_edit_access()

@@ -1,16 +1,47 @@
 # TAJ Transport Operations (Odoo 19)
 
+## Shipment entry and dispatch updates (19.0.1.44.0)
+
+- ETA and ETOL are date-only fields on Sales lines and File Number shipments.
+  Existing ETA timestamps are preserved in a backup column and converted to
+  their Asia/Damascus calendar date during upgrade.
+- Weight accepts an empty value or a nonnegative decimal such as `1250` or
+  `1250.5`. Enter digits and an optional decimal point only; do not include a
+  unit. Validation runs when the line is saved; zero is valid.
+- Duplicate Line offers **Clear Container** and **Clear All Variables**.
+  Both modes clear Container Number and Weight on the copy; Clear All Variables
+  also clears the other cargo details and sets Unit Price to zero. The source
+  line is unchanged.
+- Size remains available in the Sales line column selector and starts hidden.
+  Users with the required Sales and Analytic Account access can edit Analytical
+  Account on a confirmed order's line list or line popup. Other Sales fields
+  and the order remain locked.
+- **Sale Orders without Allocation** supports inline ETOL edits for confirmed,
+  unallocated shipments. Other data columns remain read-only, and saving ETOL
+  does not assign a truck or reserve a trip resource.
+- Fleet trucks may have one **Default Trailer**; a trailer's **Assigned Truck**
+  is the read-only reverse display of that pairing. Each trailer can pair with
+  only one truck. This default pairing does not create or change trip resource
+  reservations.
+- New File Numbers use `FN/YYYY/MM/NNNNN` (for example, `FN/2026/11/00042`).
+  The shared five-digit sequence continues across months; existing references
+  are unchanged.
+- Without Allocation and Trips Summary have wider, wrapping columns and can
+  scroll horizontally. Draft rows hide checkpoint status/progress cells while
+  Trip Status remains visible. Checkpoint data and progress calculations are
+  unchanged.
+
+These changes describe application behavior after upgrading the module; no
+deployment is implied.
+
 ## Dispatch and Trips Summary (19.0.1.26.0)
 
 The Sale Orders - Trip Not Started worklist uses wider default columns and wraps
 long labels and values. Scroll horizontally to reach the remaining fields;
 column Show/Hide and manual resizing remain available.
 
-ETA is a datetime in version 19.0.1.27.0. Date-only values from earlier versions
-are migrated with a placeholder of 12:00 noon in the Asia/Damascus timezone;
-that placeholder is not a recorded shipment arrival time.
-Individual datetime fields display in the user's timezone. The aggregated File
-Number list's ETA text is labelled UTC. The upgrade refreshes those summaries
+ETA and ETOL are date-only shipment values. Trip timing fields remain datetimes
+and display in the user's timezone. The upgrade refreshes File Number summaries
 and re-locks any previously unlocked confirmed Sales Orders.
 
 - **Dispatch Orders > Sale Orders - Trip Not Started** is an ungrouped shipment
@@ -97,7 +128,8 @@ Sales, Purchase, Accounting, Navirec or invoicing workflows.
 Order receives one File Number containing its product/service shipment rows
 and related operational trips. Sections, notes and down payments are excluded.
 Additional Sales lines join the order's first file. Confirmation does not
-create operational trips. File Numbers keep the `TF/<year>/<sequence>` format.
+create operational trips. New File Numbers use the format documented above;
+existing references are unchanged.
 Operational planning remains under **Transport Operations > Transport Trips**.
 
 The index has Customer Name, Related Sales Order, shipment/trip counts,
@@ -398,7 +430,8 @@ writes fail without side effects.
 The line table shows Product, File Type, Clearing Service, Consignee,
 Bill of Lading, Container Number, ETA, ETOL, Shipping Line, Cargo Type, Size,
 Weight, Cargo Desc., Special Handling Instructions, QTY, Unit Price,
-Tax, Amount, Analytical Account and Vehicle, in that order. Analytical Account
+Tax, Amount, Analytical Account and Vehicle, in that order. Size starts hidden
+and remains available through the optional columns menu. Analytical Account
 requires the Analytic Accounting group. Other standard columns and the
 planned schedule remain available through the optional columns menu. The
 planned schedule block is no longer shown on the line form. ETA and ETOL are
@@ -421,10 +454,11 @@ clears Vehicle so a separate shipment receives its own assignment.
 
 **Duplicate Line (19.0.1.22.0)** appears beside **Add a product**. It opens a
 modal to select a product line from the same quotation or sales order.
-**Clean Container** clears only Container Number. **Clean All Variables**
-also clears Cargo Type, Size, Weight, Cargo Description and Special Handling
-Instructions, and sets Unit Price to 0. Other shipment and commercial values
-are copied, including the planned schedule; Vehicle stays empty. The copy is
+**Clear Container** clears Container Number and Weight. **Clear All Variables**
+also clears Cargo Type, Size, Cargo Description and Special Handling
+Instructions, and sets Unit Price to 0. Remaining shipment and commercial
+values are copied, including the planned schedule; Vehicle and Analytical
+Account stay empty. The copy is
 appended to the order and the source line is unchanged. Trips, assignments,
 deliveries and invoice links are not duplicated. On a confirmed order, the
 copy joins the order's File Number through the standard line-creation flow.
@@ -436,7 +470,9 @@ to authorize selected users to change the unit price using **Edit Unit Price**
 on the line. The order remains locked, and the role does not permit changes to
 other fields or lines. Each price change is recorded in the Sales Order chatter.
 The role supplements normal document and company access and is not granted
-automatically to Sales managers. Draft quotations remain editable.
+automatically to Sales managers. Draft quotations remain editable. Narrow
+confirmed-order exceptions for Analytical Account and ETOL are documented at
+the top of this README and use their own access checks.
 
 The server enforces the permission for direct ORM/RPC writes, nested line
 commands, line reassignment and saved default order values. Native invoicing,
@@ -736,8 +772,8 @@ trip-creation snapshots are not rewritten by operational assignment.
 
 ## Dispatch worklists (19.0.1.14.0)
 
-Under **Transport Operations > Dispatch Orders**, two read-only worklists list
-the confirmed sales order lines a dispatcher still has to act on. Both open one
+Under **Transport Operations > Dispatch Orders**, two worklists list the
+confirmed sales order lines a dispatcher still has to act on. Both open one
 row per sales **line** (trips live on lines, not orders). Both worklists open
 ungrouped with optional data columns.
 
@@ -747,7 +783,8 @@ ungrouped with optional data columns.
   Shows the File Number, shipment columns and ETOL. **Assign Truck** writes the
   planned truck on the line without creating a trip; operational resources are
   assigned from Vehicle Availability or the trip resource dialog before
-  Start Trip when needed. An existing unassigned Draft is allocated by Assign Truck.
+  Start Trip when needed. An existing unassigned Draft is allocated by Assign
+  Truck. The list allows inline ETOL edits; its other data fields remain read-only.
 
 Search filters **No Trip**, **Has Trip**, **No Truck** and **Has Truck** combine
 with the menu domain, and rows can be grouped by Sales Order or Customer.

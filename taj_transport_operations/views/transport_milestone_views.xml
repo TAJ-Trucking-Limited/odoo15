@@ -29,7 +29,7 @@
                 <field name="planned_arrival_at" optional="show"/>
                 <field name="actual_arrival_at" optional="show"/>
                 <field name="actual_departure_at" optional="show"/>
-                <field name="state" widget="badge" decoration-info="state == 'pending'" decoration-warning="state == 'arrived'" decoration-success="state in ('completed', 'departed')" decoration-muted="state == 'skipped'" optional="show"/>
+                <field name="state" widget="badge" decoration-info="state == 'pending'" decoration-warning="state == 'arrived'" decoration-success="state in ('completed', 'departed')" decoration-muted="state == 'skipped'" optional="show" invisible="trip_state == 'draft'"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
                 <button name="action_open_trip" string="Open Trip" type="object" icon="fa-truck" class="btn-link" invisible="not trip_id"/>
                 <button name="action_open_record_activity" string="Record Activity" type="object" icon="fa-pencil" invisible="trip_state not in ('draft', 'ready', 'in_progress')"/>

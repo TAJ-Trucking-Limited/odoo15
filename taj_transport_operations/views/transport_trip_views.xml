@@ -4,34 +4,34 @@
         <field name="name">taj.transport.trip.list</field>
         <field name="model">taj.transport.trip</field>
         <field name="arch" type="xml">
-            <list string="Trips Summary" delete="0"
+            <list string="Trips Summary" class="o_taj_dispatch_readable" delete="0"
                   decoration-danger="activity_status == 'overdue'"
                   decoration-success="state == 'completed'"
                   decoration-info="state in ('draft', 'ready')"
                   decoration-muted="state == 'cancelled'">
                 <field name="name" optional="show" string="Trip"/>
-                <field name="transport_file_id" optional="show"/>
-                <field name="file_type_id" optional="show"/>
-                <field name="clearing_service" optional="show"/>
-                <field name="sale_order_id" optional="show" string="Sales Order Number"/>
-                <field name="partner_id" optional="show" string="Customer Name"/>
-                <field name="consignee" optional="show"/>
+                <field name="transport_file_id" optional="show" width="210px"/>
+                <field name="file_type_id" optional="show" width="160px"/>
+                <field name="clearing_service" optional="show" width="150px"/>
+                <field name="sale_order_id" optional="show" string="Sales Order Number" width="160px"/>
+                <field name="partner_id" optional="show" string="Customer Name" width="220px"/>
+                <field name="consignee" optional="show" width="220px"/>
                 <field name="product_id" optional="hide"/>
-                <field name="sale_description" optional="show" string="Product Description"/>
+                <field name="sale_description" optional="show" string="Product Description" width="280px"/>
                 <field name="cargo_quantity" optional="hide" string="QTY"/>
-                <field name="current_vehicle_id" optional="show" string="Vehicle"/>
-                <field name="eta" optional="show"/>
-                <field name="etol" optional="show"/>
+                <field name="current_vehicle_id" optional="show" string="Vehicle" width="180px"/>
+                <field name="eta" optional="show" width="160px"/>
+                <field name="etol" optional="show" width="160px"/>
                 <field name="cargo_type_id" optional="show"/>
-                <field name="size" optional="show"/>
-                <field name="weight" optional="show"/>
-                <field name="cargo_description" optional="show" string="Cargo Desc."/>
-                <field name="special_handling_instructions" optional="show"/>
+                <field name="size" optional="show" width="120px"/>
+                <field name="weight" optional="show" width="120px"/>
+                <field name="cargo_description" optional="show" string="Cargo Desc." width="240px"/>
+                <field name="special_handling_instructions" optional="show" width="280px"/>
                 <field name="allocation_date" optional="show"/>
                 <field name="last_milestone_activity" optional="show"/>
                 <field name="last_milestone_at" optional="show"/>
-                <field name="current_driver_id" optional="show" string="Current Driver"/>
-                <field name="milestone_progress" optional="show" widget="progressbar"/>
+                <field name="current_driver_id" optional="show" string="Current Driver" width="180px"/>
+                <field name="milestone_progress" optional="show" widget="progressbar" invisible="state == 'draft'"/>
                 <field name="state" optional="show" string="Trip Status" widget="badge" decoration-info="state in ('draft', 'ready')" decoration-warning="state == 'in_progress'" decoration-success="state == 'completed'" decoration-muted="state == 'cancelled'"/>
                 <field name="activity_status" optional="show" widget="badge" decoration-danger="activity_status == 'overdue'" decoration-success="activity_status == 'recent'"/>
                 <field name="last_activity_at" optional="show"/>

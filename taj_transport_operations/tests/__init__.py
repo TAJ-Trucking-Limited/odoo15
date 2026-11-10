@@ -21,3 +21,4 @@ from . import test_fleet_defaults
 from . import test_milestone_selection_actions
 from . import test_trip_email_updates
 from . import test_trip_email_concurrency
+from . import test_shipment_entry_edits

@@ -4,7 +4,7 @@ from datetime import timedelta
 from freezegun import freeze_time
 
 from odoo import fields
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import new_test_user
 
@@ -229,3 +229,58 @@ class TestAutomaticFleetDefaults(TajTransportPhase3Case):
         self.assertNotIn(first.name, " ".join(second.message_ids.mapped("body")))
         with self.assertRaisesRegex(UserError, "reserved by another Draft trip"), self.env.cr.savepoint():
             second.action_apply_initial_fleet_defaults()
+
+    def _pairing_trailer(self, plate):
+        model = self.env['fleet.vehicle.model'].create({
+            'name': plate, 'brand_id': self.brand.id,
+            'category_id': self.env.ref('taj_transport_operations.fleet_category_trailer').id,
+        })
+        return self.env['fleet.vehicle'].create({'model_id': model.id, 'license_plate': plate})
+
+    def test_default_trailer_reverse_clear_replace_and_trip_isolation(self):
+        first = self._pairing_trailer('PAIR-FIRST')
+        second = self._pairing_trailer('PAIR-SECOND')
+        self.truck.transport_default_trailer_id = first
+        self.assertEqual(first.transport_assigned_truck_id, self.truck)
+        self.assertEqual(first.transport_availability_state, 'standby')
+        trip = self._trip(line=self._source('PAIR'))
+        self.assertFalse(trip.current_assignment_id.trailer_id)
+        self.truck.transport_default_trailer_id = second
+        self.assertFalse(first.transport_assigned_truck_id)
+        self.assertEqual(second.transport_assigned_truck_id, self.truck)
+        self.truck.transport_default_trailer_id = False
+        self.assertFalse(second.transport_assigned_truck_id)
+
+    def test_default_trailer_validation_and_reverse_changes(self):
+        trailer = self._pairing_trailer('PAIR-VALIDATE')
+        other = self.env['fleet.vehicle'].create({'model_id': self.truck_model.id})
+        self.truck.category_id = False
+        self.truck.transport_default_trailer_id = trailer
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            other.transport_default_trailer_id = trailer
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.transport_default_trailer_id = self.truck
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            trailer.category_id = self.env.ref('taj_transport_operations.fleet_category_truck')
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            trailer.active = False
+        foreign = self.env['res.company'].create({'name': 'Pairing foreign company'})
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            trailer.company_id = foreign
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.active = False
+
+    def test_pairing_access_and_unpaired_invalid_targets(self):
+        trailer = self._pairing_trailer('PAIR-ACCESS')
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            self.truck.with_user(self.dispatcher).write({'transport_default_trailer_id': trailer.id})
+        trailer.active = False
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.transport_default_trailer_id = trailer
+        trailer.active = True
+        foreign = self.env['res.company'].create({'name': 'Pair target foreign'})
+        trailer.company_id = foreign
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.transport_default_trailer_id = trailer
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.truck.transport_default_trailer_id = self.truck

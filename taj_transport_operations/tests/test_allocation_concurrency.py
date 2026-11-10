@@ -90,3 +90,41 @@ class TestAllocationConcurrency(TransactionCase):
                 env["fleet.vehicle.model.brand"].browse(brand_id).unlink()
                 env["res.partner"].browse(customer_id).unlink()
                 cr.commit()
+
+    def test_two_transactions_cannot_pair_one_trailer(self):
+        from psycopg2.errors import UniqueViolation
+
+        with self.registry.cursor() as cr:
+            env = api.Environment(cr, SUPERUSER_ID, {})
+            brand = env['fleet.vehicle.model.brand'].create({'name': 'Pair race'})
+            truck_model = env['fleet.vehicle.model'].create({
+                'name': 'Pair race truck', 'brand_id': brand.id,
+                'category_id': env.ref('taj_transport_operations.fleet_category_truck').id,
+            })
+            trailer_model = env['fleet.vehicle.model'].create({
+                'name': 'Pair race trailer', 'brand_id': brand.id,
+                'category_id': env.ref('taj_transport_operations.fleet_category_trailer').id,
+            })
+            vehicles = env['fleet.vehicle'].create([
+                {'model_id': truck_model.id}, {'model_id': truck_model.id},
+                {'model_id': trailer_model.id},
+            ])
+            ids, model_ids, brand_id = vehicles.ids, (truck_model | trailer_model).ids, brand.id
+            cr.commit()
+        try:
+            with self.registry.cursor() as first, self.registry.cursor() as second:
+                second.execute('SELECT transport_default_trailer_id FROM fleet_vehicle WHERE id = %s', (ids[1],))
+                first.execute('UPDATE fleet_vehicle SET transport_default_trailer_id = %s WHERE id = %s', (ids[2], ids[0]))
+                first.commit()
+                with self.assertRaises(UniqueViolation):
+                    second.execute('UPDATE fleet_vehicle SET transport_default_trailer_id = %s WHERE id = %s', (ids[2], ids[1]))
+                second.rollback()
+        finally:
+            with self.registry.cursor() as cr:
+                env = api.Environment(cr, SUPERUSER_ID, {})
+                env['fleet.vehicle'].browse(ids).write({'transport_default_trailer_id': False})
+                env['fleet.vehicle.assignation.log'].search([('vehicle_id', 'in', ids)]).unlink()
+                env['fleet.vehicle'].browse(ids).unlink()
+                env['fleet.vehicle.model'].browse(model_ids).unlink()
+                env['fleet.vehicle.model.brand'].browse(brand_id).unlink()
+                cr.commit()

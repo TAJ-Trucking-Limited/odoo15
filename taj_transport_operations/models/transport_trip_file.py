@@ -97,7 +97,7 @@ class TajTransportTripFile(models.Model):
     container_number = fields.Char(
         string="Container Numbers", compute="_compute_summary", store=True
     )
-    etas = fields.Char(string="ETAs (UTC)", compute="_compute_summary", store=True)
+    etas = fields.Char(string="ETAs", compute="_compute_summary", store=True)
     etols = fields.Char(string="ETOLs", compute="_compute_summary", store=True)
     shipping_lines = fields.Char(
         string="Shipping Lines", compute="_compute_summary", store=True
@@ -376,7 +376,7 @@ class TajTransportTripFileLine(models.Model):
     container_num = fields.Char(
         related="sale_line_id.container_num", readonly=False, string="Container Number"
     )
-    eta = fields.Datetime(related="sale_line_id.eta", readonly=False)
+    eta = fields.Date(related="sale_line_id.eta", readonly=False)
     etol = fields.Date(related="sale_line_id.etol", readonly=False, string="ETOL")
     shipping_line = fields.Char(related="sale_line_id.shipping_line", readonly=False)
     cargo_type_id = fields.Many2one(

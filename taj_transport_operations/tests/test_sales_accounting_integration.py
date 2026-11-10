@@ -82,7 +82,7 @@ class TestTransportSalesAccountingBoundary(AccountTestInvoicingCommon):
                     "container_num": "INTEGRATION-CONTAINER-A",
                     "srn": "INTEGRATION-SRN-A",
                     "consignee": "Integration consignee",
-                    "weight": "2000 KG",
+                    "weight": "2000.5",
                     "size": "40 FT",
                     "file_name": "INTEGRATION-FILE",
                 }),

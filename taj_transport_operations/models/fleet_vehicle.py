@@ -1,6 +1,6 @@
 """Transport categories on the existing Fleet source of truth."""
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 
 from ..hooks import ensure_transport_categories
 
@@ -13,10 +13,89 @@ class FleetVehicleModelCategory(models.Model):
         ensure_transport_categories(self.env)
 
 
+class FleetVehicleModel(models.Model):
+    _inherit = "fleet.vehicle.model"
+
+    def write(self, vals):
+        result = super().write(vals)
+        if "category_id" in vals:
+            vehicles = self.env["fleet.vehicle"].sudo().with_context(active_test=False).search([
+                ("model_id", "in", self.ids),
+            ])
+            vehicles._validate_transport_pairings()
+        return result
+
+
 class FleetVehicle(models.Model):
     _inherit = "fleet.vehicle"
 
+    _unique_default_trailer = models.Constraint(
+        "UNIQUE(transport_default_trailer_id)",
+        "This trailer is already paired with another truck.",
+    )
+
     is_transport_trailer = fields.Boolean(compute="_compute_is_transport_trailer")
+    transport_default_trailer_id = fields.Many2one(
+        "fleet.vehicle", string="Default Trailer", copy=False, ondelete="restrict",
+        domain=lambda self: self._transport_resource_domain("trailer") + [
+            "|", ("company_id", "=", False), ("company_id", "in", self.env.companies.ids),
+        ],
+        groups="taj_transport_operations.group_transport_user",
+    )
+    transport_default_truck_ids = fields.One2many(
+        "fleet.vehicle", "transport_default_trailer_id", readonly=True,
+        groups="taj_transport_operations.group_transport_user",
+    )
+    transport_assigned_truck_id = fields.Many2one(
+        "fleet.vehicle", string="Assigned Truck", compute="_compute_assigned_truck",
+        compute_sudo=False, groups="taj_transport_operations.group_transport_user",
+    )
+
+    @api.depends("transport_default_truck_ids")
+    @api.depends_context("uid", "allowed_company_ids")
+    def _compute_assigned_truck(self):
+        for vehicle in self:
+            vehicle.transport_assigned_truck_id = vehicle.with_context(
+                active_test=False
+            ).transport_default_truck_ids[:1]
+
+    def _check_default_trailer_available(self, trailer_id):
+        if not trailer_id:
+            return
+        trailer = self.env["fleet.vehicle"].browse(trailer_id)
+        trailer.check_access("read")
+        self.env.cr.execute("SELECT id FROM fleet_vehicle WHERE id = %s FOR UPDATE", (trailer_id,))
+        existing = self.sudo().with_context(active_test=False).search([
+            ("transport_default_trailer_id", "=", trailer_id),
+            ("id", "not in", self.ids),
+        ], limit=1)
+        if existing:
+            try:
+                existing.with_user(self.env.user).check_access("read")
+            except AccessError:
+                raise ValidationError(_("This trailer is already paired with another truck."))
+            raise ValidationError(_(
+                "This trailer is already paired with %(truck)s. Clear that pairing first.",
+                truck=existing.display_name,
+            ))
+
+    def _validate_transport_pairings(self):
+        vehicles = self.sudo().with_context(active_test=False)
+        trucks = vehicles.filtered("transport_default_trailer_id") | vehicles.search([
+            ("transport_default_trailer_id", "in", vehicles.ids),
+        ])
+        if not trucks:
+            return
+        truck_category = self.env.ref("taj_transport_operations.fleet_category_truck")
+        trailer_category = self.env.ref("taj_transport_operations.fleet_category_trailer")
+        for truck in trucks:
+            trailer = truck.transport_default_trailer_id
+            if (truck == trailer or not truck.active or not trailer.active
+                    or (truck.category_id and truck.category_id != truck_category)
+                    or trailer.category_id != trailer_category):
+                raise ValidationError(_("A pairing requires an active truck and a different active trailer."))
+            if trailer.company_id and trailer.company_id != truck.company_id:
+                raise ValidationError(_("The trailer must be shared or belong to the truck's company."))
 
     transport_group_last_activity_at = fields.Datetime(
         string="Last Activity Recorded",
@@ -249,7 +328,11 @@ class FleetVehicle(models.Model):
         vals_list = [dict(vals) for vals in vals_list]
         for vals in vals_list:
             vals.pop("transport_availability_state", None)
-        return super().create(vals_list)
+        for vals in vals_list:
+            self._check_default_trailer_available(vals.get("transport_default_trailer_id"))
+        vehicles = super().create(vals_list)
+        vehicles._validate_transport_pairings()
+        return vehicles
 
     def write(self, vals):
         if "transport_availability_state" in vals:
@@ -265,7 +348,28 @@ class FleetVehicle(models.Model):
                 raise ValidationError(_(
                     "The company cannot change for a truck or trailer with trip assignment history."
                 ))
+        pairing_fields = {"transport_default_trailer_id", "category_id", "model_id", "company_id", "active"}
+        if pairing_fields.intersection(vals):
+            self.check_access("write")
+            targets = self.sudo().with_context(active_test=False)
+            related = targets.mapped("transport_default_trailer_id") | targets.search([
+                ("transport_default_trailer_id", "in", self.ids),
+            ])
+            ids = set(self.ids + related.ids)
+            if vals.get("transport_default_trailer_id"):
+                target = self.env["fleet.vehicle"].browse(vals["transport_default_trailer_id"])
+                target.check_access("read")
+                ids.add(target.id)
+            if ids:
+                self.env.cr.execute(
+                    "SELECT id FROM fleet_vehicle WHERE id IN %s ORDER BY id FOR UPDATE",
+                    (tuple(ids),),
+                )
+        if vals.get("transport_default_trailer_id"):
+            self._check_default_trailer_available(vals["transport_default_trailer_id"])
         result = super().write(vals)
+        if {"transport_default_trailer_id", "category_id", "model_id", "company_id", "active"}.intersection(vals):
+            self._validate_transport_pairings()
         if {"category_id", "model_id"}.intersection(vals):
             assignments = self.env["taj.transport.assignment"].sudo()
             for kind, field in (("truck", "vehicle_id"), ("trailer", "trailer_id")):

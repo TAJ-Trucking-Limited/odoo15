@@ -36,7 +36,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
             'container_num': 'CONT-001',
             'file_name': 'FILE-001',
             'consignee': 'Test Consignee',
-            'weight': '20T',
+            'weight': '20.5',
             'size': '40FT',
             'srn': 'SRN-001',
         })
@@ -60,7 +60,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(values['container_num'], 'CONT-001')
         self.assertEqual(values['file_name'], 'FILE-001')
         self.assertEqual(values['consignee'], 'Test Consignee')
-        self.assertEqual(values['weight'], '20T')
+        self.assertEqual(values['weight'], '20.5')
         self.assertEqual(values['size'], '40FT')
         self.assertEqual(values['srn'], 'SRN-001')
         self.assertEqual(values['order_id'], self.sale_order.id)
@@ -72,7 +72,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
                 line_form.container_num = 'MANUAL-CONT'
                 line_form.file_name = 'MANUAL-FILE'
                 line_form.consignee = 'Manual Consignee'
-                line_form.weight = '25T'
+                line_form.weight = '25.5'
                 line_form.size = '20FT'
                 line_form.srn = 'MANUAL-SRN'
 
@@ -87,7 +87,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(self.sale_line.container_num, 'MANUAL-CONT')
         self.assertEqual(self.sale_line.file_name, 'MANUAL-FILE')
         self.assertEqual(self.sale_line.consignee, 'Manual Consignee')
-        self.assertEqual(self.sale_line.weight, '25T')
+        self.assertEqual(self.sale_line.weight, '25.5')
         self.assertEqual(self.sale_line.size, '20FT')
         self.assertEqual(self.sale_line.srn, 'MANUAL-SRN')
 
@@ -109,7 +109,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(product_line.container_num, 'CONT-001')
         self.assertEqual(product_line.file_name, 'FILE-001')
         self.assertEqual(product_line.consignee, 'Test Consignee')
-        self.assertEqual(product_line.weight, '20T')
+        self.assertEqual(product_line.weight, '20.5')
         self.assertEqual(product_line.size, '40FT')
         self.assertEqual(product_line.srn, 'SRN-001')
 
@@ -141,7 +141,7 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
         self.assertEqual(line.container_num, 'CONT-001')
         self.assertEqual(line.file_name, 'FILE-001')
         self.assertEqual(line.consignee, 'Test Consignee')
-        self.assertEqual(line.weight, '20T')
+        self.assertEqual(line.weight, '20.5')
         self.assertEqual(line.size, '40FT')
         self.assertEqual(line.srn, 'SRN-001')
         self.assertEqual(line.vehicle_id, self.vehicle)

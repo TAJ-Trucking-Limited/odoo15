@@ -212,7 +212,6 @@ class TestSaleLineColumns(TransactionCase):
                 "eta",
                 "shipping_line",
                 "cargo_type_id",
-                "size",
                 "weight",
                 "cargo_description",
                 "special_handling_instructions",
@@ -226,8 +225,62 @@ class TestSaleLineColumns(TransactionCase):
             ],
         )
         self.assertEqual(
-            columns.xpath("field[@name='vehicle_id']")[0].get("readonly"), "1"
+            columns.xpath("field[@name='vehicle_id']")[0].get("readonly"),
+            "1",
         )
+        self.assertEqual(columns.xpath("field[@name='size']")[0].get("optional"), "hide")
+        line_popup = arch.xpath("//field[@name='order_line']/form")[0]
+        self.assertEqual(len(line_popup.xpath(".//field[@name='analytic_account_id']")), 1)
+        self.assertEqual(len(columns.xpath("field[@name='analytic_account_id']")), 1)
+
+    def test_without_allocation_list_only_edits_etol_inline(self):
+        dispatcher = new_test_user(
+            self.env,
+            login="shipment_inline_etol_view_user",
+            groups="base.group_user,taj_transport_operations.group_transport_user",
+        )
+        view = self.env["sale.order.line"].with_user(dispatcher).get_view(
+            view_id=self.env.ref(
+                "taj_transport_operations.view_sale_order_line_without_allocation_list"
+            ).id,
+            view_type="list",
+        )
+        listing = etree.fromstring(view["arch"]).xpath("//list")[0]
+        self.assertEqual(listing.get("editable"), "bottom")
+        self.assertEqual(listing.get("create"), "0")
+        self.assertEqual(listing.get("delete"), "0")
+        for field in listing.xpath("./field"):
+            if field.get("name") == "etol":
+                self.assertNotEqual(field.get("readonly"), "1")
+            else:
+                self.assertEqual(field.get("readonly"), "1", field.get("name"))
+        self.assertEqual(
+            len(listing.xpath("./header/button[@name='action_assign_selected_truck']")),
+            1,
+        )
+        self.assertEqual(
+            len(listing.xpath("./button[@name='action_open_assign_truck_wizard']")),
+            1,
+        )
+
+    def test_draft_trip_checkpoint_badges_and_progress_are_hidden_per_row(self):
+        summary_view = self.env.ref("taj_transport_operations.view_transport_trip_list")
+        summary = etree.fromstring(summary_view.get_combined_arch())
+        progress = summary.xpath("./field[@name='milestone_progress']")
+        self.assertEqual(len(progress), 1)
+        self.assertEqual(progress[0].get("invisible"), "state == 'draft'")
+        trip_status = summary.xpath("./field[@name='state']")
+        self.assertEqual(len(trip_status), 1)
+        self.assertFalse(trip_status[0].get("invisible"))
+
+        milestone_view = self.env.ref("taj_transport_operations.view_transport_milestone_list")
+        milestones = etree.fromstring(milestone_view.get_combined_arch())
+        checkpoint_status = milestones.xpath("./field[@name='state']")
+        self.assertEqual(len(checkpoint_status), 1)
+        self.assertEqual(checkpoint_status[0].get("invisible"), "trip_state == 'draft'")
+        trip_status = milestones.xpath("./field[@name='trip_state']")
+        self.assertEqual(len(trip_status), 1)
+        self.assertFalse(trip_status[0].get("invisible"))
 
     def test_sales_user_can_select_file_type_without_transport_role(self):
         salesperson = new_test_user(

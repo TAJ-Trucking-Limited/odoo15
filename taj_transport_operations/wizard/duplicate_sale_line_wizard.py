@@ -16,7 +16,7 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
                "('display_type', 'in', [False, 'product']), ('is_downpayment', '=', False)]",
     )
     clean_mode = fields.Selection(
-        [("container", "Clean Container"), ("all", "Clean All Variables")],
+        [("container", "Clear Container"), ("all", "Clear All Variables")],
         string="Clear on Duplicate", required=True, default="container",
     )
 
@@ -37,6 +37,7 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
             "order_id": order.id,
             "sequence": max(order.order_line.mapped("sequence"), default=0) + 1,
             "container_num": False,
+            "weight": False,
             "vehicle_id": False,
             # Each duplicated shipment needs fresh analytical allocation,
             # regardless of the selected cargo cleaning mode.
@@ -48,7 +49,7 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
         }
         if self.clean_mode == "all":
             values.update({
-                "cargo_type_id": False, "size": False, "weight": False,
+                "cargo_type_id": False, "size": False,
                 "cargo_description": False, "special_handling_instructions": False,
                 "price_unit": 0.0,
             })

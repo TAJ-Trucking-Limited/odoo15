@@ -150,7 +150,7 @@ class TestTripFiles(TransactionCase):
         self.assertEqual(files.line_count, 2)
         self.assertEqual(files.partner_id, self.customer)
         self.assertEqual(len(set(files.mapped("name"))), 1)
-        self.assertTrue(all(name.startswith("TF/") for name in files.mapped("name")))
+        self.assertTrue(all(name.startswith("FN/") for name in files.mapped("name")))
         self.assertEqual(
             set(files.line_ids.mapped("container_num")), {"CONT-A", "CONT-B"}
         )
@@ -692,3 +692,11 @@ class TestTripFiles(TransactionCase):
         post(self.env.cr, "19.0.1.23.0")
         self.assertEqual(len(files.line_ids), 2)
         self.assertEqual(set(sources.mapped("bill_of_lading")), {"LATER-EDIT"})
+
+    def test_file_sequence_month_changes_without_reset(self):
+        sequence = self.env.ref("taj_transport_operations.seq_transport_trip_file")
+        november = sequence.with_context(ir_sequence_date="2026-11-01").next_by_id()
+        december = sequence.with_context(ir_sequence_date="2026-12-01").next_by_id()
+        self.assertTrue(november.startswith("FN/2026/11/"))
+        self.assertTrue(december.startswith("FN/2026/12/"))
+        self.assertEqual(int(december.rsplit("/", 1)[1]), int(november.rsplit("/", 1)[1]) + 1)

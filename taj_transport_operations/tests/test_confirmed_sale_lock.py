@@ -4,7 +4,7 @@ import runpy
 from lxml import etree
 
 from odoo import Command
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import Form, TransactionCase, tagged
 from odoo.tests.common import new_test_user
 from odoo.tools import file_path
@@ -167,7 +167,7 @@ class TestConfirmedSaleLock(TransactionCase):
         )
         for node in etree.fromstring(view["arch"]).xpath(".//field[not(ancestor::field)]"):
             field = self.order._fields.get(node.get("name"))
-            if field and not field.readonly and node.get("readonly") not in ("1", "True"):
+            if field and node.get("name") != "order_line" and not field.readonly and node.get("readonly") not in ("1", "True"):
                 self.assertIn("transport_confirmed_readonly", node.get("readonly", ""), node.get("name"))
 
     def test_notes_and_attachments_do_not_change_locked_commercial_data(self):
@@ -189,3 +189,67 @@ class TestConfirmedSaleLock(TransactionCase):
         (self.order | draft).invalidate_recordset(["locked"])
         self.assertTrue(self.order.locked)
         self.assertFalse(draft.locked)
+
+    def test_confirmed_analytic_account_direct_and_nested(self):
+        order = self._confirm()
+        plan = self.env['account.analytic.plan'].create({'name': 'Test plan'})
+        account = self.env['account.analytic.account'].create({'name': 'Test account', 'plan_id': plan.id})
+        line = self.line.with_user(self.salesperson)
+        line.write({'analytic_account_id': account.id})
+        self.assertEqual(line.analytic_account_id, account)
+        order.write({'order_line': [Command.update(line.id, {'analytic_account_id': False})]})
+        self.assertFalse(line.analytic_account_id)
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            line.write({'analytic_account_id': account.id, 'price_unit': 10})
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            order.write({'order_line': [Command.update(line.id, {'analytic_account_id': account.id, 'price_unit': 10})]})
+
+    def test_confirmed_analytic_rejects_foreign_line_and_company(self):
+        order = self._confirm()
+        other = self.order.copy({"user_id": self.salesperson.id})
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            order.write({"order_line": [Command.update(other.order_line.id, {"analytic_account_id": False})]})
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            order.write({"order_line": [Command.unlink(self.line.id)]})
+        company = self.env['res.company'].create({'name': 'Foreign analytics'})
+        plan = self.env['account.analytic.plan'].create({'name': 'Foreign plan'})
+        account = self.env['account.analytic.account'].create({'name': 'Foreign account', 'plan_id': plan.id, 'company_id': company.id})
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            self.line.write({'analytic_account_id': account.id})
+
+    def test_order_line_create_delete_actions_are_restricted_when_locked(self):
+        from ast import literal_eval
+        view = self.env['sale.order'].get_view(view_id=self.env.ref('sale.view_order_form').id, view_type='form')
+        node = etree.fromstring(view['arch']).xpath("//field[@name='order_line']")[0]
+        options = literal_eval(node.get('options'))
+        for action in ('create', 'delete'):
+            self.assertIn(('state', 'not in', ['sale', 'done']), options[action])
+            self.assertIn(('locked', '=', False), options[action])
+
+    def test_confirmed_analytic_account_saved_from_order_form(self):
+        self.salesperson.group_ids |= self.env.ref('analytic.group_analytic_accounting')
+        order = self._confirm()
+        plan = self.env['account.analytic.plan'].create({'name': 'Form plan'})
+        account = self.env['account.analytic.account'].create({'name': 'Form account', 'plan_id': plan.id})
+        with Form(order) as order_form:
+            with order_form.order_line.edit(0) as line_form:
+                line_form.analytic_account_id = account
+        self.line.invalidate_recordset(['analytic_account_id'])
+        self.assertEqual(self.line.analytic_account_id, account)
+        self.assertTrue(order.locked)
+
+    def test_analytic_audit_distinguishes_accounts_with_same_name(self):
+        order = self._confirm()
+        plan = self.env['account.analytic.plan'].create({'name': 'Audit plan'})
+        accounts = self.env['account.analytic.account'].create([
+            {'name': 'Same name', 'plan_id': plan.id},
+            {'name': 'Same name', 'plan_id': plan.id},
+        ])
+        line = self.line.with_user(self.salesperson)
+        line.write({'analytic_account_id': accounts[0].id})
+        before = order.message_ids
+        line.write({'analytic_account_id': accounts[1].id})
+        new_messages = order.message_ids - before
+        body = ' '.join(new_messages.mapped('body'))
+        self.assertIn('#%s' % accounts[0].id, body)
+        self.assertIn('#%s' % accounts[1].id, body)

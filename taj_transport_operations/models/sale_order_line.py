@@ -1,3 +1,5 @@
+import re
+
 from markupsafe import Markup
 
 from odoo import _, api, fields, models
@@ -215,7 +217,9 @@ class SaleOrderLine(models.Model):
         string="Clearing Service",
     )
     bill_of_lading = fields.Char(string="Bill of Lading")
-    eta = fields.Datetime(string="ETA")
+    eta = fields.Date(string="ETA")
+    weight = fields.Char(help="Enter a number such as 1250 or 1250.5, without units.")
+    analytic_account_id = fields.Many2one(domain="[('company_id', 'in', [False, company_id])]")
     etol = fields.Date(
         string="ETOL",
         help="Estimated time of loading (estimated loading date).",
@@ -492,8 +496,27 @@ class SaleOrderLine(models.Model):
         "this sales line. Later line edits do not update existing trips.",
     )
 
+    @api.model
+    def _normalize_shipment_weight(self, vals):
+        if "weight" not in vals:
+            return vals
+        vals = dict(vals)
+        value = vals["weight"]
+        if value is False or value is None or value == "":
+            vals["weight"] = False
+        else:
+            value = str(value).strip()
+            if not value:
+                vals["weight"] = False
+            elif not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value):
+                raise ValidationError(_("Weight must be a number, such as 1250 or 1250.5. Do not include units."))
+            else:
+                vals["weight"] = value
+        return vals
+
     @api.model_create_multi
     def create(self, vals_list):
+        vals_list = [self._normalize_shipment_weight(vals) for vals in vals_list]
         if any("allocation_date" in vals for vals in vals_list):
             raise UserError(_("Allocation Date is recorded automatically."))
         default_vehicle = self.default_get(["vehicle_id"]).get("vehicle_id")
@@ -539,9 +562,38 @@ class SaleOrderLine(models.Model):
         return lines
 
     def write(self, vals):
+        vals = self._normalize_shipment_weight(vals)
+        if set(vals) == {"etol"} and not self.env.su and self.env.user.has_group(
+            "taj_transport_operations.group_transport_user"
+        ) and any(line.order_id.state in ("sale", "done", "cancel") for line in self):
+            self.check_access("read")
+            self._lock_transport_vehicle()
+            for line in self:
+                if (line.order_id.state not in ("sale", "done") or line.vehicle_id
+                        or line.transport_trip_ids or line.company_id not in self.env.companies):
+                    raise AccessError(_("Only confirmed, unallocated shipments can be edited."))
+                row = line.transport_file_line_ids
+                if len(row) != 1:
+                    raise AccessError(_("A single shipment file row is required."))
+                line._write_file_shipment(vals, row)
+            return True
+        analytic_only = set(vals) == {"analytic_account_id"}
+        if analytic_only:
+            self.check_access("write")
+            account = self.env["account.analytic.account"].browse(vals["analytic_account_id"]).exists()
+            if vals["analytic_account_id"] and not account:
+                raise ValidationError(_("The analytical account does not exist."))
+            if account:
+                account.check_access("read")
+            if account and any(account.company_id and account.company_id != line.company_id for line in self):
+                raise ValidationError(_("The analytical account must belong to the order company or be shared."))
+            old_accounts = {
+                line.id: (line.analytic_account_id.id, line.analytic_account_id.display_name)
+                for line in self
+            }
         if "allocation_date" in vals:
             raise UserError(_("Allocation Date is recorded automatically."))
-        if vals:
+        if vals and not analytic_only:
             self.order_id._check_confirmed_sale_edit_access()
             if vals.get("order_id"):
                 self.env["sale.order"].browse(
@@ -588,7 +640,18 @@ class SaleOrderLine(models.Model):
                 super(SaleOrderLine, first_allocations).write({
                     "allocation_date": fields.Datetime.now(),
                 })
-        result = super().write(vals)
+        # An account-only change must not trigger the unrelated VAT synchronizer.
+        target = self.with_context(move_invoice_line_skip_vat_percentage_sync=True) if analytic_only else self
+        result = super(SaleOrderLine, target).write(vals)
+        if analytic_only:
+            for line in self.filtered(lambda item: item.order_id.state in ("sale", "done")):
+                old_id, old_name = old_accounts[line.id]
+                new_account = line.analytic_account_id
+                if old_id != new_account.id:
+                    old = "%s (#%s)" % (old_name, old_id) if old_id else _("Empty")
+                    new = "%s (#%s)" % (new_account.display_name, new_account.id) if new_account else _("Empty")
+                    line.order_id.message_post(body=Markup("<p>Analytical account on line #%s: %s → %s</p>") % (
+                        line.id, old, new))
         for row in rows:
             line = row.sale_line_id
             changes = []

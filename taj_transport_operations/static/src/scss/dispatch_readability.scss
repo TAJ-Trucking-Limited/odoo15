@@ -1,5 +1,7 @@
-// Keep shipment values readable in the Trip Not Started worklist only.
+// Keep shipment values readable in dispatch and Trips Summary lists.
 .o_taj_dispatch_readable .o_list_table {
+    min-width: max-content;
+
     thead th .text-truncate,
     tbody > tr > td.o_data_cell,
     tbody > tr > td.o_data_cell .o_field_widget,
@@ -11,4 +13,8 @@
         text-overflow: clip !important;
         white-space: normal !important;
     }
+}
+
+.o_taj_dispatch_readable .o_list_renderer {
+    overflow-x: auto;
 }

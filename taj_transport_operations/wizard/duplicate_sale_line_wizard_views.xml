@@ -12,7 +12,7 @@
                     <field name="clean_mode" widget="radio"/>
                 </group>
                 <p class="text-muted" invisible="clean_mode != 'container'">
-                    Clear Container Number. Keep the other shipment values and Unit Price.
+                    Clear Container Number and Weight. Keep the other shipment values and Unit Price.
                 </p>
                 <p class="text-muted" invisible="clean_mode != 'all'">
                     Clear Container Number, Cargo Type, Size, Weight, Cargo Description

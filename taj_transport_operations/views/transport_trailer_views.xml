@@ -14,6 +14,8 @@
                        decoration-warning="transport_availability_state == 'assigned'"
                        decoration-success="transport_availability_state == 'standby'"/>
                 <field name="transport_trip_ids" widget="many2many_tags"/>
+                <field name="transport_default_trailer_id" optional="hide"/>
+                <field name="transport_assigned_truck_id" optional="hide"/>
                 <field name="transport_planned_sale_line_count" optional="show"/>
                 <field name="driver_id" string="Fleet Driver" optional="hide"/>
                 <field name="company_id" groups="base.group_multi_company"/>
@@ -65,6 +67,9 @@
                                decoration-warning="transport_availability_state == 'assigned'"
                                decoration-success="transport_availability_state == 'standby'"/>
                         <field name="transport_trip_ids" widget="many2many_tags"/>
+                        <field name="is_transport_trailer" invisible="1"/>
+                        <field name="transport_default_trailer_id" readonly="1" invisible="is_transport_trailer"/>
+                        <field name="transport_assigned_truck_id" readonly="1" invisible="not is_transport_trailer"/>
                     </group>
                 </sheet>
                 <chatter/>
@@ -133,6 +138,13 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
                 <field name="is_transport_trailer" invisible="1"/>
+            </xpath>
+            <xpath expr="//sheet" position="inside">
+                <group string="Transport Pairing" groups="taj_transport_operations.group_transport_user">
+                    <field name="transport_default_trailer_id" invisible="is_transport_trailer"
+                          />
+                    <field name="transport_assigned_truck_id" invisible="not is_transport_trailer" readonly="1"/>
+                </group>
             </xpath>
             <xpath expr="//group[field[@name='fuel_type']]" position="attributes">
                 <attribute name="invisible">vehicle_type != 'car' or is_transport_trailer</attribute>
