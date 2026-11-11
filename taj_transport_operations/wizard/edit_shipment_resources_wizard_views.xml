@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_edit_shipment_resources_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.edit.shipment.resources.wizard.form</field>
+        <field name="model">taj.transport.edit.shipment.resources.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Edit Info">
+                <field name="sale_line_id" invisible="1"/>
+                <field name="trip_id" invisible="1"/>
+                <field name="expected_assignment_id" invisible="1"/>
+                <field name="expected_source_vehicle_id" invisible="1"/>
+                <field name="expected_vehicle_id" invisible="1"/>
+                <field name="expected_trailer_id" invisible="1"/>
+                <field name="expected_driver_id" invisible="1"/>
+                <field name="expected_etol" invisible="1"/>
+                <field name="expected_trip_state" invisible="1"/>
+                <field name="expected_has_assignment" invisible="1"/>
+                <field name="defaults_vehicle_id" invisible="1"/>
+                <group>
+                    <group>
+                        <field name="sale_order_id"/>
+                        <field name="company_id" invisible="1"/>
+                    </group>
+                    <group>
+                        <field name="vehicle_id" options="{'no_create': True}"/>
+                        <field name="trailer_id" options="{'no_create': True}"/>
+                        <field name="driver_id" options="{'no_create': True}"/>
+                        <field name="etol" required="1" options="{'numeric': True}"/>
+                    </group>
+                </group>
+                <p class="text-muted">
+                    Updates this shipment's truck, trailer, driver and ETOL.
+                    Existing Draft or Ready trip resources are replaced with an
+                    audited history row when they change. Cancel leaves Fleet
+                    defaults and the shipment unchanged.
+                </p>
+                <footer>
+                    <button name="action_save" string="Save" type="object" class="btn-primary"/>
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

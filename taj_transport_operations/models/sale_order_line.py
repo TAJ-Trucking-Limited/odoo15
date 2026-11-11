@@ -23,6 +23,14 @@ class SaleOrderLine(models.Model):
         readonly=True, copy=False,
         help="The Assign Truck dialog explicitly selected a driver (or no driver).",
     )
+    transport_allocated_trailer_id = fields.Many2one(
+        "fleet.vehicle", string="Trailer at Allocation", readonly=True, copy=False,
+        help="Trailer selected with the Sales truck allocation, used when a Trip is created later.",
+    )
+    transport_trailer_choice_set = fields.Boolean(
+        readonly=True, copy=False,
+        help="The Assign Truck / Edit Info dialog explicitly selected a trailer (or no trailer).",
+    )
 
     transport_dispatch_driver_id = fields.Many2one(
         "res.partner", string="Driver", compute="_compute_transport_dispatch_driver_id",
@@ -439,6 +447,11 @@ class SaleOrderLine(models.Model):
             raise UserError(_("This line already has a truck. Refresh the worklist."))
         return self.action_open_assign_truck_wizard()
 
+    def action_edit_selected_info(self):
+        """Selection toolbar on the Trip Not Started worklist."""
+        self._check_single_dispatch_selection()
+        return self.action_open_edit_info()
+
     def action_open_assign_truck_wizard(self):
         self.ensure_one()
         self.check_access("read")
@@ -450,6 +463,42 @@ class SaleOrderLine(models.Model):
             "target": "new",
             "context": {"default_sale_line_id": self.id},
         }
+
+    def action_open_edit_info(self):
+        self.ensure_one()
+        self.check_access("read")
+        if not self.env.user.has_group(
+            "taj_transport_operations.group_transport_user"
+        ):
+            raise AccessError(_("Transport Operations access is required."))
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Edit Info"),
+            "res_model": "taj.transport.edit.shipment.resources.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_sale_line_id": self.id},
+        }
+
+    def _write_transport_allocation_snapshot(self, vals):
+        """Trusted Transport dialogs write allocation metadata on locked Sales lines."""
+        self.ensure_one()
+        allowed = {
+            "vehicle_id",
+            "transport_allocated_driver_id",
+            "transport_driver_choice_set",
+            "transport_allocated_trailer_id",
+            "transport_trailer_choice_set",
+        }
+        if not vals or set(vals) - allowed:
+            raise UserError(_("Only Transport allocation fields may be updated."))
+        if not (
+            self.env.su
+            or self.env.user.has_group("taj_transport_operations.group_transport_user")
+        ):
+            raise AccessError(_("Transport Operations access is required."))
+        self.check_access("read")
+        return self.sudo().write(vals)
 
     def action_prepare_transport_trip(self):
         self.ensure_one()

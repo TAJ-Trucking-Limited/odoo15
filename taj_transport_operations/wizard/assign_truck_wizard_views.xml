@@ -15,6 +15,7 @@
                     <group>
                         <field name="company_id" invisible="1"/>
                         <field name="vehicle_id" options="{'no_create': True}"/>
+                        <field name="trailer_id" options="{'no_create': True}"/>
                         <field name="driver_id" options="{'no_create': True}"/>
                         <field name="etol" required="1" options="{'numeric': True}"/>
                     </group>
@@ -26,11 +27,13 @@
                     <field name="in_progress_trip_note" readonly="1" nolabel="1"/>
                 </div>
                 <p class="text-muted">
-                    Assigns the first truck and selected driver to the Sales line.
-                    The driver defaults from Fleet but can be changed. If a Draft
-                    trip exists, the selection is recorded as its initial resources;
-                    otherwise the driver choice is saved for later trip creation.
-                    This action does not create a trip or replace an existing truck.
+                    Assigns the first truck, optional trailer and selected driver to
+                    the Sales line. Trailer and driver default from Fleet but can be
+                    changed or cleared. Saving also updates the truck's default
+                    trailer pairing. If a Draft trip exists, the selection is recorded
+                    as its initial resources; otherwise the choices are saved for later
+                    trip creation. This action does not create a trip or replace an
+                    existing truck.
                 </p>
                 <footer>
                     <button name="action_assign_truck" string="Assign Truck"

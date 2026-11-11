@@ -441,9 +441,30 @@ class TajTransportTrip(models.Model):
                         "creating this Trip."
                     ))
                 driver = False
+            # Trailer follows the same snapshot rule: only an explicit Allocated
+            # choice is applied. Legacy lines without a saved choice stay empty.
+            trailer = (
+                line.transport_allocated_trailer_id
+                if line.transport_trailer_choice_set else False
+            )
+            if trailer and (
+                not trailer.active
+                or trailer.category_id != self.env.ref(
+                    "taj_transport_operations.fleet_category_trailer"
+                )
+                or (trailer.company_id and trailer.company_id != trip.company_id)
+            ):
+                if line.transport_trailer_choice_set:
+                    raise UserError(_(
+                        "The trailer selected in Dispatch is no longer active or "
+                        "belongs to another company. Review the allocation before "
+                        "creating this Trip."
+                    ))
+                trailer = False
             self.env["taj.transport.assignment"].create({
                 "trip_id": trip.id,
                 "vehicle_id": vehicle.id,
+                "trailer_id": trailer.id if trailer else False,
                 "driver_id": driver.id if driver else False,
                 "effective_from": fields.Datetime.now(),
                 "reason": _("Initial truck from Sales line") if not driver else _("Initial truck and driver from Sales line"),

@@ -53,6 +53,17 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         help="Defaults to the Fleet truck driver. You can choose another driver "
              "or leave it empty; your choice is kept when creating the Trip later.",
     )
+    trailer_id = fields.Many2one(
+        "fleet.vehicle", string="Trailer", compute="_compute_trailer_id",
+        store=True, readonly=False, precompute=True,
+        domain=lambda self: (
+            "[('active', '=', True), ('category_id', '=', %s), '|', "
+            "('company_id', '=', False), ('company_id', '=', company_id)]"
+            % self.env.ref("taj_transport_operations.fleet_category_trailer").id
+        ),
+        help="Defaults to the truck's Fleet default trailer. You can replace it "
+             "or leave it empty; your choice is kept when creating the Trip later.",
+    )
 
     @api.model
     def _default_etol(self):
@@ -129,6 +140,17 @@ class TajTransportAssignTruckWizard(models.TransientModel):
                 and (not driver.company_id or driver.company_id == company)
             ) else False
 
+    @api.depends("vehicle_id")
+    def _compute_trailer_id(self):
+        for wizard in self:
+            trailer = wizard.vehicle_id.transport_default_trailer_id
+            company = wizard.company_id or self.env.company
+            category = self.env.ref("taj_transport_operations.fleet_category_trailer")
+            wizard.trailer_id = trailer if (
+                trailer and trailer.active and trailer.category_id == category
+                and (not trailer.company_id or trailer.company_id == company)
+            ) else False
+
     def action_assign_truck(self):
         self.ensure_one()
         line = self.sale_line_id
@@ -149,30 +171,11 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         ):
             raise UserError(_("Select a confirmed product line."))
         vehicle = self.vehicle_id
-        vehicle.check_access("read")
-        category = self.env.ref("taj_transport_operations.fleet_category_truck")
-        if (
-            not vehicle
-            or not vehicle.active
-            or (vehicle.category_id and vehicle.category_id != category)
-            or (vehicle.company_id and vehicle.company_id != line.order_id.company_id)
-        ):
-            raise UserError(
-                _(
-                    "Choose an active Truck from the sales order's company or a shared truck."
-                )
-            )
+        vehicle._require_transport_dialog_truck(line.company_id)
         driver = self.driver_id
-        if driver:
-            driver.check_access("read")
-            if (
-                not driver.active
-                or (driver.company_id and driver.company_id != line.company_id)
-            ):
-                raise UserError(_(
-                    "Choose an active driver from the Sales Order's company "
-                    "or a shared contact."
-                ))
+        self.env["fleet.vehicle"]._require_transport_dialog_driver(driver, line.company_id)
+        trailer = self.trailer_id
+        trailer._require_transport_dialog_trailer(line.company_id)
         if not self.etol:
             raise UserError(_("ETOL is required before assigning a truck."))
         # Match assignment's trip -> source line lock order. Recheck after the
@@ -190,27 +193,32 @@ class TajTransportAssignTruckWizard(models.TransientModel):
             if len(file_row) != 1:
                 raise UserError(_("The Sales line needs its File Number shipment row before allocation."))
             line._write_file_shipment({"etol": self.etol}, file_row)
+        # Fleet pairing uses the sorted lock/write path; no premature trailer lock.
+        vehicle._apply_default_trailer_from_transport_dialog(trailer)
+        snapshot = {
+            "transport_allocated_driver_id": driver.id or False,
+            "transport_driver_choice_set": True,
+            "transport_allocated_trailer_id": trailer.id or False,
+            "transport_trailer_choice_set": True,
+        }
         if trips:
             trip = trips.ensure_one()
             if trip.state != "draft" or trip.assignment_ids:
                 raise UserError(_("Use the trip's resource workflow to change its allocation."))
             self.env["taj.transport.assignment"].create({
                 "trip_id": trip.id, "vehicle_id": vehicle.id,
+                "trailer_id": trailer.id or False,
                 "driver_id": driver.id, "effective_from": fields.Datetime.now(),
                 "reason": _("Assigned from Sales allocation worklist"),
             })
             # Keep the Sales allocation snapshot consistent with Resources.
-            line.sudo().write({
-                "transport_allocated_driver_id": driver.id or False,
-                "transport_driver_choice_set": True,
-            })
+            line._write_transport_allocation_snapshot(snapshot)
         else:
-            # Save the driver's explicit choice alongside the first truck.
+            # Save the explicit driver/trailer choice alongside the first truck.
             # A later Trip uses this snapshot instead of Fleet's possibly
-            # changed driver. False is an intentional no-driver selection.
-            line.sudo().write({
+            # changed defaults. False is an intentional empty selection.
+            line._write_transport_allocation_snapshot({
                 "vehicle_id": vehicle.id,
-                "transport_allocated_driver_id": driver.id or False,
-                "transport_driver_choice_set": True,
+                **snapshot,
             })
         return {"type": "ir.actions.act_window_close"}

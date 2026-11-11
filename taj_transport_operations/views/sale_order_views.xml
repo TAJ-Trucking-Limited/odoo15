@@ -172,6 +172,9 @@
                     <button name="action_create_selected_transport_trip" type="object"
                             string="Create Trip" class="btn-primary"
                             groups="taj_transport_operations.group_transport_user"/>
+                    <button name="action_edit_selected_info" type="object"
+                            string="Edit Info" class="btn-secondary"
+                            groups="taj_transport_operations.group_transport_user"/>
                 </header>
                 <field name="transport_file_id" optional="show" width="210px"/>
                 <field name="file_type_id" optional="show" width="160px"/>
@@ -194,6 +197,9 @@
                 <field name="allocation_date" optional="show" width="190px"/>
                 <button name="action_open_or_create_transport_trip" string="Create Trip"
                         type="object" icon="fa-truck"
+                        groups="taj_transport_operations.group_transport_user"/>
+                <button name="action_open_edit_info" string="Edit Info"
+                        type="object" icon="fa-pencil"
                         groups="taj_transport_operations.group_transport_user"/>
             </list>
         </field>
@@ -276,6 +282,9 @@
                 <header>
                     <button name="action_create_selected_transport_trip"
                             type="object" string="Create Trip" class="btn-primary"
+                            groups="taj_transport_operations.group_transport_user"/>
+                    <button name="action_open_edit_info"
+                            type="object" string="Edit Info" class="btn-secondary"
                             groups="taj_transport_operations.group_transport_user"/>
                 </header>
                 <sheet>

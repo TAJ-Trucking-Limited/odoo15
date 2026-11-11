@@ -10,6 +10,7 @@
                     <field name="sale_order_id" options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="sale_line_id" context="{'transport_line_label': True}"
                            options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="trailer_id" options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="driver_id" options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="etol" required="1" options="{'numeric': True}"/>
                 </group>
@@ -21,9 +22,9 @@
                 </div>
                 <p class="text-muted">
                     Only confirmed Sales Order lines without a truck or trip
-                    are eligible. This assigns the truck and driver to the Sales
-                    shipment; it never creates or selects a Trip. Create the
-                    Trip later from Sale Orders - Trip Not Started.
+                    are eligible. This assigns the truck, optional trailer and
+                    driver to the Sales shipment; it never creates or selects a
+                    Trip. Create the Trip later from Sale Orders - Trip Not Started.
                     Other planned shipments using this truck remain visible in
                     Vehicle Availability and are not counted as active trips.
                 </p>

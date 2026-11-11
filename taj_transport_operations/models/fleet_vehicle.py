@@ -1,6 +1,6 @@
 """Transport categories on the existing Fleet source of truth."""
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 from ..hooks import ensure_transport_categories
 
@@ -78,6 +78,77 @@ class FleetVehicle(models.Model):
                 "This trailer is already paired with %(truck)s. Clear that pairing first.",
                 truck=existing.display_name,
             ))
+
+    def _require_transport_dialog_truck(self, company):
+        """Shared truck checks for Assign Truck / Edit Info dialogs."""
+        self.ensure_one()
+        self.check_access("read")
+        category = self.env.ref("taj_transport_operations.fleet_category_truck")
+        if (
+            not self.active
+            or (self.category_id and self.category_id != category)
+            or (self.company_id and self.company_id != company)
+        ):
+            raise UserError(_(
+                "Choose an active Truck from the Sales Order's company or a shared truck."
+            ))
+
+    def _require_transport_dialog_trailer(self, company):
+        """Shared optional trailer checks for Assign Truck / Edit Info dialogs."""
+        if not self:
+            return
+        self.ensure_one()
+        self.check_access("read")
+        category = self.env.ref("taj_transport_operations.fleet_category_trailer")
+        if (
+            not self.active
+            or self.category_id != category
+            or (self.company_id and self.company_id != company)
+        ):
+            raise UserError(_(
+                "Choose an active Trailer from the Sales Order's company "
+                "or a shared trailer."
+            ))
+
+    @api.model
+    def _require_transport_dialog_driver(self, driver, company):
+        """Shared optional driver checks for Assign Truck / Edit Info dialogs."""
+        if not driver:
+            return
+        driver.check_access("read")
+        if (
+            not driver.active
+            or (driver.company_id and driver.company_id != company)
+        ):
+            raise UserError(_(
+                "Choose an active driver from the Sales Order's company "
+                "or a shared contact."
+            ))
+
+    def _apply_default_trailer_from_transport_dialog(self, trailer):
+        """Update only the default trailer pairing from an authorized Transport dialog.
+
+        Dispatchers have Fleet read access only. After Transport group/company/read
+        checks, the existing sorted Fleet write path enforces exclusivity. Unrelated
+        Fleet writes stay denied by ACL.
+        """
+        self.ensure_one()
+        if not (
+            self.env.su
+            or self.env.user.has_group("taj_transport_operations.group_transport_user")
+        ):
+            raise AccessError(_("Transport Operations access is required."))
+        self.check_access("read")
+        trailer_id = trailer.id if trailer else False
+        if trailer:
+            trailer.check_access("read")
+        if (self.transport_default_trailer_id.id or False) == trailer_id:
+            return True
+        try:
+            self.sudo().write({"transport_default_trailer_id": trailer_id})
+        except ValidationError as err:
+            raise UserError(err.args[0]) from err
+        return True
 
     def _validate_transport_pairings(self):
         vehicles = self.sudo().with_context(active_test=False)

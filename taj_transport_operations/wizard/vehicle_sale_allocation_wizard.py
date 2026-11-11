@@ -34,6 +34,16 @@ class TajTransportVehicleSaleAllocationWizard(models.TransientModel):
         help="Defaults to the Fleet driver. An explicit empty selection is "
              "kept for the Trip created later.",
     )
+    trailer_id = fields.Many2one(
+        "fleet.vehicle", string="Trailer", compute="_compute_trailer_id",
+        store=True, readonly=False, precompute=True,
+        domain=lambda self: (
+            "[('active', '=', True), ('category_id', '=', %s)]"
+            % self.env.ref("taj_transport_operations.fleet_category_trailer").id
+        ),
+        help="Defaults to the truck's Fleet default trailer. An explicit empty "
+             "selection is kept for the Trip created later.",
+    )
     etol = fields.Date(
         string="ETOL (Estimated Loading Date)", required=True,
     )
@@ -42,6 +52,11 @@ class TajTransportVehicleSaleAllocationWizard(models.TransientModel):
     def _compute_driver_id(self):
         for wizard in self:
             wizard.driver_id = wizard.vehicle_id.driver_id
+
+    @api.depends("vehicle_id")
+    def _compute_trailer_id(self):
+        for wizard in self:
+            wizard.trailer_id = wizard.vehicle_id.transport_default_trailer_id
 
     @api.onchange("sale_order_id")
     def _onchange_sale_order_id(self):
@@ -89,12 +104,13 @@ class TajTransportVehicleSaleAllocationWizard(models.TransientModel):
             raise UserError(_("Choose a truck from the Sales Order's company or a shared truck."))
 
         # Reuse the already-hardened first-allocation workflow: ETOL shipment
-        # updates, driver snapshot, company checks, concurrency locks, and
-        # duplicate-allocation protection all stay in one implementation.
+        # updates, driver/trailer snapshots, company checks, concurrency locks,
+        # Fleet pairing and duplicate-allocation protection stay in one place.
         existing = self.env["taj.transport.assign.truck.wizard"].create({
             "sale_line_id": line.id,
             "vehicle_id": vehicle.id,
             "driver_id": self.driver_id.id or False,
+            "trailer_id": self.trailer_id.id or False,
             "etol": self.etol,
         })
         return existing.action_assign_truck()

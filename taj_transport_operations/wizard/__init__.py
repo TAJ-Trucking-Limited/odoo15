@@ -2,6 +2,7 @@ from . import create_trips_wizard
 from . import duplicate_sale_line_wizard
 from . import assign_truck_wizard
 from . import vehicle_sale_allocation_wizard
+from . import edit_shipment_resources_wizard
 from . import start_trip_wizard
 from . import sale_price_wizard
 from . import trip_route_chooser_wizard
