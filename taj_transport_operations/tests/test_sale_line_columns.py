@@ -229,9 +229,56 @@ class TestSaleLineColumns(TransactionCase):
             "1",
         )
         self.assertEqual(columns.xpath("field[@name='size']")[0].get("optional"), "hide")
+        etol = columns.xpath("field[@name='etol']")[0]
+        self.assertEqual(etol.get("optional"), "hide")
+        self.assertIn("'numeric': True", etol.get("options") or "")
+        self.assertEqual(
+            [node.get("name") for node in columns if node.get("name") in ("eta", "etol")],
+            ["eta", "etol"],
+        )
         line_popup = arch.xpath("//field[@name='order_line']/form")[0]
         self.assertEqual(len(line_popup.xpath(".//field[@name='analytic_account_id']")), 1)
         self.assertEqual(len(columns.xpath("field[@name='analytic_account_id']")), 1)
+
+    def test_fleet_vehicle_list_shows_transport_availability_and_last_activity(self):
+        fleet_user = new_test_user(
+            self.env,
+            login="shipment_fleet_list_transport_user",
+            groups=(
+                "base.group_user,fleet.fleet_group_user,"
+                "taj_transport_operations.group_transport_user"
+            ),
+        )
+        Fleet = self.env["fleet.vehicle"].with_user(fleet_user)
+        view = Fleet.get_view(
+            view_id=self.env.ref("fleet.fleet_vehicle_view_tree").id,
+            view_type="list",
+        )
+        listing = etree.fromstring(view["arch"]).xpath("//list")[0]
+        availability = listing.xpath("./field[@name='transport_availability_state']")[0]
+        activity = listing.xpath("./field[@name='transport_group_last_activity_at']")[0]
+        self.assertEqual(availability.get("optional"), "show")
+        self.assertEqual(availability.get("readonly"), "1")
+        self.assertEqual(availability.get("widget"), "badge")
+        self.assertEqual(activity.get("optional"), "show")
+        self.assertEqual(activity.get("readonly"), "1")
+        self.assertIn("'numeric': True", activity.get("options") or "")
+        self.assertTrue(Fleet._fields["transport_availability_state"].groups)
+        self.assertTrue(Fleet._fields["transport_group_last_activity_at"].groups)
+        # Field groups keep the values readable for transport users without sudo.
+        truck = Fleet.search([], limit=1)
+        if truck:
+            truck.read(["transport_availability_state", "transport_group_last_activity_at"])
+
+        availability_list = etree.fromstring(
+            self.env.ref("taj_transport_operations.view_transport_trailer_list").get_combined_arch()
+        )
+        self.assertEqual(
+            availability_list.xpath("./field[@name='transport_group_last_activity_at']")[0].get(
+                "optional"
+            ),
+            "show",
+        )
 
     def test_without_allocation_list_only_edits_etol_inline(self):
         dispatcher = new_test_user(

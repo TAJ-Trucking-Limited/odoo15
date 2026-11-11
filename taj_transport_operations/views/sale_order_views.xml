@@ -93,6 +93,7 @@
                 <field name="bill_of_lading" optional="show" invisible="display_type not in [False, 'product']"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='container_num']" position="move"/>
                 <field name="eta" optional="show" invisible="display_type not in [False, 'product']" options="{'numeric': True}"/>
+                <field name="etol" optional="hide" invisible="display_type not in [False, 'product']" options="{'numeric': True}"/>
                 <field name="shipping_line" optional="show" invisible="display_type not in [False, 'product']"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='cargo_type_id']" position="move"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='size']" position="move"/>

@@ -1,4 +1,4 @@
-"""Preserve legacy UTC timestamps and convert ETA to Damascus calendar dates."""
+"""Preserve legacy UTC timestamps and convert ETA to Tanzania calendar dates."""
 
 
 def migrate(cr, version):
@@ -14,5 +14,5 @@ def migrate(cr, version):
     cr.execute("UPDATE sale_order_line SET eta_timestamp_backup = eta WHERE eta_timestamp_backup IS NULL AND eta IS NOT NULL")
     cr.execute("""
         ALTER TABLE sale_order_line ALTER COLUMN eta TYPE date
-        USING ((eta AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Damascus')::date
+        USING ((eta AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Dar_es_Salaam')::date
     """)

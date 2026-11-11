@@ -13,6 +13,9 @@
                        decoration-danger="transport_availability_state == 'busy'"
                        decoration-warning="transport_availability_state == 'assigned'"
                        decoration-success="transport_availability_state == 'standby'"/>
+                <field name="transport_group_last_activity_at" string="Last Activity"
+                       optional="show" readonly="1" width="190px"
+                       options="{'numeric': True}"/>
                 <field name="transport_trip_ids" widget="many2many_tags"/>
                 <field name="transport_default_trailer_id" optional="hide"/>
                 <field name="transport_assigned_truck_id" optional="hide"/>
@@ -130,6 +133,23 @@
         <field name="view_mode">form</field>
         <field name="view_id" ref="view_transport_trailer_form"/>
         <field name="act_window_id" ref="action_transport_trailer"/>
+    </record>
+    <record id="view_fleet_vehicle_list_transport" model="ir.ui.view">
+        <field name="name">fleet.vehicle.list.transport</field>
+        <field name="model">fleet.vehicle</field>
+        <field name="inherit_id" ref="fleet.fleet_vehicle_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="transport_availability_state" string="Availability"
+                       widget="badge" optional="show" readonly="1" width="120px"
+                       decoration-danger="transport_availability_state == 'busy'"
+                       decoration-warning="transport_availability_state == 'assigned'"
+                       decoration-success="transport_availability_state == 'standby'"/>
+                <field name="transport_group_last_activity_at" string="Last Activity"
+                       optional="show" readonly="1" width="190px"
+                       options="{'numeric': True}"/>
+            </xpath>
+        </field>
     </record>
     <record id="view_fleet_vehicle_form_transport" model="ir.ui.view">
         <field name="name">fleet.vehicle.form.transport</field>

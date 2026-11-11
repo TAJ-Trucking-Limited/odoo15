@@ -30,13 +30,27 @@ class TestShipmentEntryEdits(TransactionCase):
         cr.execute('SHOW search_path')
         original_path = cr.fetchone()[0]
         try:
+            # 2022-01-01 21:30 UTC is Jan 2 in Africa/Dar_es_Salaam (UTC+3)
+            # but still Jan 1 in Asia/Damascus (UTC+2 before 2022 DST end).
             cr.execute('CREATE TEMP TABLE sale_order_line (id integer, eta timestamp) ON COMMIT DROP')
-            cr.execute("INSERT INTO sale_order_line VALUES (1, '2026-11-01 22:00:00'), (2, NULL)")
+            cr.execute(
+                "INSERT INTO sale_order_line VALUES "
+                "(1, '2022-01-01 21:30:00'), (2, NULL)"
+            )
             cr.execute('SET LOCAL search_path TO pg_temp, public')
             migrate(cr, '19.0.1.43.0')
             migrate(cr, '19.0.1.43.0')
             cr.execute('SELECT eta::text, eta_timestamp_backup::text FROM sale_order_line ORDER BY id')
-            self.assertEqual(cr.fetchall(), [('2026-11-02', '2026-11-01 22:00:00'), (None, None)])
+            self.assertEqual(
+                cr.fetchall(),
+                [('2022-01-02', '2022-01-01 21:30:00'), (None, None)],
+            )
+            cr.execute(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = 'sale_order_line' "
+                "AND column_name = 'eta'"
+            )
+            self.assertEqual(cr.fetchone()[0], 'date')
         finally:
             cr.execute('DROP TABLE IF EXISTS pg_temp.sale_order_line')
             cr.execute("SELECT set_config('search_path', %s, true)", (original_path,))
