@@ -74,8 +74,8 @@
                             <field name="consignee" optional="show"/>
                             <field name="bill_of_lading" optional="show"/>
                             <field name="container_num" optional="show"/>
-                            <field name="eta" optional="show"/>
-                            <field name="etol" optional="show"/>
+                            <field name="eta" optional="show" options="{'numeric': True}"/>
+                            <field name="etol" optional="show" options="{'numeric': True}"/>
                             <field name="shipping_line" optional="show"/>
                             <field name="cargo_type_id" optional="show" options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="size" optional="show"/>

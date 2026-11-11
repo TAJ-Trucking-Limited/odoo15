@@ -20,8 +20,8 @@
                 <field name="sale_description" optional="show" string="Product Description" width="280px"/>
                 <field name="cargo_quantity" optional="hide" string="QTY"/>
                 <field name="current_vehicle_id" optional="show" string="Vehicle" width="180px"/>
-                <field name="eta" optional="show" width="160px"/>
-                <field name="etol" optional="show" width="160px"/>
+                <field name="eta" optional="show" width="160px" options="{'numeric': True}"/>
+                <field name="etol" optional="show" width="160px" options="{'numeric': True}"/>
                 <field name="cargo_type_id" optional="show"/>
                 <field name="size" optional="show" width="120px"/>
                 <field name="weight" optional="show" width="120px"/>
@@ -141,8 +141,8 @@
                                     <field name="sale_description" string="Product Description" readonly="1"/>
                                     <field name="consignee" readonly="1"/>
                                     <field name="container_num" readonly="1"/>
-                                    <field name="eta" readonly="1"/>
-                                    <field name="etol" readonly="1"/>
+                                    <field name="eta" readonly="1" options="{'numeric': True}"/>
+                                    <field name="etol" readonly="1" options="{'numeric': True}"/>
                                     <field name="cargo_type_id" readonly="1"/>
                                     <field name="size" readonly="1"/>
                                     <field name="weight" readonly="1"/>
