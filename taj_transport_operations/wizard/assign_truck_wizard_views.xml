@@ -27,13 +27,11 @@
                     <field name="in_progress_trip_note" readonly="1" nolabel="1"/>
                 </div>
                 <p class="text-muted">
-                    Assigns the first truck, optional trailer and selected driver to
-                    the Sales line. Trailer and driver default from Fleet but can be
-                    changed or cleared. Saving also updates the truck's default
-                    trailer pairing. If a Draft trip exists, the selection is recorded
-                    as its initial resources; otherwise the choices are saved for later
-                    trip creation. This action does not create a trip or replace an
-                    existing truck.
+                    Assigns the truck, optional trailer and selected driver to the
+                    Sales line. Trailer and driver default from Fleet but can be
+                    changed or cleared; saving replaces the truck's default trailer
+                    pairing. If a Draft/Ready/In Progress trip already exists, this
+                    updates its Resources. This action does not create a trip.
                 </p>
                 <footer>
                     <button name="action_assign_truck" string="Assign Truck"

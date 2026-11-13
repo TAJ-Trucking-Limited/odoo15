@@ -350,6 +350,15 @@ class TestWithoutAllocation(TransactionCase):
         self.assertEqual(trip.current_assignment_id.driver_id, chosen)
         self.assertEqual(len(trip.assignment_ids), 2)
 
+    def test_assign_truck_names_blocking_trip_state(self):
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        trip.sudo().write({"state": "cancelled"})
+        with self.assertRaisesRegex(UserError, "cancelled"):
+            self._wizard(vehicle_id=self.truck.id).action_assign_truck()
+        self.assertFalse(self.line.vehicle_id)
+
     def test_assign_truck_rejects_inactive_or_other_company_driver(self):
         invalid = self.env["res.partner"].create({"name": "Inactive driver"})
         invalid.active = False

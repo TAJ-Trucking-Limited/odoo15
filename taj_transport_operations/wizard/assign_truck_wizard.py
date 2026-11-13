@@ -205,11 +205,18 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         }
         if trips:
             trip = trips.ensure_one()
-            # Without Allocation lists empty commercial trucks. A Draft/Ready
-            # trip may already have Resources (stale row or trip-first entry).
-            # Reuse the same replace path as Edit Info instead of dead-ending.
-            if trip.state not in ("draft", "ready"):
-                raise UserError(_("Use the trip's resource workflow to change its allocation."))
+            # Without Allocation lists empty commercial trucks. A trip may already
+            # have Resources (stale row or trip-first entry). Reuse Replace
+            # Resources for Draft/Ready/In Progress instead of dead-ending.
+            if trip.state not in ("draft", "ready", "in_progress"):
+                raise UserError(_(
+                    "Trip %(trip)s is %(state)s, so allocation cannot be changed "
+                    "from this worklist. Open the trip and use Resources there.",
+                    trip=trip.display_name,
+                    state=dict(trip._fields["state"].selection).get(trip.state, trip.state),
+                ))
+            if trip.state in ("ready", "in_progress") and not driver:
+                raise UserError(_("Ready and In Progress trips require a primary driver."))
             current = trip.current_assignment_id
             if current:
                 changed = any((
