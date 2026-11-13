@@ -38,11 +38,17 @@ class SaleOrder(models.Model):
         return True
 
     def action_cancel(self):
-        """Keep confirmed orders locked for edits, but allow Cancel."""
+        """Keep confirmed orders locked for edits, but allow Cancel.
+
+        Native Sale refuses cancel while locked. Unlock only on this trusted
+        cancel path, then run the standard cancellation.
+        """
         self.check_access("write")
-        return super(SaleOrder, self.with_context(
-            _confirmed_sale_cancel=_CONFIRMED_SALE_CANCEL,
-        )).action_cancel()
+        orders = self.with_context(_confirmed_sale_cancel=_CONFIRMED_SALE_CANCEL)
+        locked = orders.filtered("locked")
+        if locked:
+            locked.write({"locked": False})
+        return super(SaleOrder, orders).action_cancel()
 
     @api.model
     def _get_view(self, view_id=None, view_type="form", **options):

@@ -174,6 +174,7 @@ class TestConfirmedSaleLock(TransactionCase):
             order.with_user(self.salesperson).write({"client_order_ref": "edits still blocked"})
         order.with_user(self.salesperson).action_cancel()
         self.assertEqual(order.state, "cancel")
+        self.assertFalse(order.locked)
 
     def test_order_form_locks_all_editable_header_fields(self):
         view = self.env["sale.order"].get_view(
