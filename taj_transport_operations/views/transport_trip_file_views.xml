@@ -11,7 +11,7 @@
                 <field name="line_count" optional="show" string="Ship." width="60px"/>
                 <field name="trip_count" optional="show" string="Trips" width="60px"/>
                 <field name="unplanned_line_count" optional="hide" string="Unplanned" width="80px"/>
-                <field name="products" optional="show" width="160px"/>
+                <field name="products" optional="show" width="220px"/>
                 <field name="file_types" optional="hide" width="120px"/>
                 <field name="clearing_services" optional="hide" width="120px"/>
                 <field name="consignees" optional="hide" width="140px"/>
