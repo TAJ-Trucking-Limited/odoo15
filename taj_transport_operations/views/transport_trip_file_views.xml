@@ -6,17 +6,17 @@
         <field name="arch" type="xml">
             <list string="File Numbers" class="o_taj_dispatch_readable" create="0" delete="0">
                 <field name="name" optional="show" string="File Number" width="170px"/>
-                <field name="partner_id" optional="show" string="Customer Name" width="160px"/>
-                <field name="sale_order_id" optional="show" string="Sales Order Number" width="120px"/>
-                <field name="line_count" optional="show" string="Shipments" width="90px"/>
-                <field name="trip_count" optional="show" string="Related Trips" width="100px"/>
-                <field name="unplanned_line_count" optional="hide" width="110px"/>
-                <field name="products" optional="show" width="180px"/>
+                <field name="partner_id" optional="show" string="Customer" width="140px"/>
+                <field name="sale_order_id" optional="show" string="SO" width="80px"/>
+                <field name="line_count" optional="show" string="Ship." width="60px"/>
+                <field name="trip_count" optional="show" string="Trips" width="60px"/>
+                <field name="unplanned_line_count" optional="hide" string="Unplanned" width="80px"/>
+                <field name="products" optional="show" width="160px"/>
                 <field name="file_types" optional="hide" width="120px"/>
                 <field name="clearing_services" optional="hide" width="120px"/>
                 <field name="consignees" optional="hide" width="140px"/>
-                <field name="bill_of_lading" optional="show" string="Bills of Lading" width="120px"/>
-                <field name="container_number" optional="show" string="Container Numbers" width="120px"/>
+                <field name="bill_of_lading" optional="show" string="BL" width="100px"/>
+                <field name="container_number" optional="show" string="Container" width="100px"/>
                 <field name="etas" optional="hide" width="120px"/>
                 <field name="etols" optional="hide" width="120px"/>
                 <field name="shipping_lines" optional="hide" width="120px"/>
