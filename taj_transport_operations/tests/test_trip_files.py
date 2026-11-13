@@ -587,8 +587,13 @@ class TestTripFiles(TransactionCase):
             ).id,
             view_type="list",
         )
-        for node in etree.fromstring(listing["arch"]).xpath("//list/field"):
+        list_node = etree.fromstring(listing["arch"]).xpath("//list")[0]
+        self.assertIn("o_taj_dispatch_readable", list_node.get("class") or "")
+        for node in list_node.xpath("./field"):
             self.assertIn(node.get("optional"), ("show", "hide"), node.get("name"))
+        self.assertEqual(
+            list_node.xpath("./field[@name='products']")[0].get("width"), "280px"
+        )
         form = File.get_view(
             view_id=self.env.ref(
                 "taj_transport_operations.view_transport_trip_file_form"

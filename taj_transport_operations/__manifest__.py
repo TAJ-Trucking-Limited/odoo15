@@ -1,6 +1,6 @@
 {
     "name": "TAJ Operations",
-    "version": "19.0.1.55.0",
+    "version": "19.0.1.56.0",
     "summary": "Transport trip records linked one-to-one to sales order lines",
     "category": "Operations/Transport",
     "author": "TAJ Trucking",
