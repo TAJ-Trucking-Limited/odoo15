@@ -12,8 +12,10 @@
                 <attribute name="groups">base.group_no_one</attribute>
                 <attribute name="invisible">1</attribute>
             </xpath>
+            <!-- Confirmed orders stay locked for edits, but Cancel must remain usable.
+                 Replace the native locked/state invisible so lock no longer hides it. -->
             <xpath expr="//button[@name='action_cancel']" position="attributes">
-                <attribute name="invisible" add="transport_confirmed_readonly" separator=" or "/>
+                <attribute name="invisible">state not in ['draft', 'sent', 'sale'] or not id</attribute>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/control/create[@name='add_product_control']" position="after">
                 <button name="action_open_duplicate_line_wizard" type="object"

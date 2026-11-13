@@ -6,6 +6,8 @@ from odoo.exceptions import AccessError, UserError
 
 # Only trusted accounting methods can supply this object; RPC context values cannot.
 _CONFIRMED_SALE_ACCOUNTING = object()
+# Same for Cancel: keep commercial edits locked, but allow action_cancel writes.
+_CONFIRMED_SALE_CANCEL = object()
 
 
 class SaleOrder(models.Model):
@@ -23,6 +25,8 @@ class SaleOrder(models.Model):
     def _check_confirmed_sale_edit_access(self):
         if self.env.context.get("_confirmed_sale_accounting") is _CONFIRMED_SALE_ACCOUNTING:
             return
+        if self.env.context.get("_confirmed_sale_cancel") is _CONFIRMED_SALE_CANCEL:
+            return
         if (not self.env.su
                 and any(order.state in ("sale", "done") for order in self)):
             raise AccessError(_(
@@ -32,6 +36,13 @@ class SaleOrder(models.Model):
     def _should_be_locked(self):
         self.ensure_one()
         return True
+
+    def action_cancel(self):
+        """Keep confirmed orders locked for edits, but allow Cancel."""
+        self.check_access("write")
+        return super(SaleOrder, self.with_context(
+            _confirmed_sale_cancel=_CONFIRMED_SALE_CANCEL,
+        )).action_cancel()
 
     @api.model
     def _get_view(self, view_id=None, view_type="form", **options):

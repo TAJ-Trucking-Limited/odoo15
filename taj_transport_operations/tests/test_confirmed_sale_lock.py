@@ -161,6 +161,20 @@ class TestConfirmedSaleLock(TransactionCase):
         view = self.env["sale.order"].with_user(self.salesperson).get_view(view_id=view_id, view_type="form")
         self.assertFalse(etree.fromstring(view["arch"]).xpath("//button[@name='action_unlock'][not(@invisible='1')]"))
 
+    def test_cancel_stays_available_on_locked_confirmed_order(self):
+        order = self._confirm()
+        self.assertTrue(order.locked)
+        view = self.env["sale.order"].with_user(self.salesperson).get_view(
+            view_id=self.env.ref("sale.view_order_form").id, view_type="form",
+        )
+        cancel = etree.fromstring(view["arch"]).xpath("//button[@name='action_cancel']")[0]
+        self.assertNotIn("locked", cancel.get("invisible") or "")
+        self.assertNotIn("transport_confirmed_readonly", cancel.get("invisible") or "")
+        with self.assertRaises(AccessError), self.env.cr.savepoint():
+            order.with_user(self.salesperson).write({"client_order_ref": "edits still blocked"})
+        order.with_user(self.salesperson).action_cancel()
+        self.assertEqual(order.state, "cancel")
+
     def test_order_form_locks_all_editable_header_fields(self):
         view = self.env["sale.order"].get_view(
             view_id=self.env.ref("sale.view_order_form").id, view_type="form",
