@@ -1,6 +1,6 @@
 """Transport categories on the existing Fleet source of truth."""
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.exceptions import AccessError, RedirectWarning, UserError, ValidationError
 
 from ..hooks import ensure_transport_categories
 
@@ -74,10 +74,15 @@ class FleetVehicle(models.Model):
                 existing.with_user(self.env.user).check_access("read")
             except AccessError:
                 raise ValidationError(_("This trailer is already paired with another truck."))
-            raise ValidationError(_(
-                "This trailer is already paired with %(truck)s. Clear that pairing first.",
-                truck=existing.display_name,
-            ))
+            raise RedirectWarning(
+                _(
+                    "This trailer is already paired with %(truck)s. "
+                    "Open that truck to clear the Default Trailer, then try again.",
+                    truck=existing.display_name,
+                ),
+                existing.get_formview_action(),
+                _("Open %(truck)s", truck=existing.display_name),
+            )
 
     def _require_transport_dialog_truck(self, company):
         """Shared truck checks for Assign Truck / Edit Info dialogs."""

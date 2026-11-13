@@ -4,7 +4,7 @@ from datetime import timedelta
 from freezegun import freeze_time
 
 from odoo import fields
-from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.exceptions import AccessError, RedirectWarning, UserError, ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import new_test_user
 
@@ -256,8 +256,10 @@ class TestAutomaticFleetDefaults(TajTransportPhase3Case):
         other = self.env['fleet.vehicle'].create({'model_id': self.truck_model.id})
         self.truck.category_id = False
         self.truck.transport_default_trailer_id = trailer
-        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+        with self.assertRaises(RedirectWarning) as paired, self.env.cr.savepoint():
             other.transport_default_trailer_id = trailer
+        self.assertEqual(paired.exception.args[1]["res_id"], self.truck.id)
+        self.assertIn("Open", paired.exception.args[2])
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             self.truck.transport_default_trailer_id = self.truck
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
