@@ -126,6 +126,14 @@
                     string="Last GPS"
                     optional="show"
                     readonly="1"/>
+                <field name="navirec_movement_state"
+                    string="Movement"
+                    widget="badge"
+                    decoration-success="navirec_movement_state == 'moving'"
+                    decoration-warning="navirec_movement_state == 'idling'"
+                    decoration-info="navirec_movement_state == 'stopped'"
+                    optional="show"
+                    readonly="1"/>
             </xpath>
         </field>
     </record>

@@ -483,6 +483,11 @@ class TestVehicleSync(TransactionCase):
         self.assertIn("navirec_integration_status", arch)
         self.assertIn("Stale GPS data", arch)
 
+    def test_vehicle_list_shows_navirec_movement(self):
+        arch = self.env.ref("fleet_navirec.fleet_vehicle_view_tree_navirec").arch_db
+        self.assertIn('name="navirec_movement_state"', arch)
+        self.assertIn('string="Movement"', arch)
+
 
     def test_location_name_takes_priority_over_coordinates(self):
         self.vehicle.write({
