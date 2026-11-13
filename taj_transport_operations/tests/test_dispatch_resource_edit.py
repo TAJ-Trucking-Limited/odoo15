@@ -108,31 +108,32 @@ class TestAssignTruckTrailerDefaults(TransactionCase):
         self.assertEqual(self.truck.transport_default_trailer_id, self.trailer)
         self.assertFalse(self.line.vehicle_id)
 
-    def test_paired_trailer_fails_cleanly_without_stealing(self):
+    def test_paired_trailer_is_stolen_for_dialog_choice(self):
         other_truck = self.env["fleet.vehicle"].create({
             "model_id": self.truck_model.id, "license_plate": "TRAILER-TRUCK-02",
         })
         other_truck.transport_default_trailer_id = self.other_trailer
-        with self.assertRaises(UserError), self.env.cr.savepoint():
-            self._wizard(
-                self.dispatcher,
-                vehicle_id=self.truck.id, trailer_id=self.other_trailer.id,
-            ).action_assign_truck()
-        self.assertFalse(self.line.vehicle_id)
-        self.assertEqual(self.truck.transport_default_trailer_id, self.trailer)
-        self.assertEqual(self.other_trailer.transport_assigned_truck_id, other_truck)
+        self._wizard(
+            self.dispatcher,
+            vehicle_id=self.truck.id, trailer_id=self.other_trailer.id,
+        ).action_assign_truck()
+        self.assertEqual(self.line.vehicle_id, self.truck)
+        self.assertEqual(self.truck.transport_default_trailer_id, self.other_trailer)
+        self.assertFalse(other_truck.transport_default_trailer_id)
+        self.assertEqual(self.other_trailer.transport_assigned_truck_id, self.truck)
 
-    def test_assign_paired_trailer_rolls_back_etol_write(self):
-        other_truck = self.env["fleet.vehicle"].create({
-            "model_id": self.truck_model.id, "license_plate": "TRAILER-TRUCK-ROLL",
+    def test_assign_rejects_foreign_trailer_before_allocation(self):
+        foreign = self.env["res.company"].create({"name": "Trailer roll company"})
+        foreign_trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id, "license_plate": "TRAILER-ROLL-FOREIGN",
+            "company_id": foreign.id,
         })
-        other_truck.transport_default_trailer_id = self.other_trailer
         original_etol = self.line.etol
         with self.assertRaises(UserError), self.env.cr.savepoint():
             self._wizard(
                 self.dispatcher,
                 vehicle_id=self.truck.id,
-                trailer_id=self.other_trailer.id,
+                trailer_id=foreign_trailer.id,
                 etol=date(2026, 12, 25),
             ).action_assign_truck()
         self.line.invalidate_recordset(["etol", "vehicle_id"])
@@ -571,17 +572,34 @@ class TestEditShipmentInfo(TajTransportPhase3Case):
         self.assertEqual(line.transport_allocated_trailer_id, manual_trailer)
         self.assertEqual(line.transport_allocated_driver_id, manual_driver)
 
-    def test_edit_info_rollback_keeps_commercial_and_fleet_untouched_on_conflict(self):
+    def test_edit_info_steals_paired_trailer_for_dialog_choice(self):
         line = self._sale_line("EDIT-ROLL", vehicle_id=False)
         trailer = self._trailer("EDIT-ROLL-TR")
         self._allocate(line, trailer=trailer)
+        trip = self._trip(line=line)
+        self._assignment_started_earlier(trip)
         paired = self._trailer("EDIT-ROLL-PAIR")
         other = self._truck("EDIT-ROLL-TRUCK2")
         other.transport_default_trailer_id = paired
+        self._edit_wizard(line, trailer_id=paired.id).action_save()
+        self.assertEqual(line.transport_allocated_trailer_id, paired)
+        self.assertEqual(self.truck.transport_default_trailer_id, paired)
+        self.assertFalse(other.transport_default_trailer_id)
+
+    def test_edit_info_rollback_keeps_commercial_and_fleet_untouched_on_conflict(self):
+        line = self._sale_line("EDIT-ROLL-FOREIGN", vehicle_id=False)
+        trailer = self._trailer("EDIT-ROLL-FOREIGN-TR")
+        self._allocate(line, trailer=trailer)
+        foreign = self.env["res.company"].create({"name": "Edit roll foreign company"})
+        foreign_trailer = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id,
+            "license_plate": "EDIT-ROLL-FOREIGN-TR2",
+            "company_id": foreign.id,
+        })
         price = line.price_unit
         before_default = self.truck.transport_default_trailer_id
         with self.assertRaises(UserError), self.env.cr.savepoint():
-            self._edit_wizard(line, trailer_id=paired.id).action_save()
+            self._edit_wizard(line, trailer_id=foreign_trailer.id).action_save()
         self.assertEqual(line.price_unit, price)
         self.assertEqual(self.truck.transport_default_trailer_id, before_default)
         self.assertEqual(line.transport_allocated_trailer_id, trailer)

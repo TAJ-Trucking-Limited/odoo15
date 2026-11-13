@@ -129,8 +129,9 @@ class FleetVehicle(models.Model):
         """Update only the default trailer pairing from an authorized Transport dialog.
 
         Dispatchers have Fleet read access only. After Transport group/company/read
-        checks, the existing sorted Fleet write path enforces exclusivity. Unrelated
-        Fleet writes stay denied by ACL.
+        checks, the existing sorted Fleet write path enforces exclusivity. Choosing a
+        trailer already paired elsewhere replaces that pairing with this truck —
+        the dialog choice is the source of truth. Unrelated Fleet writes stay denied.
         """
         self.ensure_one()
         if not (
@@ -145,6 +146,19 @@ class FleetVehicle(models.Model):
         if (self.transport_default_trailer_id.id or False) == trailer_id:
             return True
         try:
+            if trailer_id:
+                # Serialize on the trailer row, then clear any other truck's claim
+                # so uniqueness allows the dialog's chosen pairing.
+                self.env.cr.execute(
+                    "SELECT id FROM fleet_vehicle WHERE id = %s FOR UPDATE",
+                    (trailer_id,),
+                )
+                previous = self.sudo().with_context(active_test=False).search([
+                    ("transport_default_trailer_id", "=", trailer_id),
+                    ("id", "!=", self.id),
+                ])
+                if previous:
+                    previous.write({"transport_default_trailer_id": False})
             self.sudo().write({"transport_default_trailer_id": trailer_id})
         except ValidationError as err:
             raise UserError(err.args[0]) from err

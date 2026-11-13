@@ -312,6 +312,44 @@ class TestWithoutAllocation(TransactionCase):
         self.assertEqual(self.line.vehicle_id, self.truck)
         self.assertEqual(self.line.transport_trip_ids, trip)
 
+    def test_assign_truck_replaces_existing_draft_trip_resources(self):
+        """Stuck without-allocation rows (trip has Resources, line truck empty)."""
+        from datetime import timedelta
+
+        from odoo import fields
+
+        first = self.env["fleet.vehicle"].create({
+            "model_id": self.truck_model.id,
+            "license_plate": "ALLOC-FIRST",
+        })
+        replacement = self.env["fleet.vehicle"].create({
+            "model_id": self.truck_model.id,
+            "license_plate": "ALLOC-NEXT",
+        })
+        trip = self.env["taj.transport.trip"].create({
+            "sale_line_id": self.line.id,
+        })
+        self.env["taj.transport.assignment"].create({
+            "trip_id": trip.id,
+            "vehicle_id": first.id,
+            "driver_id": self.env["res.partner"].create({"name": "First driver"}).id,
+            "effective_from": fields.Datetime.now() - timedelta(hours=1),
+            "reason": "Seeded before commercial truck",
+        })
+        # Simulate the stale worklist row: trip allocated, sale line still empty.
+        self.line.sudo().write({"vehicle_id": False})
+        self.assertFalse(self.line.vehicle_id)
+        self.assertTrue(trip.current_assignment_id)
+        chosen = self.env["res.partner"].create({"name": "Replacement driver"})
+        self._wizard(
+            vehicle_id=replacement.id, driver_id=chosen.id,
+        ).action_assign_truck()
+        trip.invalidate_recordset()
+        self.assertEqual(self.line.vehicle_id, replacement)
+        self.assertEqual(trip.current_assignment_id.vehicle_id, replacement)
+        self.assertEqual(trip.current_assignment_id.driver_id, chosen)
+        self.assertEqual(len(trip.assignment_ids), 2)
+
     def test_assign_truck_rejects_inactive_or_other_company_driver(self):
         invalid = self.env["res.partner"].create({"name": "Inactive driver"})
         invalid.active = False

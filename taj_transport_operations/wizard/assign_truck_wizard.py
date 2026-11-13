@@ -194,8 +194,10 @@ class TajTransportAssignTruckWizard(models.TransientModel):
                 raise UserError(_("The Sales line needs its File Number shipment row before allocation."))
             line._write_file_shipment({"etol": self.etol}, file_row)
         # Fleet pairing uses the sorted lock/write path; no premature trailer lock.
+        # Dialog trailer choice replaces any existing Fleet default pairing.
         vehicle._apply_default_trailer_from_transport_dialog(trailer)
         snapshot = {
+            "vehicle_id": vehicle.id,
             "transport_allocated_driver_id": driver.id or False,
             "transport_driver_choice_set": True,
             "transport_allocated_trailer_id": trailer.id or False,
@@ -203,22 +205,40 @@ class TajTransportAssignTruckWizard(models.TransientModel):
         }
         if trips:
             trip = trips.ensure_one()
-            if trip.state != "draft" or trip.assignment_ids:
+            # Without Allocation lists empty commercial trucks. A Draft/Ready
+            # trip may already have Resources (stale row or trip-first entry).
+            # Reuse the same replace path as Edit Info instead of dead-ending.
+            if trip.state not in ("draft", "ready"):
                 raise UserError(_("Use the trip's resource workflow to change its allocation."))
-            self.env["taj.transport.assignment"].create({
-                "trip_id": trip.id, "vehicle_id": vehicle.id,
-                "trailer_id": trailer.id or False,
-                "driver_id": driver.id, "effective_from": fields.Datetime.now(),
-                "reason": _("Assigned from Sales allocation worklist"),
-            })
-            # Keep the Sales allocation snapshot consistent with Resources.
+            current = trip.current_assignment_id
+            if current:
+                changed = any((
+                    (current.vehicle_id.id or False) != vehicle.id,
+                    (current.trailer_id.id or False) != (trailer.id or False),
+                    (current.driver_id.id or False) != (driver.id or False),
+                ))
+                if changed:
+                    self.env["taj.transport.replace.assignment.wizard"].create({
+                        "trip_id": trip.id,
+                        "expected_assignment_id": current.id,
+                        "vehicle_id": vehicle.id,
+                        "trailer_id": trailer.id or False,
+                        "driver_id": driver.id or False,
+                        "co_driver_id": current.co_driver_id.id or False,
+                        "effective_from": fields.Datetime.now(),
+                        "reason": _("Updated from Sales allocation worklist"),
+                    }).action_replace_resources()
+            else:
+                self.env["taj.transport.assignment"].create({
+                    "trip_id": trip.id, "vehicle_id": vehicle.id,
+                    "trailer_id": trailer.id or False,
+                    "driver_id": driver.id, "effective_from": fields.Datetime.now(),
+                    "reason": _("Assigned from Sales allocation worklist"),
+                })
             line._write_transport_allocation_snapshot(snapshot)
         else:
             # Save the explicit driver/trailer choice alongside the first truck.
             # A later Trip uses this snapshot instead of Fleet's possibly
             # changed defaults. False is an intentional empty selection.
-            line._write_transport_allocation_snapshot({
-                "vehicle_id": vehicle.id,
-                **snapshot,
-            })
+            line._write_transport_allocation_snapshot(snapshot)
         return {"type": "ir.actions.act_window_close"}
