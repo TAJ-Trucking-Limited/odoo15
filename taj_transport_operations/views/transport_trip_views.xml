@@ -27,7 +27,7 @@
                 <field name="weight" optional="show" width="120px"/>
                 <field name="cargo_description" optional="show" string="Cargo Desc." width="240px"/>
                 <field name="special_handling_instructions" optional="show" width="280px"/>
-                <field name="allocation_date" optional="show"/>
+                <field name="allocation_date" optional="show" options="{'numeric': True}"/>
                 <field name="last_milestone_activity" optional="show"/>
                 <field name="last_milestone_at" optional="show"/>
                 <field name="current_driver_id" optional="show" string="Current Driver" width="180px"/>
@@ -156,7 +156,7 @@
                                         <field name="current_driver_id" readonly="1"/>
                                     </group>
                                     <group string="Trip Progress" name="trip_progress_section">
-                                        <field name="allocation_date" readonly="1"/>
+                                        <field name="allocation_date" readonly="1" options="{'numeric': True}"/>
                                         <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')"/>
                                         <field name="last_milestone_activity" readonly="1"/>
                                         <field name="last_milestone_at" readonly="1"/>

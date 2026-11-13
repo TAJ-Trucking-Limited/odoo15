@@ -153,6 +153,8 @@ class TestWithoutAllocation(TransactionCase):
             columns[columns.index("vehicle_id") + 1],
             "transport_dispatch_driver_id",
         )
+        allocation = arch.xpath("./field[@name='allocation_date']")[0]
+        self.assertIn("'numeric': True", allocation.get("options") or "")
         form = etree.fromstring(self.env.ref(
             "taj_transport_operations.view_sale_order_line_dispatch_form"
         ).get_combined_arch())

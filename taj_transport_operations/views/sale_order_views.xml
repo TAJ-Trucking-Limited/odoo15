@@ -194,7 +194,7 @@
                 <field name="weight" optional="show" width="120px"/>
                 <field name="cargo_description" optional="show" string="Cargo Desc." width="240px"/>
                 <field name="special_handling_instructions" optional="show" width="280px"/>
-                <field name="allocation_date" optional="show" width="190px"/>
+                <field name="allocation_date" optional="show" width="190px" options="{'numeric': True}"/>
                 <button name="action_open_or_create_transport_trip" string="Create Trip"
                         type="object" icon="fa-truck"
                         groups="taj_transport_operations.group_transport_user"/>
