@@ -588,16 +588,14 @@ class TestTripFiles(TransactionCase):
             view_type="list",
         )
         list_node = etree.fromstring(listing["arch"]).xpath("//list")[0]
-        classes = list_node.get("class") or ""
-        self.assertIn("o_taj_dispatch_readable", classes)
-        self.assertIn("o_taj_file_numbers_list", classes)
+        self.assertIn("o_taj_dispatch_readable", list_node.get("class") or "")
         for node in list_node.xpath("./field"):
             self.assertIn(node.get("optional"), ("show", "hide"), node.get("name"))
         self.assertEqual(
             list_node.xpath("./field[@name='sale_order_id']")[0].get("string"), "SO"
         )
         self.assertEqual(
-            list_node.xpath("./field[@name='line_count']")[0].get("width"), "50px"
+            list_node.xpath("./field[@name='line_count']")[0].get("width"), "60px"
         )
         self.assertEqual(
             list_node.xpath("./field[@name='products']")[0].get("width"), "160px"

@@ -18,26 +18,3 @@
 .o_taj_dispatch_readable .o_list_renderer {
     overflow-x: auto;
 }
-
-// File Numbers: keep SO / Ship. / Trips compact. Odoo otherwise stretches
-// short columns to fill leftover width under the readable table layout.
-.o_taj_file_numbers_list .o_list_table {
-    table-layout: fixed;
-    width: max(100%, 960px);
-    min-width: 960px;
-}
-
-.o_taj_file_numbers_list .o_list_table th[data-name="sale_order_id"],
-.o_taj_file_numbers_list .o_list_table td[data-name="sale_order_id"] {
-    width: 4.75rem !important;
-    max-width: 4.75rem !important;
-}
-
-.o_taj_file_numbers_list .o_list_table th[data-name="line_count"],
-.o_taj_file_numbers_list .o_list_table td[data-name="line_count"],
-.o_taj_file_numbers_list .o_list_table th[data-name="trip_count"],
-.o_taj_file_numbers_list .o_list_table td[data-name="trip_count"] {
-    width: 3.25rem !important;
-    max-width: 3.25rem !important;
-    text-align: center;
-}
