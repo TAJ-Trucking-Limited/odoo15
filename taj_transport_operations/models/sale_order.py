@@ -1,6 +1,6 @@
 from ast import literal_eval
 
-from odoo import _, api, fields, models
+from odoo import Command, _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 
@@ -41,9 +41,24 @@ class SaleOrder(models.Model):
         """Keep confirmed orders locked for edits, but allow Cancel.
 
         Native Sale refuses cancel while locked. Unlock only on this trusted
-        cancel path, then run the standard cancellation.
+        cancel path, then run the standard cancellation. Orders with related
+        trips get a confirmation warning first.
         """
         self.check_access("write")
+        if not self.env.context.get("confirm_sale_cancel_with_trips"):
+            with_trips = self.filtered("transport_trip_ids")
+            if with_trips:
+                wizard = self.env["taj.transport.sale.cancel.wizard"].create({
+                    "sale_order_ids": [Command.set(self.ids)],
+                })
+                return {
+                    "type": "ir.actions.act_window",
+                    "name": _("Cancel Sales Order"),
+                    "res_model": "taj.transport.sale.cancel.wizard",
+                    "res_id": wizard.id,
+                    "view_mode": "form",
+                    "target": "new",
+                }
         orders = self.with_context(_confirmed_sale_cancel=_CONFIRMED_SALE_CANCEL)
         locked = orders.filtered("locked")
         if locked:

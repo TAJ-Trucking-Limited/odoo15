@@ -176,6 +176,19 @@ class TestConfirmedSaleLock(TransactionCase):
         self.assertEqual(order.state, "cancel")
         self.assertFalse(order.locked)
 
+    def test_cancel_warns_when_order_has_related_trips(self):
+        order = self._confirm()
+        trip = self.env["taj.transport.trip"].create({"sale_line_id": self.line.id})
+        action = order.with_user(self.salesperson).action_cancel()
+        self.assertEqual(action["type"], "ir.actions.act_window")
+        self.assertEqual(action["res_model"], "taj.transport.sale.cancel.wizard")
+        self.assertEqual(order.state, "sale")
+        wizard = self.env["taj.transport.sale.cancel.wizard"].browse(action["res_id"])
+        self.assertIn("related transport trip", wizard.warning_message)
+        wizard.with_user(self.salesperson).action_confirm_cancellation()
+        self.assertEqual(order.state, "cancel")
+        self.assertEqual(trip.state, "draft")
+
     def test_order_form_locks_all_editable_header_fields(self):
         view = self.env["sale.order"].get_view(
             view_id=self.env.ref("sale.view_order_form").id, view_type="form",

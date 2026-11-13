@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_cancel_wizard_form" model="ir.ui.view">
+        <field name="name">taj.transport.sale.cancel.wizard.form</field>
+        <field name="model">taj.transport.sale.cancel.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cancel Sales Order">
+                <field name="sale_order_ids" invisible="1"/>
+                <div class="alert alert-warning" role="alert">
+                    <field name="warning_message" readonly="1" nolabel="1"/>
+                </div>
+                <p class="text-muted">
+                    Confirm only if you still want to cancel the Sales Order.
+                </p>
+                <footer>
+                    <button name="action_confirm_cancellation" type="object"
+                            string="Cancel Sales Order" class="btn-primary"/>
+                    <button string="Keep Sales Order" special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

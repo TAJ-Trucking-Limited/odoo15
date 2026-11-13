@@ -9,6 +9,7 @@ from . import trip_route_chooser_wizard
 from . import initial_resource_assignment_wizard
 from . import replace_resource_assignment_wizard
 from . import cancel_trip_wizard
+from . import sale_cancel_wizard
 from . import trip_milestone_action_wizard
 from . import trip_milestone_correction_wizard
 from . import trip_milestone_add_wizard
