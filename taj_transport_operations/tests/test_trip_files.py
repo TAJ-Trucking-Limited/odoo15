@@ -592,7 +592,7 @@ class TestTripFiles(TransactionCase):
         for node in list_node.xpath("./field"):
             self.assertIn(node.get("optional"), ("show", "hide"), node.get("name"))
         self.assertEqual(
-            list_node.xpath("./field[@name='products']")[0].get("width"), "280px"
+            list_node.xpath("./field[@name='products']")[0].get("width"), "180px"
         )
         form = File.get_view(
             view_id=self.env.ref(

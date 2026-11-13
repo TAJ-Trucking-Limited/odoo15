@@ -5,35 +5,35 @@
         <field name="model">taj.transport.trip.file</field>
         <field name="arch" type="xml">
             <list string="File Numbers" class="o_taj_dispatch_readable" create="0" delete="0">
-                <field name="name" optional="show" string="File Number" width="210px"/>
-                <field name="partner_id" optional="show" string="Customer Name" width="220px"/>
-                <field name="sale_order_id" optional="show" string="Sales Order Number" width="160px"/>
-                <field name="line_count" optional="show" string="Shipments" width="120px"/>
-                <field name="trip_count" optional="show" string="Related Trips" width="130px"/>
-                <field name="unplanned_line_count" optional="hide" width="140px"/>
-                <field name="products" optional="show" width="280px"/>
-                <field name="file_types" optional="hide" width="160px"/>
-                <field name="clearing_services" optional="hide" width="150px"/>
-                <field name="consignees" optional="hide" width="220px"/>
-                <field name="bill_of_lading" optional="show" string="Bills of Lading" width="200px"/>
-                <field name="container_number" optional="show" string="Container Numbers" width="200px"/>
-                <field name="etas" optional="hide" width="160px"/>
-                <field name="etols" optional="hide" width="160px"/>
-                <field name="shipping_lines" optional="hide" width="180px"/>
-                <field name="cargo_types" optional="hide" width="160px"/>
-                <field name="sizes" optional="hide" width="120px"/>
-                <field name="weights" optional="hide" width="120px"/>
-                <field name="cargo_descriptions" optional="hide" string="Cargo Desc." width="240px"/>
-                <field name="handling_instructions" optional="hide" width="280px"/>
-                <field name="total_quantity" optional="hide" string="Total QTY" width="120px"/>
-                <field name="units" optional="hide" width="120px"/>
-                <field name="trip_ids" optional="hide" widget="many2many_tags" width="220px"
+                <field name="name" optional="show" string="File Number" width="170px"/>
+                <field name="partner_id" optional="show" string="Customer Name" width="160px"/>
+                <field name="sale_order_id" optional="show" string="Sales Order Number" width="120px"/>
+                <field name="line_count" optional="show" string="Shipments" width="90px"/>
+                <field name="trip_count" optional="show" string="Related Trips" width="100px"/>
+                <field name="unplanned_line_count" optional="hide" width="110px"/>
+                <field name="products" optional="show" width="180px"/>
+                <field name="file_types" optional="hide" width="120px"/>
+                <field name="clearing_services" optional="hide" width="120px"/>
+                <field name="consignees" optional="hide" width="140px"/>
+                <field name="bill_of_lading" optional="show" string="Bills of Lading" width="120px"/>
+                <field name="container_number" optional="show" string="Container Numbers" width="120px"/>
+                <field name="etas" optional="hide" width="120px"/>
+                <field name="etols" optional="hide" width="120px"/>
+                <field name="shipping_lines" optional="hide" width="120px"/>
+                <field name="cargo_types" optional="hide" width="120px"/>
+                <field name="sizes" optional="hide" width="90px"/>
+                <field name="weights" optional="hide" width="90px"/>
+                <field name="cargo_descriptions" optional="hide" string="Cargo Desc." width="160px"/>
+                <field name="handling_instructions" optional="hide" width="160px"/>
+                <field name="total_quantity" optional="hide" string="Total QTY" width="90px"/>
+                <field name="units" optional="hide" width="90px"/>
+                <field name="trip_ids" optional="hide" widget="many2many_tags" width="160px"
                        context="{'form_view_ref': 'taj_transport_operations.view_file_related_trip_form'}"/>
                 <field name="legacy_container_number" optional="hide"/>
                 <field name="legacy_bill_of_lading" optional="hide"/>
-                <field name="create_date" optional="hide" width="190px" options="{'numeric': True}"/>
+                <field name="create_date" optional="hide" width="150px" options="{'numeric': True}"/>
                 <field name="create_uid" optional="hide"/>
-                <field name="write_date" optional="hide" width="190px" options="{'numeric': True}"/>
+                <field name="write_date" optional="hide" width="150px" options="{'numeric': True}"/>
                 <field name="write_uid" optional="hide"/>
                 <field name="company_id" optional="hide"/>
             </list>
