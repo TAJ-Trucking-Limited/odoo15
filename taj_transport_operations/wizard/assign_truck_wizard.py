@@ -180,8 +180,12 @@ class TajTransportAssignTruckWizard(models.TransientModel):
             raise UserError(_("ETOL is required before assigning a truck."))
         # Match assignment's trip -> source line lock order. Recheck after the
         # lock so a stale dialog or a retried request cannot replace a truck.
-        trips = line.transport_trip_ids
-        for trip in trips.sorted("id"):
+        # Cancelled/completed trips stay linked (unique sale line) but must not
+        # block commercial allocation from this worklist.
+        active_trips = line.transport_trip_ids.filtered(
+            lambda t: t.state in ("draft", "ready", "in_progress")
+        )
+        for trip in active_trips.sorted("id"):
             trip._lock_for_transition()
         line._lock_transport_vehicle()
         if line.vehicle_id:
@@ -203,18 +207,11 @@ class TajTransportAssignTruckWizard(models.TransientModel):
             "transport_allocated_trailer_id": trailer.id or False,
             "transport_trailer_choice_set": True,
         }
-        if trips:
-            trip = trips.ensure_one()
-            # Without Allocation lists empty commercial trucks. A trip may already
-            # have Resources (stale row or trip-first entry). Reuse Replace
+        if active_trips:
+            trip = active_trips.ensure_one()
+            # Without Allocation lists empty commercial trucks. An active trip may
+            # already have Resources (stale row or trip-first entry). Reuse Replace
             # Resources for Draft/Ready/In Progress instead of dead-ending.
-            if trip.state not in ("draft", "ready", "in_progress"):
-                raise UserError(_(
-                    "Trip %(trip)s is %(state)s, so allocation cannot be changed "
-                    "from this worklist. Open the trip and use Resources there.",
-                    trip=trip.display_name,
-                    state=dict(trip._fields["state"].selection).get(trip.state, trip.state),
-                ))
             if trip.state in ("ready", "in_progress") and not driver:
                 raise UserError(_("Ready and In Progress trips require a primary driver."))
             current = trip.current_assignment_id
@@ -244,8 +241,7 @@ class TajTransportAssignTruckWizard(models.TransientModel):
                 })
             line._write_transport_allocation_snapshot(snapshot)
         else:
-            # Save the explicit driver/trailer choice alongside the first truck.
-            # A later Trip uses this snapshot instead of Fleet's possibly
-            # changed defaults. False is an intentional empty selection.
+            # No active trip (none, or only cancelled/completed). Save the Sales
+            # allocation snapshot; cancelled history is left untouched.
             line._write_transport_allocation_snapshot(snapshot)
         return {"type": "ir.actions.act_window_close"}
