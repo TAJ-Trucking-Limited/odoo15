@@ -94,7 +94,7 @@ class TestSendMail(TransactionCase):
             self.env['report.send.mail']._get_mail_configuration(),
             {
                 'email_from': 'odoobot@taj-limited.odoo.com',
-                'email_to': 'kreik.ali@gmail.com',
+                'email_to': 'Ali@taj.co.tz',
                 'email_cc': (
                     'moustapha@primeshiftuae.com, '
                     'souzan@primeshiftuae.com, '

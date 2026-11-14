@@ -12,7 +12,7 @@
         </record>
         <record id="email_to_parameter" model="ir.config_parameter">
             <field name="key">send_report_via_mail.email_to</field>
-            <field name="value">kreik.ali@gmail.com</field>
+            <field name="value">Ali@taj.co.tz</field>
         </record>
         <record id="email_cc_parameter" model="ir.config_parameter">
             <field name="key">send_report_via_mail.email_cc</field>
