@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_send_report" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.send.report</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='account']" position="inside">
+                <block title="Aged Reports Email" name="send_report_via_mail_aged_block">
+                    <setting string="From" help="Sender used by the Aged Payable / Receivable cron email.">
+                        <field name="send_report_email_from" placeholder="odoobot@example.com"/>
+                    </setting>
+                    <setting string="To" help="Primary recipient. Change this when the contact email changes.">
+                        <field name="send_report_email_to" placeholder="finance@example.com"/>
+                    </setting>
+                    <setting string="Cc" help="Comma-separated copy recipients.">
+                        <field name="send_report_email_cc" placeholder="a@example.com, b@example.com"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>
