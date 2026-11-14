@@ -103,6 +103,32 @@ class TestSendMail(TransactionCase):
             },
         )
 
+    def test_aged_report_settings_are_editable_from_configuration(self):
+        settings = self.env['res.config.settings'].create({
+            'send_report_email_from': 'reports@taj.co.tz',
+            'send_report_email_to': 'finance@taj.co.tz',
+            'send_report_email_cc': 'cc1@taj.co.tz, cc2@taj.co.tz',
+        })
+        settings.execute()
+        self.assertEqual(
+            self.env['report.send.mail']._get_mail_configuration(),
+            {
+                'email_from': 'reports@taj.co.tz',
+                'email_to': 'finance@taj.co.tz',
+                'email_cc': 'cc1@taj.co.tz, cc2@taj.co.tz',
+            },
+        )
+        view = self.env.ref(
+            'send_report_via_mail.res_config_settings_view_form_send_report'
+        )
+        arch = ElementTree.fromstring(view.get_combined_arch())
+        for name in (
+            'send_report_email_from',
+            'send_report_email_to',
+            'send_report_email_cc',
+        ):
+            self.assertTrue(arch.findall(".//field[@name='%s']" % name))
+
     def test_aged_report_export_uses_odoo_19_options_api(self):
         report = MagicMock()
         report.get_options.return_value = {'date': {}}
