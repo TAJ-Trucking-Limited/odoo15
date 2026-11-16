@@ -88,6 +88,10 @@
                                 <group>
                                     <field name="field_vehicle"/>
                                     <field name="field_license_plate"/>
+                                    <field name="field_driver_name"/>
+                                    <field name="field_driver_number"/>
+                                    <field name="field_trailer"/>
+                                    <field name="field_trailer_number"/>
                                     <field name="field_trip"/>
                                     <field name="field_customer"/>
                                     <field name="field_sale_order"/>

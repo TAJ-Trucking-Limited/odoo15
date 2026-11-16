@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 import base64
 import io
@@ -46,6 +46,19 @@ class TestNavirecReportSubscription(TransactionCase):
                 "name": "Client & One",
                 "email": "client@example.com",
             }
+        )
+        cls.service_product = cls.env["product.product"].create(
+            {
+                "name": "Tracking report transport service",
+                "type": "service",
+                "list_price": 100,
+            }
+        )
+        cls.truck_category = cls.env.ref(
+            "taj_transport_operations.fleet_category_truck"
+        )
+        cls.trailer_category = cls.env.ref(
+            "taj_transport_operations.fleet_category_trailer"
         )
 
     def _create_subscription(self, **overrides):
@@ -592,3 +605,344 @@ class TestNavirecReportSubscription(TransactionCase):
 
         self.assertEqual(download["type"], "ir.actions.report")
         self.assertEqual(download["report_name"], "fleet_navirec.fleet_position_xlsx")
+
+    # ------------------------------------------------------------------
+    # Current trip resources in tracking reports
+    # ------------------------------------------------------------------
+    def _create_truck(self, plate, driver=None, default_trailer=None, **vals):
+        values = {
+            "model_id": self.model.id,
+            "license_plate": plate,
+            "category_id": self.truck_category.id,
+            **vals,
+        }
+        if driver:
+            values["driver_id"] = driver.id
+        if default_trailer:
+            values["transport_default_trailer_id"] = default_trailer.id
+        return self.env["fleet.vehicle"].create(values)
+
+    def _create_trailer(self, plate, **vals):
+        return self.env["fleet.vehicle"].create(
+            {
+                "model_id": self.model.id,
+                "license_plate": plate,
+                "category_id": self.trailer_category.id,
+                **vals,
+            }
+        )
+
+    def _started_trip(self, customer, truck, driver, trailer=None, company=None):
+        models = {
+            name: self.env[name]
+            for name in (
+                "sale.order",
+                "sale.order.line",
+                "taj.transport.trip",
+                "taj.transport.assignment",
+            )
+        }
+        if company:
+            models = {
+                name: model.with_company(company) for name, model in models.items()
+            }
+        order = models["sale.order"].create(
+            {
+                "partner_id": customer.id,
+                "company_id": (company or self.env.company).id,
+            }
+        )
+        line = models["sale.order.line"].create(
+            {
+                "order_id": order.id,
+                "product_id": self.service_product.id,
+                "name": "Tracking report freight",
+                "product_uom_qty": 1,
+                "price_unit": 100,
+            }
+        )
+        order.action_confirm()
+        trip = models["taj.transport.trip"].create({"sale_line_id": line.id})
+        now = fields.Datetime.now()
+        trip.write(
+            {
+                "origin_location": "Dar es Salaam",
+                "destination_location": "Lusaka",
+                "planned_departure_at": now + timedelta(hours=2),
+                "planned_arrival_at": now + timedelta(days=2),
+            }
+        )
+        models["taj.transport.assignment"].create(
+            {
+                "trip_id": trip.id,
+                "vehicle_id": truck.id,
+                "driver_id": driver.id,
+                "trailer_id": trailer.id if trailer else False,
+                "effective_from": now - timedelta(hours=4),
+            }
+        )
+        trip.action_mark_ready()
+        trip.write({"actual_departure_at": now - timedelta(hours=1)})
+        trip.action_start_trip()
+        return trip
+
+    def _row_for(self, subscription, vehicle):
+        return next(
+            row
+            for row in subscription._prepare_report_rows()
+            if row["license_plate"] == vehicle.license_plate
+        )
+
+    def test_license_plate_column_is_labelled_truck_number(self):
+        subscription = self._create_subscription()
+
+        self.assertEqual(
+            self.env["fleet.navirec.report.subscription"]
+            ._fields["field_license_plate"]
+            .string,
+            "Truck Number",
+        )
+        self.assertIn(("license_plate", "Truck Number"), subscription._report_columns())
+        html = subscription._render_report_html()
+        self.assertIn(">Truck Number<", html)
+        self.assertNotIn(">License Plate<", html)
+
+        with (
+            self.env.cr.savepoint(),
+            self.assertRaisesRegex(ValidationError, "Truck Number"),
+        ):
+            subscription.write({"field_vehicle": False, "field_license_plate": False})
+
+    def test_resource_columns_default_enabled_and_configurable(self):
+        subscription = self._create_subscription()
+        for field_name in (
+            "field_driver_name",
+            "field_driver_number",
+            "field_trailer",
+            "field_trailer_number",
+        ):
+            with self.subTest(field=field_name):
+                self.assertTrue(subscription[field_name])
+
+        columns = dict(subscription._report_columns())
+        self.assertEqual(columns["driver_name"], "Driver Name")
+        self.assertEqual(columns["driver_number"], "Driver Number")
+        self.assertEqual(columns["trailer"], "Trailer")
+        self.assertEqual(columns["trailer_number"], "Trailer Number")
+
+        subscription.write({"field_driver_name": False, "field_trailer_number": False})
+        columns = dict(subscription._report_columns())
+        self.assertNotIn("driver_name", columns)
+        self.assertNotIn("trailer_number", columns)
+        self.assertIn("driver_number", columns)
+        self.assertIn("trailer", columns)
+
+    def test_current_assignment_resources_not_fleet_defaults(self):
+        fleet_driver = self.env["res.partner"].create(
+            {
+                "name": "Fleet Default Driver",
+                "phone": "+255700000001",
+            }
+        )
+        current_driver = self.env["res.partner"].create(
+            {
+                "name": "Current Trip Driver",
+                "phone": "+255700000002",
+            }
+        )
+        fleet_trailer = self._create_trailer("DEFAULT-TRAILER")
+        current_trailer = self._create_trailer("CURRENT-TRAILER")
+        truck = self._create_truck(
+            "RESOURCE-TRUCK",
+            driver=fleet_driver,
+            default_trailer=fleet_trailer,
+        )
+        self._started_trip(self.client, truck, current_driver, trailer=current_trailer)
+        subscription = self._create_subscription(vehicle_ids=[Command.set([truck.id])])
+
+        row = self._row_for(subscription, truck)
+
+        self.assertEqual(row["driver_name"], "Current Trip Driver")
+        self.assertEqual(row["driver_number"], "+255700000002")
+        self.assertEqual(row["trailer"], current_trailer.display_name)
+        self.assertEqual(row["trailer_number"], "CURRENT-TRAILER")
+        self.assertNotIn("Fleet Default Driver", row.values())
+        self.assertNotIn("DEFAULT-TRAILER", row.values())
+
+    def test_resources_populate_when_old_trip_columns_are_off(self):
+        driver = self.env["res.partner"].create(
+            {"name": "Scoped Driver", "phone": "+255700000003"}
+        )
+        trailer = self._create_trailer("SCOPED-TRAILER")
+        truck = self._create_truck("SCOPED-TRUCK")
+        self._started_trip(self.client, truck, driver, trailer=trailer)
+        subscription = self._create_subscription(
+            vehicle_ids=[Command.set([truck.id])],
+            field_trip=False,
+            field_customer=False,
+            field_sale_order=False,
+        )
+
+        row = self._row_for(subscription, truck)
+        html = subscription._render_report_html()
+
+        self.assertEqual(row["driver_name"], "Scoped Driver")
+        self.assertEqual(row["driver_number"], "+255700000003")
+        self.assertEqual(row["trailer_number"], "SCOPED-TRAILER")
+        self.assertIn(">Driver Name<", html)
+        self.assertIn("Scoped Driver", html)
+        self.assertIn("SCOPED-TRAILER", html)
+
+    def test_other_client_trip_discloses_no_resources(self):
+        other_client = self.env["res.partner"].create({"name": "Other Client"})
+        other_driver = self.env["res.partner"].create(
+            {"name": "Other Client Driver", "phone": "+255700000004"}
+        )
+        other_trailer = self._create_trailer("OTHER-TRAILER")
+        truck = self._create_truck("NO-MATCH-TRUCK")
+        self._started_trip(other_client, truck, other_driver, trailer=other_trailer)
+        subscription = self._create_subscription(vehicle_ids=[Command.set([truck.id])])
+
+        row = self._row_for(subscription, truck)
+        html = subscription._render_report_html()
+
+        for key in (
+            "trip",
+            "customer",
+            "sale_order",
+            "driver_name",
+            "driver_number",
+            "trailer",
+            "trailer_number",
+        ):
+            self.assertEqual(row.get(key, ""), "")
+        self.assertNotIn("Other Client Driver", html)
+        self.assertNotIn("Other Client", html)
+        self.assertNotIn("OTHER-TRAILER", html)
+
+    def test_disallowed_company_trip_discloses_no_resources(self):
+        other_company = self.env["res.company"].create(
+            {"name": "Disallowed Tracking Company"}
+        )
+        other_client = self.env["res.partner"].create(
+            {"name": "Disallowed Company Client", "company_id": other_company.id}
+        )
+        other_driver = self.env["res.partner"].create(
+            {
+                "name": "Disallowed Company Driver",
+                "phone": "+255700000005",
+                "company_id": other_company.id,
+            }
+        )
+        truck = self._create_truck("DISALLOWED-TRUCK", company_id=other_company.id)
+        trailer = self._create_trailer(
+            "DISALLOWED-TRAILER", company_id=other_company.id
+        )
+        self._started_trip(
+            other_client,
+            truck,
+            other_driver,
+            trailer=trailer,
+            company=other_company,
+        )
+        subscription = self._create_subscription(
+            vehicle_ids=[Command.set([truck.id])],
+            trip_details_scope="fleet",
+        )
+
+        hidden = subscription.with_context(allowed_company_ids=[self.env.company.id])
+        row = self._row_for(hidden, truck)
+        html = hidden._render_report_html()
+
+        self.assertEqual(row.get("driver_name", ""), "")
+        self.assertEqual(row.get("driver_number", ""), "")
+        self.assertEqual(row.get("trailer_number", ""), "")
+        self.assertNotIn("Disallowed Company Driver", html)
+        self.assertNotIn("DISALLOWED-TRAILER", html)
+
+        # Positive control: the same fleet-scoped subscription sees the
+        # assignment once its company is explicitly allowed.
+        allowed = subscription.with_context(allowed_company_ids=[other_company.id])
+        allowed_row = self._row_for(allowed, truck)
+
+        self.assertEqual(allowed_row.get("driver_number"), "+255700000005")
+        self.assertEqual(allowed_row.get("trailer_number"), "DISALLOWED-TRAILER")
+
+    def test_multiple_scoped_trips_blank_all_trip_resource_columns(self):
+        other_client = self.env["res.partner"].create({"name": "Hidden Client"})
+        driver_one = self.env["res.partner"].create(
+            {"name": "First Driver", "phone": "+255700000006"}
+        )
+        driver_two = self.env["res.partner"].create(
+            {"name": "Hidden Driver", "phone": "+255700000007"}
+        )
+        trailer_one = self._create_trailer("FIRST-TRAILER")
+        trailer_two = self._create_trailer("HIDDEN-TRAILER")
+        truck = self._create_truck("AMBIGUOUS-TRUCK")
+        other_truck = self._create_truck("AMBIGUOUS-OTHER-TRUCK")
+        self._started_trip(self.client, truck, driver_one, trailer=trailer_one)
+        second_trip = self._started_trip(
+            other_client, other_truck, driver_two, trailer=trailer_two
+        )
+        # Normal lifecycle rejects reusing an active truck. Simulate legacy
+        # corrupt data in this test only so the report's ambiguity guard is
+        # exercised without weakening the transport resource constraints.
+        self.env.flush_all()
+        self.env.cr.execute(
+            "UPDATE taj_transport_assignment SET vehicle_id = %s WHERE trip_id = %s",
+            (truck.id, second_trip.id),
+        )
+        self.env["taj.transport.assignment"].invalidate_model(["vehicle_id"])
+        self.env["taj.transport.trip"].invalidate_model(["current_assignment_id"])
+        subscription = self._create_subscription(vehicle_ids=[Command.set([truck.id])])
+
+        row = self._row_for(subscription, truck)
+        html = subscription._render_report_html()
+
+        for key in (
+            "trip",
+            "customer",
+            "sale_order",
+            "driver_name",
+            "driver_number",
+            "trailer",
+            "trailer_number",
+        ):
+            self.assertEqual(row[key], "Multiple active trips")
+        self.assertNotIn("Hidden Driver", html)
+        self.assertNotIn("HIDDEN-TRAILER", html)
+        self.assertNotIn("Hidden Client", html)
+
+    def test_html_escapes_and_xlsx_exports_resource_columns(self):
+        driver = self.env["res.partner"].create(
+            {
+                "name": "Driver <Unsafe> & Co",
+                "phone": "+255700000008",
+            }
+        )
+        trailer = self._create_trailer("EXCEL-TRAILER")
+        truck = self._create_truck("EXCEL-TRUCK")
+        self._started_trip(self.client, truck, driver, trailer=trailer)
+        subscription = self._create_subscription(vehicle_ids=[Command.set([truck.id])])
+
+        html = subscription._render_report_html()
+        _sheet_xml, shared_xml = self._xlsx_parts(subscription)
+        shared_root = ElementTree.fromstring(shared_xml)
+        ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        shared_values = [
+            "".join(node.text or "" for node in item.findall(".//s:t", ns))
+            for item in shared_root.findall("s:si", ns)
+        ]
+
+        self.assertIn("Driver &lt;Unsafe&gt; &amp; Co", html)
+        self.assertNotIn("Driver <Unsafe> & Co", html)
+        for value in (
+            "Driver Name",
+            "Driver Number",
+            "Trailer",
+            "Trailer Number",
+            "Driver <Unsafe> & Co",
+            "+255700000008",
+            "EXCEL-TRAILER",
+        ):
+            self.assertIn(value, shared_values)

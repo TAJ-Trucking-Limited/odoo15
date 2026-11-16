@@ -63,10 +63,14 @@ class FleetNavirecReportSubscription(models.Model):
     last_error_at = fields.Datetime(readonly=True)
 
     field_vehicle = fields.Boolean(string="Vehicle", default=True)
-    field_license_plate = fields.Boolean(string="License Plate", default=True)
+    field_license_plate = fields.Boolean(string="Truck Number", default=True)
     field_trip = fields.Boolean(string="Trip", default=False)
     field_customer = fields.Boolean(string="Customer", default=False)
     field_sale_order = fields.Boolean(string="Sales Order", default=False)
+    field_driver_name = fields.Boolean(string="Driver Name", default=True)
+    field_driver_number = fields.Boolean(string="Driver Number", default=True)
+    field_trailer = fields.Boolean(string="Trailer", default=True)
+    field_trailer_number = fields.Boolean(string="Trailer Number", default=True)
     field_status = fields.Boolean(string="Navirec Status", default=True)
     field_location = fields.Boolean(string="Current Position", default=True)
     field_coordinates = fields.Boolean(string="Coordinates", default=False)
@@ -148,7 +152,7 @@ class FleetNavirecReportSubscription(models.Model):
             if not (subscription.field_vehicle or subscription.field_license_plate):
                 raise ValidationError(
                     _(
-                        "Enable Vehicle or License Plate so every report row "
+                        "Enable Vehicle or Truck Number so every report row "
                         "can be identified."
                     )
                 )
@@ -231,7 +235,15 @@ class FleetNavirecReportSubscription(models.Model):
         """Read current assignments within the chosen company/client scope."""
         self.ensure_one()
         if (
-            not (self.field_trip or self.field_customer or self.field_sale_order)
+            not (
+                self.field_trip
+                or self.field_customer
+                or self.field_sale_order
+                or self.field_driver_name
+                or self.field_driver_number
+                or self.field_trailer
+                or self.field_trailer_number
+            )
             or not self.vehicle_ids
         ):
             return {}
@@ -279,12 +291,24 @@ class FleetNavirecReportSubscription(models.Model):
                     "trip": conflict,
                     "customer": conflict,
                     "sale_order": conflict,
+                    "driver_name": conflict,
+                    "driver_number": conflict,
+                    "trailer": conflict,
+                    "trailer_number": conflict,
                 }
             else:
+                trip = matching_trips
+                assignment = trip.current_assignment_id
+                driver = assignment.driver_id
+                trailer = assignment.trailer_id
                 values[vehicle_id] = {
-                    "trip": matching_trips.name or "",
-                    "customer": matching_trips.partner_id.display_name or "",
-                    "sale_order": matching_trips.sale_order_id.name or "",
+                    "trip": trip.name or "",
+                    "customer": trip.partner_id.display_name or "",
+                    "sale_order": trip.sale_order_id.name or "",
+                    "driver_name": driver.name or "",
+                    "driver_number": driver.phone or "",
+                    "trailer": trailer.display_name or "",
+                    "trailer_number": trailer.license_plate or "",
                 }
         return values
 
@@ -346,8 +370,12 @@ class FleetNavirecReportSubscription(models.Model):
             (
                 "field_license_plate",
                 "license_plate",
-                _("License Plate"),
+                _("Truck Number"),
             ),
+            ("field_driver_name", "driver_name", _("Driver Name")),
+            ("field_driver_number", "driver_number", _("Driver Number")),
+            ("field_trailer", "trailer", _("Trailer")),
+            ("field_trailer_number", "trailer_number", _("Trailer Number")),
             ("field_status", "status", _("Navirec Status")),
             ("field_trip", "trip", _("Trip")),
             ("field_customer", "customer", _("Customer")),

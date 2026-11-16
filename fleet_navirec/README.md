@@ -94,10 +94,17 @@ When the template is empty, that verified live vehicle route is used automatical
 - To/CC recipients and IANA timezone per subscription.
 - Any number of distinct configurable local send times per day.
 - UTC `next_send_at` calculation with timezone conversion.
-- Configurable Vehicle, License Plate, Position, Coordinates, Speed,
-  Ignition/Movement and Odometer columns.
+- Configurable Vehicle, Truck Number, Driver Name, Driver Number, Trailer,
+  Trailer Number, Position, Coordinates, Speed, Ignition/Movement and Odometer
+  columns. The former License Plate column is now labelled Truck Number; its
+  technical field and report key are unchanged for compatibility. Driver
+  Number is the driver's phone number, and Trailer Number is the trailer's
+  registration/license plate. Driver Name, Driver Number, Trailer and Trailer
+  Number are enabled by default.
 - Optional Trip, Customer and Sales Order columns, disabled by default, use the
-  truck or trailer's current open assignment on an In Progress trip. Trip details
+  truck or trailer's current open assignment on an In Progress trip. Driver
+  Name, Driver Number and trailer identities also come from that current
+  assignment, never from Fleet defaults or historic assignments. Trip details
   use **Trip Details Scope** to select either the client's commercial company
   (including its contact/address records) or **Internal fleet (all selected
   vehicles)**. The default is Selected client, preserving customer-report
