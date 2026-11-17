@@ -12,7 +12,7 @@
                 <field name="expected_vehicle_id" invisible="1"/>
                 <field name="expected_trailer_id" invisible="1"/>
                 <field name="expected_driver_id" invisible="1"/>
-                <field name="expected_etol" invisible="1"/>
+                <field name="expected_etol" invisible="1" options="{'numeric': True}"/>
                 <field name="expected_trip_state" invisible="1"/>
                 <field name="expected_has_assignment" invisible="1"/>
                 <field name="defaults_vehicle_id" invisible="1"/>

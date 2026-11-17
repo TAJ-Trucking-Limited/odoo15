@@ -46,8 +46,8 @@
                     <field name="origin_location" invisible="'origin_location' not in empty_field_names"/>
                     <field name="destination_location" invisible="'destination_location' not in empty_field_names"/>
                     <field name="route_notes" invisible="'route_notes' not in empty_field_names"/>
-                    <field name="actual_departure_at" invisible="'actual_departure_at' not in empty_field_names"/>
-                    <field name="actual_arrival_at" invisible="'actual_arrival_at' not in empty_field_names"/>
+                    <field name="actual_departure_at" invisible="'actual_departure_at' not in empty_field_names" options="{'numeric': True}"/>
+                    <field name="actual_arrival_at" invisible="'actual_arrival_at' not in empty_field_names" options="{'numeric': True}"/>
                 </group>
                 <group string="Proof of Delivery"
                        invisible="'pod_file' not in empty_field_names and 'pod_notes' not in empty_field_names">

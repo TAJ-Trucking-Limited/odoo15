@@ -18,7 +18,7 @@
                         <field name="co_driver_id" options="{'no_quick_create': True}"/>
                     </group>
                     <group string="Change Details">
-                        <field name="effective_from"/>
+                        <field name="effective_from" options="{'numeric': True}"/>
                         <field name="effective_location"/>
                         <field name="reason" required="1"/>
                         <field name="notes"/>

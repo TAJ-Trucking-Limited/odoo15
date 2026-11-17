@@ -11,7 +11,7 @@
                     <field name="action_type" readonly="1"/>
                     <field name="event_at"
                            invisible="action_type == 'skip'"
-                           required="action_type in ('arrival', 'departure')"/>
+                           required="action_type in ('arrival', 'departure')" options="{'numeric': True}"/>
                     <field name="reason"
                            invisible="action_type != 'skip'"
                            required="action_type == 'skip'"
@@ -47,8 +47,8 @@
                     <field name="milestone_id" readonly="1"/>
                     <field name="trip_id" readonly="1"/>
                     <field name="field_name"/>
-                    <field name="current_value" readonly="1"/>
-                    <field name="new_value"/>
+                    <field name="current_value" readonly="1" options="{'numeric': True}"/>
+                    <field name="new_value" options="{'numeric': True}"/>
                     <field name="reason" placeholder="Why is the recorded value wrong?"/>
                     <field name="note"/>
                 </group>

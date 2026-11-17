@@ -29,16 +29,16 @@
                 <field name="special_handling_instructions" optional="show" width="280px"/>
                 <field name="allocation_date" optional="show" options="{'numeric': True}"/>
                 <field name="last_milestone_activity" optional="show"/>
-                <field name="last_milestone_at" optional="show"/>
+                <field name="last_milestone_at" optional="show" options="{'numeric': True}"/>
                 <field name="current_driver_id" optional="show" string="Current Driver" width="180px"/>
                 <field name="milestone_progress" optional="show" widget="progressbar" invisible="state == 'draft'"/>
                 <field name="state" optional="show" string="Trip Status" widget="badge" decoration-info="state in ('draft', 'ready')" decoration-warning="state == 'in_progress'" decoration-success="state == 'completed'" decoration-muted="state == 'cancelled'"/>
                 <field name="activity_status" optional="show" widget="badge" decoration-danger="activity_status == 'overdue'" decoration-success="activity_status == 'recent'"/>
-                <field name="last_activity_at" optional="show"/>
+                <field name="last_activity_at" optional="show" options="{'numeric': True}"/>
                 <field name="email_position_preview" optional="show" string="Current Position"/>
                 <field name="email_position_map_url" optional="show" string="Map" widget="url" text="View Map"/>
                 <field name="email_position_source" optional="hide" string="Position Source"/>
-                <field name="email_position_updated_at" optional="hide" string="Position Updated At"/>
+                <field name="email_position_updated_at" optional="hide" string="Position Updated At" options="{'numeric': True}"/>
                 <field name="container_num" optional="show"/>
                 <field name="origin_location" optional="show"/>
                 <field name="destination_location" optional="show"/>
@@ -49,8 +49,8 @@
                 <field name="transport_reference" optional="hide"/>
                 <field name="route_id" optional="hide"/>
                 <field name="milestone_open_count" optional="hide"/>
-                <field name="actual_departure_at" optional="hide" string="Actual Start"/>
-                <field name="actual_arrival_at" optional="hide"/>
+                <field name="actual_departure_at" optional="hide" string="Actual Start" options="{'numeric': True}"/>
+                <field name="actual_arrival_at" optional="hide" options="{'numeric': True}"/>
                 <field name="company_id" optional="hide" groups="base.group_multi_company"/>
             </list>
         </field>
@@ -161,31 +161,31 @@
                                     </group>
                                     <group string="Trip Progress" name="trip_progress_section">
                                         <field name="allocation_date" readonly="1" options="{'numeric': True}"/>
-                                        <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')"/>
+                                        <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')" options="{'numeric': True}"/>
                                         <field name="last_milestone_activity" readonly="1"/>
-                                        <field name="last_milestone_at" readonly="1"/>
+                                        <field name="last_milestone_at" readonly="1" options="{'numeric': True}"/>
                                         <field name="milestone_progress" widget="progressbar" readonly="1"/>
                                         <field name="activity_status" widget="badge" readonly="1"/>
-                                        <field name="last_activity_at" readonly="1"/>
+                                        <field name="last_activity_at" readonly="1" options="{'numeric': True}"/>
                                         <field name="email_position_preview" string="Current Position" readonly="1"/>
                                         <field name="email_position_source" readonly="1"/>
-                                        <field name="email_position_updated_at" readonly="1"/>
+                                        <field name="email_position_updated_at" readonly="1" options="{'numeric': True}"/>
                                     </group>
                                 </group>
                             </group>
                         </page>
                         <page string="Activity History" name="activity_history" invisible="not id">
                             <group>
-                                <field name="last_activity_at" readonly="1"/>
-                                <field name="last_inactivity_alert_at" readonly="1"/>
+                                <field name="last_activity_at" readonly="1" options="{'numeric': True}"/>
+                                <field name="last_inactivity_alert_at" readonly="1" options="{'numeric': True}"/>
                             </group>
                             <field name="trip_activity_ids" readonly="1">
                                 <list create="0" edit="0" delete="0">
-                                    <field name="recorded_at"/>
+                                    <field name="recorded_at" options="{'numeric': True}"/>
                                     <field name="user_id"/>
                                     <field name="activity_type"/>
                                     <field name="milestone_id" optional="show"/>
-                                    <field name="occurred_at" optional="hide"/>
+                                    <field name="occurred_at" optional="hide" options="{'numeric': True}"/>
                                     <field name="description"/>
                                 </list>
                             </field>
@@ -247,8 +247,8 @@
                                             invisible="state != 'draft' or (origin_location and destination_location)"/>
                                 </group>
                                 <group string="Schedule">
-                                    <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')"/>
-                                    <field name="actual_arrival_at" readonly="state in ('completed', 'cancelled')"/>
+                                    <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')" options="{'numeric': True}"/>
+                                    <field name="actual_arrival_at" readonly="state in ('completed', 'cancelled')" options="{'numeric': True}"/>
                                 </group>
                             </group>
                             <p class="text-muted">
@@ -289,9 +289,9 @@
                                     <field name="sequence" optional="hide"/>
                                     <field name="name"/>
                                     <field name="milestone_type_id" optional="show"/>
-                                    <field name="planned_arrival_at" optional="show"/>
-                                    <field name="actual_arrival_at"/>
-                                    <field name="actual_departure_at"/>
+                                    <field name="planned_arrival_at" optional="show" options="{'numeric': True}"/>
+                                    <field name="actual_arrival_at" options="{'numeric': True}"/>
+                                    <field name="actual_departure_at" options="{'numeric': True}"/>
                                     <field name="state" widget="badge"
                                            decoration-info="state == 'pending'"
                                            decoration-warning="state == 'arrived'"
@@ -360,8 +360,8 @@
                             <separator string="Assignment History"/>
                             <field name="assignment_ids" readonly="1">
                                 <list create="0" edit="0" delete="0">
-                                    <field name="effective_from"/>
-                                    <field name="effective_to"/>
+                                    <field name="effective_from" options="{'numeric': True}"/>
+                                    <field name="effective_to" options="{'numeric': True}"/>
                                     <field name="vehicle_id"/>
                                     <field name="trailer_id"/>
                                     <field name="driver_id"/>
@@ -386,15 +386,15 @@
                                     <field name="email_interval_hours"/>
                                 </group>
                                 <group string="Schedule &amp; Live Position">
-                                    <field name="email_next_send_at" readonly="1"/>
-                                    <field name="email_last_queued_at" readonly="1"/>
+                                    <field name="email_next_send_at" readonly="1" options="{'numeric': True}"/>
+                                    <field name="email_last_queued_at" readonly="1" options="{'numeric': True}"/>
                                     <field name="email_failure_count" readonly="1"
                                            invisible="not email_failure_count"/>
                                     <field name="email_last_error" readonly="1"
                                            invisible="not email_last_error"/>
                                     <field name="email_position_preview" readonly="1"/>
                                     <field name="email_position_source" readonly="1"/>
-                                    <field name="email_position_updated_at" readonly="1"/>
+                                    <field name="email_position_updated_at" readonly="1" options="{'numeric': True}"/>
                                     <field name="email_position_map_url" widget="url" text="View on Map"
                                            invisible="not email_position_map_url" readonly="1"/>
                                     <field name="email_position_notice" readonly="1"
@@ -409,7 +409,7 @@
                             <separator string="Dispatch History"/>
                             <field name="email_dispatch_ids" readonly="1">
                                 <list create="0" edit="0" delete="0">
-                                    <field name="queued_at"/>
+                                    <field name="queued_at" options="{'numeric': True}"/>
                                     <field name="dispatch_type"/>
                                     <field name="requested_by_id"/>
                                     <field name="recipient_emails"/>
@@ -431,10 +431,10 @@
                         <page string="Lifecycle" name="trip_lifecycle">
                             <group>
                                 <group string="Operational Milestones">
-                                    <field name="ready_at" readonly="1"/>
-                                    <field name="started_at" readonly="1"/>
-                                    <field name="completed_at" readonly="1"/>
-                                    <field name="cancelled_at" readonly="1"/>
+                                    <field name="ready_at" readonly="1" options="{'numeric': True}"/>
+                                    <field name="started_at" readonly="1" options="{'numeric': True}"/>
+                                    <field name="completed_at" readonly="1" options="{'numeric': True}"/>
+                                    <field name="cancelled_at" readonly="1" options="{'numeric': True}"/>
                                 </group>
                                 <group string="Cancellation" invisible="state != 'cancelled'">
                                     <field name="cancelled_by_id" readonly="1"/>

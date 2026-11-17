@@ -7,7 +7,7 @@
             <form string="Start Trip">
                 <group>
                     <field name="trip_id"/>
-                    <field name="actual_start_at"/>
+                    <field name="actual_start_at" options="{'numeric': True}"/>
                 </group>
                 <p class="text-muted">The start defaults to now. Change it if the trip started earlier.</p>
                 <footer>

@@ -7,7 +7,7 @@
             <form string="Transport Operations Settings">
                 <sheet>
                     <group>
-                        <field name="dispatch_cutoff_date"/>
+                        <field name="dispatch_cutoff_date" options="{'numeric': True}"/>
                     </group>
                     <group string="Sale Order Line Requirements">
                         <field name="required_shipment_field_ids" widget="many2many_checkboxes"

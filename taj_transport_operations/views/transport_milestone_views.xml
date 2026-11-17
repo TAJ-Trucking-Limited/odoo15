@@ -6,12 +6,12 @@
         <field name="arch" type="xml">
             <list string="Trips" create="0" delete="0" edit="0">
                 <groupby name="vehicle_id">
-                    <field name="transport_group_last_activity_at"/>
+                    <field name="transport_group_last_activity_at" options="{'numeric': True}"/>
                 </groupby>
                 <groupby name="trip_id">
                     <!-- Fetch the Trip's stored activity timestamp once for the
                          group header, not from individual milestone rows. -->
-                    <field name="last_activity_at"/>
+                    <field name="last_activity_at" options="{'numeric': True}"/>
                 </groupby>
                 <header>
                     <button name="action_open_trip" string="Open Trip" type="object" class="btn-secondary"/>
@@ -26,9 +26,9 @@
                 <field name="sequence" optional="hide"/>
                 <field name="name" optional="show"/>
                 <field name="milestone_type_id" optional="show"/>
-                <field name="planned_arrival_at" optional="show"/>
-                <field name="actual_arrival_at" optional="show"/>
-                <field name="actual_departure_at" optional="show"/>
+                <field name="planned_arrival_at" optional="show" options="{'numeric': True}"/>
+                <field name="actual_arrival_at" optional="show" options="{'numeric': True}"/>
+                <field name="actual_departure_at" optional="show" options="{'numeric': True}"/>
                 <field name="state" widget="badge" decoration-info="state == 'pending'" decoration-warning="state == 'arrived'" decoration-success="state in ('completed', 'departed')" decoration-muted="state == 'skipped'" optional="show" invisible="trip_state == 'draft'"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
                 <button name="action_open_trip" string="Open Trip" type="object" icon="fa-truck" class="btn-link" invisible="not trip_id"/>
@@ -75,19 +75,19 @@
                             <field name="milestone_type_id" readonly="1"/>
                             <field name="type_name" readonly="1"/>
                             <field name="planned_offset_hours" readonly="1"/>
-                            <field name="planned_arrival_at" readonly="1"/>
+                            <field name="planned_arrival_at" readonly="1" options="{'numeric': True}"/>
                             <field name="route_id" readonly="1"/>
                         </group>
                     </group>
                     <group>
                         <group string="Recorded Events">
-                            <field name="actual_arrival_at" readonly="1"/>
+                            <field name="actual_arrival_at" readonly="1" options="{'numeric': True}"/>
                             <field name="arrived_by_id" readonly="1"/>
-                            <field name="actual_departure_at" readonly="1"/>
+                            <field name="actual_departure_at" readonly="1" options="{'numeric': True}"/>
                             <field name="departed_by_id" readonly="1"/>
                         </group>
                         <group string="Historical Confirmation" invisible="not confirmed_at">
-                            <field name="confirmed_at" readonly="1"/>
+                            <field name="confirmed_at" readonly="1" options="{'numeric': True}"/>
                             <field name="confirmed_by_id" readonly="1"/>
                             <field name="confirmation_note" readonly="1"/>
                         </group>
@@ -99,10 +99,10 @@
                         <page string="Checkpoint History" name="milestone_history">
                             <field name="event_ids" readonly="1">
                                 <list create="0" delete="0" edit="0">
-                                    <field name="recorded_at"/>
+                                    <field name="recorded_at" options="{'numeric': True}"/>
                                     <field name="event_type"/>
                                     <field name="source"/>
-                                    <field name="occurred_at"/>
+                                    <field name="occurred_at" options="{'numeric': True}"/>
                                     <field name="user_id"/>
                                     <field name="field_name" optional="hide"/>
                                     <field name="old_value" optional="show"/>

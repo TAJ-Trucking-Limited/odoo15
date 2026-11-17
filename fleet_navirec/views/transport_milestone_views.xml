@@ -10,7 +10,7 @@
                 <field name="navirec_position_display"
                        string="Current Position" optional="show"/>
                 <field name="navirec_last_state_time"
-                       string="Last GPS" optional="show"/>
+                       string="Last GPS" optional="show" options="{'numeric': True}"/>
                 <button name="action_view_current_truck_on_map" string="Map"
                         type="object" icon="fa-map-marker" class="btn-link"
                         invisible="not navirec_has_position"/>

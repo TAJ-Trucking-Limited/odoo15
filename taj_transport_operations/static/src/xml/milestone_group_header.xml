@@ -8,7 +8,7 @@
                   class="ms-3 small fw-normal text-muted o_taj_trip_group_last_activity">
                 Last Activity:
                 <t t-if="group.record.data.last_activity_at">
-                    <Field name="'last_activity_at'" record="group.record"/>
+                    <Field name="'last_activity_at'" record="group.record" numeric="true"/>
                 </t>
                 <t t-else="">—</t>
             </span>
@@ -16,7 +16,7 @@
                   class="ms-3 small fw-normal text-muted o_taj_vehicle_group_last_activity">
                 Last Activity:
                 <t t-if="group.record.data.transport_group_last_activity_at">
-                    <Field name="'transport_group_last_activity_at'" record="group.record"/>
+                    <Field name="'transport_group_last_activity_at'" record="group.record" numeric="true"/>
                 </t>
                 <t t-else="">—</t>
             </span>

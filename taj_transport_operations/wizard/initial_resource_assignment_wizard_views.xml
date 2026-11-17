@@ -14,7 +14,7 @@
                     <field name="trailer_id" options="{'no_create': True}"/>
                     <field name="driver_id" options="{'no_quick_create': True}"/>
                     <field name="co_driver_id" options="{'no_quick_create': True}"/>
-                    <field name="effective_from"/>
+                    <field name="effective_from" options="{'numeric': True}"/>
                     <field name="effective_location"/>
                     <field name="reason"/>
                     <field name="notes"/>

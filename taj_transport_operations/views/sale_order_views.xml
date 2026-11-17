@@ -83,13 +83,13 @@
                            placeholder="Loading, storage or handling notes"/>
                 </group>
                 <group string="Transport Schedule" invisible="display_type not in [False, 'product']">
-                    <field name="transport_planned_departure_at"/>
-                    <field name="transport_planned_arrival_at"/>
+                    <field name="transport_planned_departure_at" options="{'numeric': True}"/>
+                    <field name="transport_planned_arrival_at" options="{'numeric': True}"/>
                 </group>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
-                <field name="transport_planned_departure_at" optional="hide" invisible="display_type not in [False, 'product']"/>
-                <field name="transport_planned_arrival_at" optional="hide" invisible="display_type not in [False, 'product']"/>
+                <field name="transport_planned_departure_at" optional="hide" invisible="display_type not in [False, 'product']" options="{'numeric': True}"/>
+                <field name="transport_planned_arrival_at" optional="hide" invisible="display_type not in [False, 'product']" options="{'numeric': True}"/>
                 <field name="cargo_type_id"
                        options="{'no_create': True, 'no_create_edit': True}"
                        optional="show" invisible="display_type not in [False, 'product']"/>
