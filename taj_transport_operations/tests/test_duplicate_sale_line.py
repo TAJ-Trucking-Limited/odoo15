@@ -113,20 +113,46 @@ class TestDuplicateSaleLine(TransactionCase):
         self.assertEqual(self.line.weight, "22000")
         self.assertEqual(self.line.vehicle_id, self.truck)
 
-    def test_clean_all_clears_shipment_fields_and_sets_price_and_amount_to_zero(self):
+    def test_clean_all_clears_shipment_fields_and_preserves_price_and_amount(self):
         duplicate = self._duplicate("all")
         for name in ("container_num", "cargo_type_id", "size", "weight", "cargo_description",
                      "special_handling_instructions"):
             self.assertFalse(duplicate[name], name)
-        self.assertEqual(duplicate.price_unit, 0)
-        self.assertEqual(duplicate.price_subtotal, 0)
-        self.assertEqual(duplicate.price_total, 0)
+        self.assertEqual(duplicate.price_unit, self.line.price_unit)
+        self.assertEqual(duplicate.price_subtotal, self.line.price_subtotal)
+        self.assertEqual(duplicate.price_total, self.line.price_total)
         self.assertEqual(duplicate.product_id, self.product)
         self.assertEqual(duplicate.file_type_id, self.file_type)
         self.assertEqual(duplicate.clearing_service, "included")
         self.assertEqual(duplicate.product_uom_qty, 2.5)
         self.assertEqual(self.line.cargo_description, "Machinery")
         self.assertEqual(self.line.price_unit, 321)
+
+    def test_multiple_duplicates_preserve_price_in_both_modes(self):
+        for mode in ("container", "all"):
+            with self.subTest(mode=mode):
+                before = self.order.order_line
+                self._wizard(mode, number_of_duplicates=5).action_duplicate()
+                copies = self.order.order_line - before
+                self.assertEqual(len(copies), 5)
+                self.assertEqual(len(set(copies.mapped("sequence"))), 5)
+                self.assertGreater(min(copies.mapped("sequence")), max(before.mapped("sequence")))
+                for copy in copies:
+                    self.assertEqual(copy.price_unit, 321)
+                    self.assertEqual(copy.discount, self.line.discount)
+                    self.assertEqual(copy.product_uom_qty, self.line.product_uom_qty)
+                    self.assertEqual(copy.price_total, self.line.price_total)
+                    self.assertFalse(copy.container_num)
+                self.assertEqual(self.line.container_num, "CONT-123")
+
+    def test_empty_count_creates_one_copy_and_negative_count_is_rejected(self):
+        before = self.order.order_line
+        self._wizard(number_of_duplicates=False).action_duplicate()
+        self.assertEqual(len(self.order.order_line - before), 1)
+        before = self.order.order_line
+        with self.assertRaises(UserError):
+            self._wizard(number_of_duplicates=-1).action_duplicate()
+        self.assertEqual(self.order.order_line, before)
 
     def test_analytical_account_is_always_cleared_on_duplicate(self):
         plan = self.env["account.analytic.plan"].create({
@@ -180,7 +206,7 @@ class TestDuplicateSaleLine(TransactionCase):
         before = self.order.order_line
         wizard.action_duplicate()
         self.assertEqual(len(self.order.order_line - before), 1)
-        self.assertEqual((self.order.order_line - before).price_unit, 0)
+        self.assertEqual((self.order.order_line - before).price_unit, 321)
 
     def test_read_only_dispatcher_cannot_duplicate_sales_lines(self):
         dispatcher = new_test_user(self.env, login="duplicate_dispatcher",

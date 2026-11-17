@@ -19,6 +19,10 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
         [("container", "Clear Container"), ("all", "Clear All Variables")],
         string="Clear on Duplicate", required=True, default="container",
     )
+    number_of_duplicates = fields.Integer(
+        string="Number of Duplicates", default=1,
+        help="Number of additional lines to create. Leave empty to create one copy.",
+    )
 
     def action_duplicate(self):
         self.ensure_one()
@@ -33,6 +37,8 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
         if (not source or source.order_id != order or not source.product_id
                 or source.display_type not in (False, "product") or source.is_downpayment):
             raise UserError(_("Select a product line from this quotation or sales order."))
+        if self.number_of_duplicates < 0:
+            raise UserError(_("Number of duplicates cannot be negative."))
         values = {
             "order_id": order.id,
             "sequence": max(order.order_line.mapped("sequence"), default=0) + 1,
@@ -51,7 +57,7 @@ class TajTransportDuplicateSaleLineWizard(models.TransientModel):
             values.update({
                 "cargo_type_id": False, "size": False,
                 "cargo_description": False, "special_handling_instructions": False,
-                "price_unit": 0.0,
             })
-        source.copy(values)
+        for offset in range(self.number_of_duplicates or 1):
+            source.copy({**values, "sequence": values["sequence"] + offset})
         return {"type": "ir.actions.act_window_close"}

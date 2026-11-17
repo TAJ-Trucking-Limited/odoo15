@@ -272,33 +272,33 @@ class SaleOrderLine(models.Model):
     shipping_line = fields.Char(string="Shipping Line")
 
     @api.model
-    def _suggest_route_file_type(self, product_tmpl, company):
+    def _suggest_route_trip_type(self, product_tmpl, company):
         """Suggest a type only when all active product routes agree.
 
         Never guess between differently classified routes; blank legacy
         routes also make the choice ambiguous. Explicit Sales choices win.
         """
-        FileType = self.env["taj.transport.file.type"]
+        TripType = self.env["taj.transport.trip.type"]
         if not product_tmpl or not company:
-            return FileType
+            return TripType
         routes = self.env["taj.transport.route"].sudo().search([
             ("product_tmpl_id", "=", product_tmpl.id),
             ("company_id", "=", company.id),
             ("active", "=", True),
         ])
         if not routes:
-            return FileType
-        types = routes.mapped("file_type_id")
+            return TripType
+        types = routes.mapped("trip_type_id")
         if (
             len(types) == 1
             and types.active
-            and all(route.file_type_id == types for route in routes)
+            and all(route.trip_type_id == types for route in routes)
         ):
             return types
-        return FileType
+        return TripType
 
     @api.onchange("product_id", "product_template_id", "order_id")
-    def _onchange_route_file_type(self):
+    def _onchange_route_trip_type(self):
         for line in self:
             if line.display_type not in (False, "product") or line.is_downpayment:
                 continue
@@ -306,7 +306,7 @@ class SaleOrderLine(models.Model):
             company = line.order_id.company_id or self.env.company
             # The user may change this selection afterward. Do not use a
             # computed/related field, which would overwrite manual choices.
-            line.file_type_id = self._suggest_route_file_type(template, company)
+            line.trip_type_id = self._suggest_route_trip_type(template, company)
 
     def action_open_duplicate_line_wizard(self):
         order = self.env["sale.order"].browse(self.env.context.get("order_id")).exists()
@@ -333,7 +333,7 @@ class SaleOrderLine(models.Model):
         }
 
     @api.constrains(
-        "product_id", "file_type_id", "order_id", "display_type", "is_downpayment"
+        "product_id", "trip_type_id", "order_id", "display_type", "is_downpayment"
     )
     def _check_goods_transport_configuration(self):
         for line in self:
@@ -362,35 +362,34 @@ class SaleOrderLine(models.Model):
                     }
                 )
             # Unclassified legacy templates are compatible with any chosen
-            # File Type; classified templates must agree with the Sales line.
-            if line.file_type_id and not any(
-                not route.file_type_id or route.file_type_id == line.file_type_id
+            # Trip Type; classified templates must agree with the Sales line.
+            if line.trip_type_id and not any(
+                not route.trip_type_id or route.trip_type_id == line.trip_type_id
                 for route in routes
             ):
                 raise ValidationError(
                     _(
                         "No active Route Template for Goods product %(product)s "
-                        "matches File Type %(file_type)s. Choose a matching "
-                        "File Type or configure a matching Route Template."
+                        "matches Trip Type %(trip_type)s. Choose a matching "
+                        "Trip Type or configure a matching Route Template."
                     )
                     % {
                         "product": line.product_id.display_name,
-                        "file_type": line.file_type_id.display_name,
+                        "trip_type": line.trip_type_id.display_name,
                     }
                 )
 
-    @api.constrains("file_type_id")
-    def _check_existing_trip_route_file_type(self):
-        # File Numbers can change shipment fields after confirmation. Do not
-        # let that path silently conflict with a trip's selected route.
+    @api.constrains("trip_type_id")
+    def _check_existing_trip_route_trip_type(self):
+        # Preserve compatibility with the routes already selected for this line.
         for line in self:
             if any(
-                trip.route_id.file_type_id
-                and trip.route_id.file_type_id != line.file_type_id
+                trip.route_id.trip_type_id
+                and trip.route_id.trip_type_id != line.trip_type_id
                 for trip in line.transport_trip_ids
             ):
                 raise ValidationError(_(
-                    "The File Type cannot differ from the Route Template "
+                    "The Trip Type cannot differ from the Route Template "
                     "of an existing transport trip."
                 ))
 
@@ -615,8 +614,8 @@ class SaleOrderLine(models.Model):
                 if vals.get("vehicle_id", default_vehicle) else False
             )
             if (
-                "file_type_id" not in vals
-                and "default_file_type_id" not in self.env.context
+                "trip_type_id" not in vals
+                and "default_trip_type_id" not in self.env.context
                 and vals.get("display_type") in (False, None, "product")
                 and not vals.get("is_downpayment")
             ):
@@ -630,11 +629,11 @@ class SaleOrderLine(models.Model):
                 order = self.env["sale.order"].browse(
                     vals.get("order_id") or default_order_id
                 )
-                file_type = self._suggest_route_file_type(
+                trip_type = self._suggest_route_trip_type(
                     template, order.company_id or self.env.company
                 )
-                if file_type:
-                    vals["file_type_id"] = file_type.id
+                if trip_type:
+                    vals["trip_type_id"] = trip_type.id
             if (
                 "clearing_service" not in vals
                 and "default_clearing_service" not in self.env.context

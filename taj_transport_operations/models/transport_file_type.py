@@ -1,4 +1,4 @@
-"""Manager-maintained file type classifications for route templates."""
+"""Manager-maintained file type classifications for sales lines."""
 
 from odoo import fields, models
 

@@ -64,15 +64,17 @@ class TestSaleLineTypes(TransactionCase):
         ).create(base)
         self.assertEqual(line.clearing_service, "not_included")
 
-    def test_route_suggested_file_type_also_defaults_clearing(self):
-        included = self._type("Included route type", "included")
+    def test_route_suggested_trip_type_does_not_select_file_type_or_clearing(self):
+        trip_type = self.env["taj.transport.trip.type"].create({"name": "Suggested trip type"})
+        self._type(trip_type.name, "included")
         self.env["taj.transport.route"].create({
             "name": "Line types route", "product_tmpl_id": self.product.product_tmpl_id.id,
-            "company_id": self.env.company.id, "file_type_id": included.id,
+            "company_id": self.env.company.id, "trip_type_id": trip_type.id,
         })
         line = self._line()
-        self.assertEqual(line.file_type_id, included)
-        self.assertEqual(line.clearing_service, "included")
+        self.assertEqual(line.trip_type_id, trip_type)
+        self.assertFalse(line.file_type_id)
+        self.assertFalse(line.clearing_service)
 
     def test_write_selection_defaults_and_clearing_empty_mapping(self):
         included = self._type("Included write type", "included")

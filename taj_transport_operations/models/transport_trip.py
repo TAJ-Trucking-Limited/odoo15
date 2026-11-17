@@ -532,16 +532,16 @@ class TajTransportTrip(models.Model):
             trip._validate_sale_line(trip.sale_line_id)
 
     @api.constrains("route_id", "sale_line_id")
-    def _check_route_file_type(self):
+    def _check_route_trip_type(self):
         # Also protects direct API trip creates/route edits, not just the
         # Sales buttons that use _require_matching_route_for_sale_line.
         for trip in self:
-            route_type = trip.route_id.file_type_id
-            line_type = trip.sale_line_id.file_type_id
+            route_type = trip.route_id.trip_type_id
+            line_type = trip.sale_line_id.trip_type_id
             if route_type and line_type and route_type != line_type:
                 raise ValidationError(_(
-                    "The trip's Route Template File Type must match the "
-                    "Sales line File Type."
+                    "The trip's Route Template Trip Type must match the "
+                    "Sales line Trip Type."
                 ))
 
     @api.constrains("sale_order_id", "sale_line_id")
@@ -723,19 +723,19 @@ class TajTransportTrip(models.Model):
                 "product": line.product_id.display_name,
             })
         if (
-            line.file_type_id
-            and route.file_type_id
-            and route.file_type_id != line.file_type_id
+            line.trip_type_id
+            and route.trip_type_id
+            and route.trip_type_id != line.trip_type_id
         ):
             raise UserError(_(
-                "Route template %(route)s has File Type %(route_type)s, "
+                "Route template %(route)s has Trip Type %(route_type)s, "
                 "but sales line %(line)s uses %(line_type)s. Choose a "
-                "matching route or change the sales line's File Type."
+                "matching route or change the sales line's Trip Type."
             ) % {
                 "route": route.display_name,
-                "route_type": route.file_type_id.display_name,
+                "route_type": route.trip_type_id.display_name,
                 "line": line.display_name,
-                "line_type": line.file_type_id.display_name,
+                "line_type": line.trip_type_id.display_name,
             })
         return route
 

@@ -248,27 +248,23 @@ class TestRouteTemplates(TajTransportPhase3Case):
         with self.assertRaises(IntegrityError), self.env.cr.savepoint():
             file_types.create({"name": "Transit Import"})
 
-    def test_file_type_is_assignable_to_route_templates(self):
+    def test_trip_type_is_assignable_to_route_templates(self):
         route = self._route("Transit import route")
-        self.assertFalse(route.file_type_id)
-        transit_import = self.env.ref(
-            "taj_transport_operations.file_type_transit_import"
-        )
-        transit_export = self.env.ref(
-            "taj_transport_operations.file_type_transit_export"
-        )
-        route.write({"file_type_id": transit_import.id})
-        self.assertEqual(route.file_type_id, transit_import)
+        self.assertFalse(route.trip_type_id)
+        transit_import = self.env["taj.transport.trip.type"].create({"name": "Import"})
+        transit_export = self.env["taj.transport.trip.type"].create({"name": "Export"})
+        route.write({"trip_type_id": transit_import.id})
+        self.assertEqual(route.trip_type_id, transit_import)
         self.assertIn(
             route,
             self.env["taj.transport.route"].search([
-                ("file_type_id", "=", transit_import.id),
+                ("trip_type_id", "=", transit_import.id),
             ]),
         )
-        route.write({"file_type_id": transit_export.id})
-        self.assertEqual(route.file_type_id, transit_export)
-        route.write({"file_type_id": False})
-        self.assertFalse(route.file_type_id)
+        route.write({"trip_type_id": transit_export.id})
+        self.assertEqual(route.trip_type_id, transit_export)
+        route.write({"trip_type_id": False})
+        self.assertFalse(route.trip_type_id)
 
     def test_route_menu_is_manager_scoped_and_views_are_valid(self):
         menu = self.env.ref("taj_transport_operations.menu_transport_routes")
@@ -280,7 +276,7 @@ class TestRouteTemplates(TajTransportPhase3Case):
             ).get_combined_arch()
         )
         self.assertEqual(len(form.xpath("//field[@name='line_ids']")), 1)
-        self.assertEqual(len(form.xpath("//field[@name='file_type_id']")), 1)
+        self.assertEqual(len(form.xpath("//field[@name='trip_type_id']")), 1)
         self.assertIn(
             self.env.ref(MANAGER_GROUP),
             self.env.ref(

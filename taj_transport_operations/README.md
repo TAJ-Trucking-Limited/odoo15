@@ -1,5 +1,15 @@
 # TAJ Transport Operations (Odoo 19)
 
+## Route Template classification (19.0.1.65.0)
+
+Route Templates use **Trip Type**. Odoo suggests it on sales lines when all
+active routes for the product and company share the same active Trip Type.
+A selected Trip Type filters eligible routes to matching or unclassified
+templates. On upgrade, existing route classifications are carried over to
+same-named Trip Types, and applicable sales lines with no Trip Type are
+backfilled. File Type remains a separate shipment field and supplies the
+Clearing Service default.
+
 ## Trip Type and Clearing Service defaults (19.0.1.64.0)
 
 Transport Managers maintain **TAJ Operations > Configuration > Trip Types**.
@@ -8,9 +18,8 @@ types to keep their historical references.
 
 In **Configuration > File Types**, set **Default Clearing Service** to Included
 or Not Included. Selecting that File Type auto-fills Clearing Service on the
-sales line, including when the File Type is suggested by its route or supplied
-through an import/API. The value remains editable; explicit values supplied by
-imports/API and explicit creation-context defaults are preserved. Selecting an
+sales line, including when File Type is supplied through an import or the API.
+The value remains editable. Explicit values and creation defaults are preserved. Selecting an
 unconfigured File Type or clearing the selection clears the auto-filled value.
 Changing the catalog default does not rewrite existing sales lines.
 
@@ -34,9 +43,8 @@ down payments, and cancelled orders are excluded.
 
 The default preserves the existing requirement for File Type on Goods product
 lines; the other 17 fields start optional. File Type can be unchecked, but Goods
-still need an active product-linked route, and a supplied File Type must match
-that route. Existing trip/route compatibility checks still apply. New rules are
-checked on the next save of an existing shipment; configuration does not rewrite
+still need an active product-linked route. Route compatibility checks use Trip
+Type. New rules are checked on the next save of an existing shipment. Configuration preserves
 historical data or grant access to locked order fields. Use the Sales line column
 selector to show required fields that were previously hidden.
 
@@ -481,7 +489,7 @@ File Type uses the manager-maintained catalog, initially Transit Import
 and Transit Export. Clearing Service offers Included and Not Included.
 Goods product lines require an active route template linked to the product
 in the order's company. File Type is required by default and can be made
-optional in company settings. When supplied, it limits route choices to
+optional in company settings. Selecting a Trip Type limits route choices to
 matching or unclassified templates. Saving the line and confirming the order
 both validate the route configuration. Services, sections, notes and down
 payments are exempt from the Goods route rule.
@@ -496,9 +504,11 @@ clears Vehicle so a separate shipment receives its own assignment.
 
 **Duplicate Line (19.0.1.22.0)** appears beside **Add a product**. It opens a
 modal to select a product line from the same quotation or sales order.
+**Number of Duplicates** controls how many additional copies are created;
+the default or an empty value creates one copy. Negative values are rejected.
 **Clear Container** clears Container Number and Weight. **Clear All Variables**
 also clears Cargo Type, Size, Cargo Description and Special Handling
-Instructions, and sets Unit Price to 0. Remaining shipment and commercial
+Instructions. Both modes preserve the source Unit Price on every copy. Remaining shipment and commercial
 values are copied, including the planned schedule; Vehicle and Analytical
 Account stay empty. The copy is
 appended to the order and the source line is unchanged. Trips, assignments,

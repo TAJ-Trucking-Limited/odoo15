@@ -9,6 +9,7 @@
                     <field name="sale_order_id"/>
                     <field name="source_line_id" context="{'transport_line_label': True}"
                            options="{'no_create': True, 'no_create_edit': True, 'no_open': True}"/>
+                    <field name="number_of_duplicates"/>
                     <field name="clean_mode" widget="radio"/>
                 </group>
                 <p class="text-muted" invisible="clean_mode != 'container'">
@@ -16,7 +17,7 @@
                 </p>
                 <p class="text-muted" invisible="clean_mode != 'all'">
                     Clear Container Number, Cargo Type, Size, Weight, Cargo Description
-                    and Special Handling Instructions. Set Unit Price to 0.
+                    and Special Handling Instructions. Keep Unit Price.
                 </p>
                 <footer>
                     <button name="action_duplicate" type="object" string="Duplicate Line" class="btn-primary"/>

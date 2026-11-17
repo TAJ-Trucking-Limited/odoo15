@@ -51,13 +51,13 @@ class TajTransportRoute(models.Model):
         "templates may share the same product. Leave empty for standalone "
         "or legacy templates that are chosen only on the trip form.",
     )
-    file_type_id = fields.Many2one(
-        "taj.transport.file.type",
-        string="File Type",
+    trip_type_id = fields.Many2one(
+        "taj.transport.trip.type",
+        string="Trip Type",
         index=True,
         ondelete="restrict",
-        help="Optional file classification for this route template. "
-        "Transport Managers maintain the available file types.",
+        help="Optional trip classification for this route template. "
+        "Transport Managers maintain the available trip types.",
     )
     origin_location = fields.Char(
         string="Planned Origin",
@@ -102,12 +102,12 @@ class TajTransportRoute(models.Model):
             ("active", "=", True),
         ]
         # An unclassified legacy template remains usable, but explicitly
-        # classified templates must match the Sales line's selected File Type.
-        if sale_line.file_type_id:
+        # classified templates must match the Sales line's selected Trip Type.
+        if sale_line.trip_type_id:
             domain += [
                 "|",
-                ("file_type_id", "=", False),
-                ("file_type_id", "=", sale_line.file_type_id.id),
+                ("trip_type_id", "=", False),
+                ("trip_type_id", "=", sale_line.trip_type_id.id),
             ]
         return self.search(domain)._filtered_access("read")
 
