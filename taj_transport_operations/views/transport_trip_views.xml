@@ -84,7 +84,7 @@
                             groups="taj_transport_operations.group_transport_manager"
                             invisible="state != 'in_progress'"/>
                     <field name="state" widget="statusbar" readonly="1"
-                           statusbar_visible="draft,ready,in_progress,completed,cancelled"/>
+                           statusbar_visible="draft,in_progress,completed,cancelled"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -466,7 +466,6 @@
                 <field name="destination_location"/>
                 <field name="initial_vehicle_id"/>
                 <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                <filter name="ready" string="Ready" domain="[('state', '=', 'ready')]"/>
                 <filter name="in_progress" string="In Progress" domain="[('state', '=', 'in_progress')]"/>
                 <filter name="completed" string="Completed" domain="[('state', '=', 'completed')]"/>
                 <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancelled')]"/>
