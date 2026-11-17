@@ -1,5 +1,45 @@
 # TAJ Transport Operations (Odoo 19)
 
+## Trip Type and Clearing Service defaults (19.0.1.64.0)
+
+Transport Managers maintain **TAJ Operations > Configuration > Trip Types**.
+Sales lines have an optional Trip Type column and popup field. Archive unused
+types to keep their historical references.
+
+In **Configuration > File Types**, set **Default Clearing Service** to Included
+or Not Included. Selecting that File Type auto-fills Clearing Service on the
+sales line, including when the File Type is suggested by its route or supplied
+through an import/API. The value remains editable; explicit values supplied by
+imports/API and explicit creation-context defaults are preserved. Selecting an
+unconfigured File Type or clearing the selection clears the auto-filled value.
+Changing the catalog default does not rewrite existing sales lines.
+
+## Sale order line requirements (19.0.1.63.0)
+
+Transport Managers configure required fields under **TAJ Operations >
+Configuration > Settings > Sale Order Line Requirements**. Check a field to
+require it on save; leave it unchecked to make it optional. Settings apply to
+the active company and cover only these 18 fields:
+
+Container Number, Shipment Reference Number, Consignee, Size, Weight, File Name,
+File Type, Clearing Service, Bill of Lading, ETA, ETOL, Shipping Line, Cargo Type,
+Cargo Description, Special Handling Instructions, Planned Departure, Planned
+Arrival, and Analytic Account.
+
+Requirements apply when saving quotations, sales orders, and shipment lines,
+including imports, API updates, and File Number shipment edits. Missing values
+are reported by order and line. Whitespace-only text counts as empty; zero
+Weight and Clearing Service = Not Included are valid values. Sections, notes,
+down payments, and cancelled orders are excluded.
+
+The default preserves the existing requirement for File Type on Goods product
+lines; the other 17 fields start optional. File Type can be unchecked, but Goods
+still need an active product-linked route, and a supplied File Type must match
+that route. Existing trip/route compatibility checks still apply. New rules are
+checked on the next save of an existing shipment; configuration does not rewrite
+historical data or grant access to locked order fields. Use the Sales line column
+selector to show required fields that were previously hidden.
+
 ## Shipment entry and dispatch updates (19.0.1.44.0)
 
 - ETA and ETOL are date-only fields on Sales lines and File Number shipments.
@@ -433,16 +473,18 @@ Weight, Cargo Desc., Special Handling Instructions, QTY, Unit Price,
 Tax, Amount, Analytical Account and Vehicle, in that order. Size starts hidden
 and remains available through the optional columns menu. Analytical Account
 requires the Analytic Accounting group. Other standard columns and the
-planned schedule remain available through the optional columns menu. The
-planned schedule block is no longer shown on the line form. ETA and ETOL are
+planned schedule remain available through the optional columns menu. All 18
+configurable fields are also available on the line form. ETA and ETOL are
 shipment dates, separate from the planned trip times.
 
 File Type uses the manager-maintained catalog, initially Transit Import
 and Transit Export. Clearing Service offers Included and Not Included.
-File Type does not filter route templates. Goods product lines require
-a File Type and an active route template linked to the product in the
-order's company. Saving the line and confirming the order both validate
-this rule. Services, sections, notes and down payments are exempt.
+Goods product lines require an active route template linked to the product
+in the order's company. File Type is required by default and can be made
+optional in company settings. When supplied, it limits route choices to
+matching or unclassified templates. Saving the line and confirming the order
+both validate the route configuration. Services, sections, notes and down
+payments are exempt from the Goods route rule.
 
 Bill of Lading and Container Number on File Number shipment rows read and
 update the linked Sales Order line. Historical snapshots are preserved separately.

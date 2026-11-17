@@ -52,13 +52,22 @@
                         groups="taj_transport_operations.group_transport_user"
                         invisible="display_type not in [False, 'product'] or transport_trip_count == 0"/>
             </xpath>
+            <xpath expr="//sheet" position="inside">
+                <field name="transport_required_shipment_fields" invisible="1"/>
+            </xpath>
             <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
                 <group string="Shipment Details" invisible="display_type not in [False, 'product']">
+                    <field name="trip_type_id" options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="file_type_id" required="product_type == 'consu' and not is_downpayment"
                            options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="clearing_service"/>
+                    <field name="file_name"/>
+                    <field name="srn" string="Shipment Reference Number"/>
+                    <field name="consignee" string="Consignee"/>
                     <field name="bill_of_lading"/>
+                    <field name="container_num" string="Container Number"/>
                     <field name="eta" options="{'numeric': True}"/>
+                    <field name="etol" options="{'numeric': True}"/>
                     <field name="shipping_line"/>
                     <field name="analytic_account_id" string="Analytical Account"/>
                     <field name="vehicle_id" readonly="1"/>
@@ -66,10 +75,16 @@
                 <group string="Cargo Details" invisible="display_type not in [False, 'product']">
                     <field name="cargo_type_id"
                            options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="size" string="Size"/>
+                    <field name="weight" string="Weight"/>
                     <field name="cargo_description"
-                           placeholder="Optional description of the goods to transport"/>
+                           placeholder="Description of the goods to transport"/>
                     <field name="special_handling_instructions"
-                           placeholder="Optional loading, storage or handling notes"/>
+                           placeholder="Loading, storage or handling notes"/>
+                </group>
+                <group string="Transport Schedule" invisible="display_type not in [False, 'product']">
+                    <field name="transport_planned_departure_at"/>
+                    <field name="transport_planned_arrival_at"/>
                 </group>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='name']" position="after">
@@ -80,12 +95,15 @@
                        optional="show" invisible="display_type not in [False, 'product']"/>
                 <field name="cargo_description" optional="show"
                        invisible="display_type not in [False, 'product']"
-                       placeholder="Optional description of the goods to transport"/>
+                       placeholder="Description of the goods to transport"/>
                 <field name="special_handling_instructions" optional="show"
                        invisible="display_type not in [False, 'product']"
-                       placeholder="Optional loading, storage or handling notes"/>
+                       placeholder="Loading, storage or handling notes"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='product_template_id']" position="after">
+                <field name="trip_type_id" optional="show"
+                       invisible="display_type not in [False, 'product']"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
                 <field name="file_type_id" optional="show"
                        required="not display_type and product_type == 'consu' and not is_downpayment"
                        invisible="display_type not in [False, 'product']"

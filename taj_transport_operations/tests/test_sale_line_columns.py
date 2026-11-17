@@ -204,6 +204,7 @@ class TestSaleLineColumns(TransactionCase):
             visible,
             [
                 "product_template_id",
+                "trip_type_id",
                 "file_type_id",
                 "clearing_service",
                 "consignee",

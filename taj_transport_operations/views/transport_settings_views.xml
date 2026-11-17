@@ -9,6 +9,17 @@
                     <group>
                         <field name="dispatch_cutoff_date"/>
                     </group>
+                    <group string="Sale Order Line Requirements">
+                        <field name="required_shipment_field_ids" widget="many2many_checkboxes"
+                               context="{'hide_model': True}"
+                               options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                    <p>Checked Shipment and Cargo fields are required whenever a quotation
+                       or sales order is saved, including imports and API updates.
+                       Unchecked fields are optional. File Type applies only to Goods
+                       product lines. Sections, notes and down payments are excluded.
+                       Changes apply to this company; existing shipments must meet the
+                       new requirements when they are next saved.</p>
                     <group string="Trip Inactivity Alerts">
                         <field name="company_id" readonly="1"/>
                         <field name="inactivity_alerts_enabled"/>

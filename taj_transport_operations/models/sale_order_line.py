@@ -5,11 +5,38 @@ from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 from .transport_trip_file import SHIPMENT_FIELDS, _FILE_SHIPMENT_WRITE
+from .transport_settings import CONFIGURABLE_SHIPMENT_FIELDS
 
 _CONFIRMED_PRICE_WRITE = object()
 
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
+
+    def _check_required_shipment_fields(self):
+        missing = []
+        for line in self:
+            if (
+                line.display_type not in (False, "product")
+                or line.is_downpayment or line.order_id.state == "cancel"
+            ):
+                continue
+            names = line.company_id.sudo().transport_required_shipment_fields or []
+            labels = []
+            for name in CONFIGURABLE_SHIPMENT_FIELDS:
+                if name not in names or (name == "file_type_id" and line.product_id.type != "consu"):
+                    continue
+                value = line[name]
+                if not (value.strip() if isinstance(value, str) else value):
+                    labels.append(line._fields[name]._description_string(self.env))
+            if labels:
+                missing.append(_("%(order)s — line %(line)s (%(product)s): %(fields)s") % {
+                    "order": line.order_id.display_name,
+                    "line": line.order_id.order_line.ids.index(line.id) + 1,
+                    "product": line.product_id.display_name or line.name,
+                    "fields": ", ".join(labels),
+                })
+        if missing:
+            raise ValidationError(_("Missing required shipment fields:\n%s") % "\n".join(missing))
 
     allocation_date = fields.Datetime(
         string="Allocation Date", readonly=True, copy=False,
@@ -215,6 +242,9 @@ class SaleOrderLine(models.Model):
                     line.product_updatable = True
 
     vehicle_id = fields.Many2one(readonly=True, copy=False)
+    trip_type_id = fields.Many2one(
+        "taj.transport.trip.type", string="Trip Type", ondelete="restrict",
+    )
     file_type_id = fields.Many2one(
         "taj.transport.file.type",
         string="File Type",
@@ -224,6 +254,13 @@ class SaleOrderLine(models.Model):
         [("included", "Included"), ("not_included", "Not Included")],
         string="Clearing Service",
     )
+
+    @api.onchange("file_type_id")
+    def _onchange_file_type_clearing_service(self):
+        for line in self:
+            if line.display_type in (False, "product") and not line.is_downpayment:
+                line.clearing_service = line.file_type_id.clearing_service
+
     bill_of_lading = fields.Char(string="Bill of Lading")
     eta = fields.Date(string="ETA")
     weight = fields.Char(help="Enter a number such as 1250 or 1250.5, without units.")
@@ -306,11 +343,7 @@ class SaleOrderLine(models.Model):
                 or line.product_id.type != "consu"
             ):
                 continue
-            if not line.file_type_id:
-                raise ValidationError(
-                    _("Select a File Type for Goods product %(product)s.")
-                    % {"product": line.product_id.display_name}
-                )
+            line._check_required_shipment_fields()
             # Sales users need not have route-maintenance read access.
             routes = self.env["taj.transport.route"].sudo().search([
                 ("product_tmpl_id", "=", line.product_id.product_tmpl_id.id),
@@ -330,7 +363,7 @@ class SaleOrderLine(models.Model):
                 )
             # Unclassified legacy templates are compatible with any chosen
             # File Type; classified templates must agree with the Sales line.
-            if not any(
+            if line.file_type_id and not any(
                 not route.file_type_id or route.file_type_id == line.file_type_id
                 for route in routes
             ):
@@ -569,6 +602,7 @@ class SaleOrderLine(models.Model):
         if any("allocation_date" in vals for vals in vals_list):
             raise UserError(_("Allocation Date is recorded automatically."))
         default_vehicle = self.default_get(["vehicle_id"]).get("vehicle_id")
+        default_file_type = self.default_get(["file_type_id"]).get("file_type_id")
         vals_list = [dict(vals) for vals in vals_list]
         default_order_id = (
             self.default_get(["order_id"]).get("order_id")
@@ -601,17 +635,29 @@ class SaleOrderLine(models.Model):
                 )
                 if file_type:
                     vals["file_type_id"] = file_type.id
+            if (
+                "clearing_service" not in vals
+                and "default_clearing_service" not in self.env.context
+                and vals.get("display_type") in (False, None, "product")
+                and not vals.get("is_downpayment")
+            ):
+                file_type_id = vals.get("file_type_id", default_file_type)
+                if file_type_id:
+                    vals["clearing_service"] = self.env["taj.transport.file.type"].browse(file_type_id).clearing_service
         order_ids = [vals.get("order_id", default_order_id) for vals in vals_list]
         self.env["sale.order"].browse(
             [order_id for order_id in order_ids if order_id]
         )._check_confirmed_sale_edit_access()
         lines = super().create(vals_list)
+        lines._check_required_shipment_fields()
         confirmed = lines.filtered(lambda line: line.order_id.state in ("sale", "done"))
         self.env["taj.transport.trip.file"]._ensure_for_sale_lines(confirmed)
         return lines
 
     def write(self, vals):
         vals = self._normalize_shipment_weight(vals)
+        if "file_type_id" in vals and "clearing_service" not in vals:
+            vals = dict(vals, clearing_service=self.env["taj.transport.file.type"].browse(vals["file_type_id"]).clearing_service)
         if set(vals) == {"etol"} and not self.env.su and self.env.user.has_group(
             "taj_transport_operations.group_transport_user"
         ) and any(line.order_id.state in ("sale", "done", "cancel") for line in self):
@@ -692,6 +738,7 @@ class SaleOrderLine(models.Model):
         # An account-only change must not trigger the unrelated VAT synchronizer.
         target = self.with_context(move_invoice_line_skip_vat_percentage_sync=True) if analytic_only else self
         result = super(SaleOrderLine, target).write(vals)
+        self._check_required_shipment_fields()
         if analytic_only:
             for line in self.filtered(lambda item: item.order_id.state in ("sale", "done")):
                 old_id, old_name = old_accounts[line.id]

@@ -4,8 +4,8 @@ from datetime import datetime, time
 
 import pytz
 
-from odoo import _, api, fields, models
-from odoo.exceptions import AccessError
+from odoo import Command, _, api, fields, models
+from odoo.exceptions import AccessError, ValidationError
 from odoo.tools.safe_eval import safe_eval
 
 CUTOFF_PARAM = "taj_transport_operations.dispatch_cutoff_date"
@@ -13,6 +13,43 @@ DISPATCH_ACTIONS = {
     "taj_transport_operations.action_sale_order_line_without_trip",
     "taj_transport_operations.action_sale_order_line_without_truck",
 }
+
+CONFIGURABLE_SHIPMENT_FIELDS = (
+    "container_num", "srn", "consignee", "size", "weight", "file_name",
+    "file_type_id", "clearing_service", "bill_of_lading", "eta", "etol",
+    "shipping_line", "cargo_type_id", "cargo_description",
+    "special_handling_instructions", "transport_planned_departure_at",
+    "transport_planned_arrival_at", "analytic_account_id",
+)
+
+
+class ResCompany(models.Model):
+    _inherit = "res.company"
+
+    transport_required_shipment_fields = fields.Json(
+        string="Required Shipment Fields",
+        default=lambda self: ["file_type_id"],
+        help="Shipment fields required when saving a quotation or sales order. "
+        "File Type applies only to Goods product lines.",
+    )
+
+    @api.constrains("transport_required_shipment_fields")
+    def _check_required_shipment_field_names(self):
+        for company in self:
+            names = company.transport_required_shipment_fields or []
+            if not isinstance(names, list) or any(
+                not isinstance(name, str) or name not in CONFIGURABLE_SHIPMENT_FIELDS
+                for name in names
+            ):
+                raise ValidationError(_("Only the 18 Shipment and Cargo fields can be configured."))
+
+    def write(self, vals):
+        if "transport_required_shipment_fields" in vals and not self.env.su:
+            if not self.env.user.has_group("taj_transport_operations.group_transport_manager"):
+                raise AccessError(_("Only a Transport Manager can change shipment requirements."))
+            if any(company not in self.env.companies for company in self):
+                raise AccessError(_("Configure requirements only for an allowed company."))
+        return super().write(vals)
 
 
 def get_dispatch_cutoff_date(env):
@@ -63,6 +100,15 @@ class TajTransportSettings(models.TransientModel):
         string="Inactivity Hours", default=24, required=True
     )
     inactivity_recipient = fields.Char(string="Alert Recipient Email")
+    required_shipment_field_ids = fields.Many2many(
+        "ir.model.fields", string="Required Shipment and Cargo Fields",
+        domain=lambda self: [
+            ("model", "=", "sale.order.line"),
+            ("name", "in", CONFIGURABLE_SHIPMENT_FIELDS),
+        ],
+        help="Checked fields are required on save. Unchecked fields are optional. "
+        "File Type applies only to Goods product lines.",
+    )
 
     @api.model
     def default_get(self, fields_list):
@@ -70,6 +116,12 @@ class TajTransportSettings(models.TransientModel):
         if "dispatch_cutoff_date" in fields_list:
             values["dispatch_cutoff_date"] = get_dispatch_cutoff_date(self.env)
         company = self.env.company
+        if "required_shipment_field_ids" in fields_list:
+            selected = self.env["ir.model.fields"].search([
+                ("model", "=", "sale.order.line"),
+                ("name", "in", company.transport_required_shipment_fields or []),
+            ])
+            values["required_shipment_field_ids"] = [Command.set(selected.ids)]
         for field, source in (
             ("inactivity_alerts_enabled", "transport_inactivity_enabled"),
             ("inactivity_hours", "transport_inactivity_hours"),
@@ -89,8 +141,14 @@ class TajTransportSettings(models.TransientModel):
             )
         if self.company_id != self.env.company:
             raise AccessError(_("Open settings in the company you want to configure."))
+        if any(
+            field.model != "sale.order.line" or field.name not in CONFIGURABLE_SHIPMENT_FIELDS
+            for field in self.required_shipment_field_ids
+        ):
+            raise ValidationError(_("Only the 18 Shipment and Cargo fields can be configured."))
         self.company_id.sudo().write(
             {
+                "transport_required_shipment_fields": self.required_shipment_field_ids.mapped("name"),
                 "transport_inactivity_enabled": self.inactivity_alerts_enabled,
                 "transport_inactivity_hours": self.inactivity_hours,
                 "transport_inactivity_recipient": (

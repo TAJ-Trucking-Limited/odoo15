@@ -14,5 +14,11 @@ class TajTransportFileType(models.Model):
     )
 
     name = fields.Char(string="File Type", required=True)
+    clearing_service = fields.Selection(
+        [("included", "Included"), ("not_included", "Not Included")],
+        string="Default Clearing Service",
+        help="Auto-filled when this File Type is selected on a sales line. "
+        "Users can override it. Leave empty for no default.",
+    )
     sequence = fields.Integer(default=10)
     active = fields.Boolean(default=True)

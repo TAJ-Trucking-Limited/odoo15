@@ -2,6 +2,7 @@ from ast import literal_eval
 
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+from .transport_settings import CONFIGURABLE_SHIPMENT_FIELDS
 
 
 # Only trusted accounting methods can supply this object; RPC context values cannot.
@@ -12,6 +13,10 @@ _CONFIRMED_SALE_CANCEL = object()
 
 class SaleOrder(models.Model):
     _inherit = "sale.order"
+
+    transport_required_shipment_fields = fields.Json(
+        related="company_id.transport_required_shipment_fields", readonly=True,
+    )
 
     transport_confirmed_readonly = fields.Boolean(compute="_compute_transport_confirmed_readonly")
 
@@ -76,6 +81,15 @@ class SaleOrder(models.Model):
                     # Keep the one2many editable so its analytical account cell can be saved.
                     node.set("readonly", "state == 'cancel'")
                     for child in node.xpath("./list//field | ./form//field"):
+                        name = child.get("name")
+                        if name in CONFIGURABLE_SHIPMENT_FIELDS:
+                            required = (
+                                "display_type in [False, 'product'] and not is_downpayment "
+                                "and '%s' in (parent.transport_required_shipment_fields or [])" % name
+                            )
+                            if name == "file_type_id":
+                                required += " and product_type == 'consu'"
+                            child.set("required", required)
                         if child.get("name") != "analytic_account_id":
                             readonly = child.get("readonly", "False")
                             if readonly not in ("1", "True"):
@@ -119,11 +133,19 @@ class SaleOrder(models.Model):
                 raise AccessError(_("The line must belong to this Sales Order."))
             for command in commands:
                 lines.browse(command[1]).write(command[2])
+            self.order_line._check_required_shipment_fields()
             return True
         # Confirmation may lock the order without granting permission to edit it.
         if vals and vals != {"locked": True}:
             self._check_confirmed_sale_edit_access()
-        return super().write(vals)
+        result = super().write(vals)
+        # Cancelling a locked order first unlocks it while its state is still sale.
+        if not (
+            vals == {"locked": False}
+            and self.env.context.get("_confirmed_sale_cancel") is _CONFIRMED_SALE_CANCEL
+        ):
+            self.order_line._check_required_shipment_fields()
+        return result
 
     transport_customer_email = fields.Char(
         string="Customer Email", related="partner_id.email",
@@ -169,6 +191,7 @@ class SaleOrder(models.Model):
             order.trip_file_count = len(order.trip_file_ids)
 
     def _action_confirm(self):
+        self.order_line._check_required_shipment_fields()
         self.order_line._check_goods_transport_configuration()
         result = super()._action_confirm()
         self.env["taj.transport.trip.file"]._ensure_for_sale_lines(self.order_line)
