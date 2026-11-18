@@ -8,78 +8,118 @@ from .transport_trip_file import SHIPMENT_FIELDS, _FILE_SHIPMENT_WRITE
 from .transport_settings import CONFIGURABLE_SHIPMENT_FIELDS
 
 _CONFIRMED_PRICE_WRITE = object()
+# Only the confirmation warning's Proceed button can supply this object.
+_CONFIRM_MISSING_SHIPMENT_FIELDS = object()
+
 
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
 
-    def _check_required_shipment_fields(self):
+    def _missing_required_shipment_fields(self):
+        """One message per line listing its empty configured shipment fields."""
         missing = []
         for line in self:
             if (
                 line.display_type not in (False, "product")
-                or line.is_downpayment or line.order_id.state == "cancel"
+                or line.is_downpayment
+                or line.order_id.state == "cancel"
             ):
                 continue
             names = line.company_id.sudo().transport_required_shipment_fields or []
             labels = []
             for name in CONFIGURABLE_SHIPMENT_FIELDS:
-                if name not in names or (name == "file_type_id" and line.product_id.type != "consu"):
+                if name not in names or (
+                    name == "file_type_id" and line.product_id.type != "consu"
+                ):
                     continue
                 value = line[name]
                 if not (value.strip() if isinstance(value, str) else value):
                     labels.append(line._fields[name]._description_string(self.env))
             if labels:
-                missing.append(_("%(order)s — line %(line)s (%(product)s): %(fields)s") % {
-                    "order": line.order_id.display_name,
-                    "line": line.order_id.order_line.ids.index(line.id) + 1,
-                    "product": line.product_id.display_name or line.name,
-                    "fields": ", ".join(labels),
-                })
+                missing.append(
+                    _("%(order)s — line %(line)s (%(product)s): %(fields)s")
+                    % {
+                        "order": line.order_id.display_name,
+                        "line": line.order_id.order_line.ids.index(line.id) + 1,
+                        "product": line.product_id.display_name or line.name,
+                        "fields": ", ".join(labels),
+                    }
+                )
+        return missing
+
+    def _check_required_shipment_fields(self):
+        # The confirmation warning already told the user and they chose to proceed.
+        if (
+            self.env.context.get("_confirm_missing_shipment_fields")
+            is _CONFIRM_MISSING_SHIPMENT_FIELDS
+        ):
+            return
+        missing = self._missing_required_shipment_fields()
         if missing:
-            raise ValidationError(_("Missing required shipment fields:\n%s") % "\n".join(missing))
+            raise ValidationError(
+                _("Missing required shipment fields:\n%s") % "\n".join(missing)
+            )
 
     allocation_date = fields.Datetime(
-        string="Allocation Date", readonly=True, copy=False,
+        string="Allocation Date",
+        readonly=True,
+        copy=False,
         help="Time the Sales line first received a truck. Replacements preserve this date.",
     )
     transport_allocated_driver_id = fields.Many2one(
-        "res.partner", string="Driver at Allocation", readonly=True, copy=False,
+        "res.partner",
+        string="Driver at Allocation",
+        readonly=True,
+        copy=False,
         help="Driver selected with the first Sales truck, used when a Trip is created later.",
     )
     transport_driver_choice_set = fields.Boolean(
-        readonly=True, copy=False,
+        readonly=True,
+        copy=False,
         help="The Assign Truck dialog explicitly selected a driver (or no driver).",
     )
     transport_allocated_trailer_id = fields.Many2one(
-        "fleet.vehicle", string="Trailer at Allocation", readonly=True, copy=False,
+        "fleet.vehicle",
+        string="Trailer at Allocation",
+        readonly=True,
+        copy=False,
         help="Trailer selected with the Sales truck allocation, used when a Trip is created later.",
     )
     transport_trailer_choice_set = fields.Boolean(
-        readonly=True, copy=False,
+        readonly=True,
+        copy=False,
         help="The Assign Truck / Edit Info dialog explicitly selected a trailer (or no trailer).",
     )
 
     transport_dispatch_driver_id = fields.Many2one(
-        "res.partner", string="Driver", compute="_compute_transport_dispatch_driver_id",
+        "res.partner",
+        string="Driver",
+        compute="_compute_transport_dispatch_driver_id",
         readonly=True,
         help="Driver selected during allocation; if a Trip has Resources, "
-             "show their assigned driver instead. Older lines fall back "
-             "to the Fleet truck's default driver.",
+        "show their assigned driver instead. Older lines fall back "
+        "to the Fleet truck's default driver.",
     )
 
     @api.depends(
-        "vehicle_id", "vehicle_id.driver_id", "transport_allocated_driver_id",
-        "transport_driver_choice_set", "transport_trip_ids.state",
+        "vehicle_id",
+        "vehicle_id.driver_id",
+        "transport_allocated_driver_id",
+        "transport_driver_choice_set",
+        "transport_trip_ids.state",
         "transport_trip_ids.current_assignment_id.driver_id",
     )
     def _compute_transport_dispatch_driver_id(self):
         for line in self:
             open_trip = line.transport_trip_ids.filtered(
-                lambda trip: trip.state in ("draft", "ready")
-                and trip.current_assignment_id
+                lambda trip: (
+                    trip.state in ("draft", "ready") and trip.current_assignment_id
+                )
             )[:1]
             if open_trip:
-                line.transport_dispatch_driver_id = open_trip.current_assignment_id.driver_id
+                line.transport_dispatch_driver_id = (
+                    open_trip.current_assignment_id.driver_id
+                )
             elif line.transport_driver_choice_set:
                 # A deliberately blank driver choice must stay blank.
                 line.transport_dispatch_driver_id = line.transport_allocated_driver_id
@@ -104,7 +144,9 @@ class SaleOrderLine(models.Model):
                 "UPDATE sale_order_line SET write_date = write_date WHERE id = ANY(%s)",
                 (sorted(self.ids),),
             )
-        self.invalidate_recordset(["vehicle_id", "allocation_date", "transport_trip_ids"])
+        self.invalidate_recordset(
+            ["vehicle_id", "allocation_date", "transport_trip_ids"]
+        )
 
     transport_file_line_ids = fields.One2many(
         "taj.transport.trip.file.line",
@@ -147,9 +189,7 @@ class SaleOrderLine(models.Model):
             or self.env.user.has_group(
                 "taj_transport_operations.group_shipment_data_entry"
             )
-            or self.env.user.has_group(
-                "taj_transport_operations.group_transport_user"
-            )
+            or self.env.user.has_group("taj_transport_operations.group_transport_user")
             or self.env.user.has_group("base.group_system")
         ):
             raise AccessError(_("Shipment editing permission is required."))
@@ -209,14 +249,28 @@ class SaleOrderLine(models.Model):
     def action_open_confirmed_price_wizard(self):
         self.ensure_one()
         self.check_access("write")
-        if not self.env.user.has_group("taj_transport_operations.group_edit_confirmed_sale_orders"):
-            raise AccessError(_("Confirmed Sales Order Price Editing permission is required."))
-        if self.order_id.state not in ("sale", "done") or self.display_type or self.is_downpayment:
+        if not self.env.user.has_group(
+            "taj_transport_operations.group_edit_confirmed_sale_orders"
+        ):
+            raise AccessError(
+                _("Confirmed Sales Order Price Editing permission is required.")
+            )
+        if (
+            self.order_id.state not in ("sale", "done")
+            or self.display_type
+            or self.is_downpayment
+        ):
             raise UserError(_("Choose a confirmed product line."))
         return {
-            "type": "ir.actions.act_window", "name": _("Edit Unit Price"),
-            "res_model": "taj.transport.sale.price.wizard", "view_mode": "form", "target": "new",
-            "context": {"default_sale_line_id": self.id, "default_price_unit": self.price_unit},
+            "type": "ir.actions.act_window",
+            "name": _("Edit Unit Price"),
+            "res_model": "taj.transport.sale.price.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_sale_line_id": self.id,
+                "default_price_unit": self.price_unit,
+            },
         }
 
     @api.depends(
@@ -243,7 +297,9 @@ class SaleOrderLine(models.Model):
 
     vehicle_id = fields.Many2one(readonly=True, copy=False)
     trip_type_id = fields.Many2one(
-        "taj.transport.trip.type", string="Trip Type", ondelete="restrict",
+        "taj.transport.trip.type",
+        string="Trip Type",
+        ondelete="restrict",
     )
     file_type_id = fields.Many2one(
         "taj.transport.file.type",
@@ -264,7 +320,9 @@ class SaleOrderLine(models.Model):
     bill_of_lading = fields.Char(string="Bill of Lading")
     eta = fields.Date(string="ETA")
     weight = fields.Char(help="Enter a number such as 1250 or 1250.5, without units.")
-    analytic_account_id = fields.Many2one(domain="[('company_id', 'in', [False, company_id])]")
+    analytic_account_id = fields.Many2one(
+        domain="[('company_id', 'in', [False, company_id])]"
+    )
     etol = fields.Date(
         string="ETOL",
         help="Estimated time of loading (estimated loading date).",
@@ -281,11 +339,17 @@ class SaleOrderLine(models.Model):
         TripType = self.env["taj.transport.trip.type"]
         if not product_tmpl or not company:
             return TripType
-        routes = self.env["taj.transport.route"].sudo().search([
-            ("product_tmpl_id", "=", product_tmpl.id),
-            ("company_id", "=", company.id),
-            ("active", "=", True),
-        ])
+        routes = (
+            self.env["taj.transport.route"]
+            .sudo()
+            .search(
+                [
+                    ("product_tmpl_id", "=", product_tmpl.id),
+                    ("company_id", "=", company.id),
+                    ("active", "=", True),
+                ]
+            )
+        )
         if not routes:
             return TripType
         types = routes.mapped("trip_type_id")
@@ -345,11 +409,17 @@ class SaleOrderLine(models.Model):
                 continue
             line._check_required_shipment_fields()
             # Sales users need not have route-maintenance read access.
-            routes = self.env["taj.transport.route"].sudo().search([
-                ("product_tmpl_id", "=", line.product_id.product_tmpl_id.id),
-                ("company_id", "=", line.company_id.id),
-                ("active", "=", True),
-            ])
+            routes = (
+                self.env["taj.transport.route"]
+                .sudo()
+                .search(
+                    [
+                        ("product_tmpl_id", "=", line.product_id.product_tmpl_id.id),
+                        ("company_id", "=", line.company_id.id),
+                        ("active", "=", True),
+                    ]
+                )
+            )
             if not routes:
                 raise ValidationError(
                     _(
@@ -388,10 +458,12 @@ class SaleOrderLine(models.Model):
                 and trip.route_id.trip_type_id != line.trip_type_id
                 for trip in line.transport_trip_ids
             ):
-                raise ValidationError(_(
-                    "The Trip Type cannot differ from the Route Template "
-                    "of an existing transport trip."
-                ))
+                raise ValidationError(
+                    _(
+                        "The Trip Type cannot differ from the Route Template "
+                        "of an existing transport trip."
+                    )
+                )
 
     transport_planned_departure_at = fields.Datetime(
         string="Planned Departure",
@@ -459,9 +531,7 @@ class SaleOrderLine(models.Model):
             line.display_name = "%s [#%s]" % (label, line.id)
 
     def _check_single_dispatch_selection(self):
-        if not self.env.user.has_group(
-            "taj_transport_operations.group_transport_user"
-        ):
+        if not self.env.user.has_group("taj_transport_operations.group_transport_user"):
             raise AccessError(_("Transport Operations access is required."))
         if len(self) != 1:
             raise UserError(_("Select exactly one shipment line to continue."))
@@ -499,9 +569,7 @@ class SaleOrderLine(models.Model):
     def action_open_edit_info(self):
         self.ensure_one()
         self.check_access("read")
-        if not self.env.user.has_group(
-            "taj_transport_operations.group_transport_user"
-        ):
+        if not self.env.user.has_group("taj_transport_operations.group_transport_user"):
             raise AccessError(_("Transport Operations access is required."))
         return {
             "type": "ir.actions.act_window",
@@ -590,7 +658,11 @@ class SaleOrderLine(models.Model):
             if not value:
                 vals["weight"] = False
             elif not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value):
-                raise ValidationError(_("Weight must be a number, such as 1250 or 1250.5. Do not include units."))
+                raise ValidationError(
+                    _(
+                        "Weight must be a number, such as 1250 or 1250.5. Do not include units."
+                    )
+                )
             else:
                 vals["weight"] = value
         return vals
@@ -611,7 +683,8 @@ class SaleOrderLine(models.Model):
         for vals in vals_list:
             vals["allocation_date"] = (
                 fields.Datetime.now()
-                if vals.get("vehicle_id", default_vehicle) else False
+                if vals.get("vehicle_id", default_vehicle)
+                else False
             )
             if (
                 "trip_type_id" not in vals
@@ -622,9 +695,9 @@ class SaleOrderLine(models.Model):
                 template = (
                     self.env["product.template"].browse(vals["product_template_id"])
                     if vals.get("product_template_id")
-                    else self.env["product.product"].browse(
-                        vals.get("product_id")
-                    ).product_tmpl_id
+                    else self.env["product.product"]
+                    .browse(vals.get("product_id"))
+                    .product_tmpl_id
                 )
                 order = self.env["sale.order"].browse(
                     vals.get("order_id") or default_order_id
@@ -642,7 +715,11 @@ class SaleOrderLine(models.Model):
             ):
                 file_type_id = vals.get("file_type_id", default_file_type)
                 if file_type_id:
-                    vals["clearing_service"] = self.env["taj.transport.file.type"].browse(file_type_id).clearing_service
+                    vals["clearing_service"] = (
+                        self.env["taj.transport.file.type"]
+                        .browse(file_type_id)
+                        .clearing_service
+                    )
         order_ids = [vals.get("order_id", default_order_id) for vals in vals_list]
         self.env["sale.order"].browse(
             [order_id for order_id in order_ids if order_id]
@@ -656,16 +733,30 @@ class SaleOrderLine(models.Model):
     def write(self, vals):
         vals = self._normalize_shipment_weight(vals)
         if "file_type_id" in vals and "clearing_service" not in vals:
-            vals = dict(vals, clearing_service=self.env["taj.transport.file.type"].browse(vals["file_type_id"]).clearing_service)
-        if set(vals) == {"etol"} and not self.env.su and self.env.user.has_group(
-            "taj_transport_operations.group_transport_user"
-        ) and any(line.order_id.state in ("sale", "done", "cancel") for line in self):
+            vals = dict(
+                vals,
+                clearing_service=self.env["taj.transport.file.type"]
+                .browse(vals["file_type_id"])
+                .clearing_service,
+            )
+        if (
+            set(vals) == {"etol"}
+            and not self.env.su
+            and self.env.user.has_group("taj_transport_operations.group_transport_user")
+            and any(line.order_id.state in ("sale", "done", "cancel") for line in self)
+        ):
             self.check_access("read")
             self._lock_transport_vehicle()
             for line in self:
-                if (line.order_id.state not in ("sale", "done") or line.vehicle_id
-                        or line.transport_trip_ids or line.company_id not in self.env.companies):
-                    raise AccessError(_("Only confirmed, unallocated shipments can be edited."))
+                if (
+                    line.order_id.state not in ("sale", "done")
+                    or line.vehicle_id
+                    or line.transport_trip_ids
+                    or line.company_id not in self.env.companies
+                ):
+                    raise AccessError(
+                        _("Only confirmed, unallocated shipments can be edited.")
+                    )
                 row = line.transport_file_line_ids
                 if len(row) != 1:
                     raise AccessError(_("A single shipment file row is required."))
@@ -674,15 +765,29 @@ class SaleOrderLine(models.Model):
         analytic_only = set(vals) == {"analytic_account_id"}
         if analytic_only:
             self.check_access("write")
-            account = self.env["account.analytic.account"].browse(vals["analytic_account_id"]).exists()
+            account = (
+                self.env["account.analytic.account"]
+                .browse(vals["analytic_account_id"])
+                .exists()
+            )
             if vals["analytic_account_id"] and not account:
                 raise ValidationError(_("The analytical account does not exist."))
             if account:
                 account.check_access("read")
-            if account and any(account.company_id and account.company_id != line.company_id for line in self):
-                raise ValidationError(_("The analytical account must belong to the order company or be shared."))
+            if account and any(
+                account.company_id and account.company_id != line.company_id
+                for line in self
+            ):
+                raise ValidationError(
+                    _(
+                        "The analytical account must belong to the order company or be shared."
+                    )
+                )
             old_accounts = {
-                line.id: (line.analytic_account_id.id, line.analytic_account_id.display_name)
+                line.id: (
+                    line.analytic_account_id.id,
+                    line.analytic_account_id.display_name,
+                )
                 for line in self
             }
         if "allocation_date" in vals:
@@ -731,22 +836,36 @@ class SaleOrderLine(models.Model):
             self._lock_transport_vehicle()
             first_allocations = self.filtered(lambda line: not line.allocation_date)
             if first_allocations:
-                super(SaleOrderLine, first_allocations).write({
-                    "allocation_date": fields.Datetime.now(),
-                })
+                super(SaleOrderLine, first_allocations).write(
+                    {
+                        "allocation_date": fields.Datetime.now(),
+                    }
+                )
         # An account-only change must not trigger the unrelated VAT synchronizer.
-        target = self.with_context(move_invoice_line_skip_vat_percentage_sync=True) if analytic_only else self
+        target = (
+            self.with_context(move_invoice_line_skip_vat_percentage_sync=True)
+            if analytic_only
+            else self
+        )
         result = super(SaleOrderLine, target).write(vals)
         self._check_required_shipment_fields()
         if analytic_only:
-            for line in self.filtered(lambda item: item.order_id.state in ("sale", "done")):
+            for line in self.filtered(
+                lambda item: item.order_id.state in ("sale", "done")
+            ):
                 old_id, old_name = old_accounts[line.id]
                 new_account = line.analytic_account_id
                 if old_id != new_account.id:
                     old = "%s (#%s)" % (old_name, old_id) if old_id else _("Empty")
-                    new = "%s (#%s)" % (new_account.display_name, new_account.id) if new_account else _("Empty")
-                    line.order_id.message_post(body=Markup("<p>Analytical account on line #%s: %s → %s</p>") % (
-                        line.id, old, new))
+                    new = (
+                        "%s (#%s)" % (new_account.display_name, new_account.id)
+                        if new_account
+                        else _("Empty")
+                    )
+                    line.order_id.message_post(
+                        body=Markup("<p>Analytical account on line #%s: %s → %s</p>")
+                        % (line.id, old, new)
+                    )
         for row in rows:
             line = row.sale_line_id
             changes = []

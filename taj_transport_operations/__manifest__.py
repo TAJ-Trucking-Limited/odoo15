@@ -38,6 +38,7 @@
         "wizard/replace_resource_assignment_wizard_views.xml",
         "wizard/cancel_trip_wizard_views.xml",
         "wizard/sale_cancel_wizard_views.xml",
+        "wizard/sale_confirm_wizard_views.xml",
         "wizard/trip_milestone_wizard_views.xml",
         "wizard/trip_activity_wizard_views.xml",
         "wizard/duplicate_sale_line_wizard_views.xml",

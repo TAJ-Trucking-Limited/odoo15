@@ -2,6 +2,7 @@ from ast import literal_eval
 
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+from .sale_order_line import _CONFIRM_MISSING_SHIPMENT_FIELDS
 from .transport_settings import CONFIGURABLE_SHIPMENT_FIELDS
 
 
@@ -15,28 +16,37 @@ class SaleOrder(models.Model):
     _inherit = "sale.order"
 
     transport_required_shipment_fields = fields.Json(
-        related="company_id.transport_required_shipment_fields", readonly=True,
+        related="company_id.transport_required_shipment_fields",
+        readonly=True,
     )
 
-    transport_confirmed_readonly = fields.Boolean(compute="_compute_transport_confirmed_readonly")
+    transport_confirmed_readonly = fields.Boolean(
+        compute="_compute_transport_confirmed_readonly"
+    )
 
     @api.depends("state")
     @api.depends_context("uid")
     def _compute_transport_confirmed_readonly(self):
         allowed = self.env.su
         for order in self:
-            order.transport_confirmed_readonly = order.state in ("sale", "done") and not allowed
+            order.transport_confirmed_readonly = (
+                order.state in ("sale", "done") and not allowed
+            )
 
     def _check_confirmed_sale_edit_access(self):
-        if self.env.context.get("_confirmed_sale_accounting") is _CONFIRMED_SALE_ACCOUNTING:
+        if (
+            self.env.context.get("_confirmed_sale_accounting")
+            is _CONFIRMED_SALE_ACCOUNTING
+        ):
             return
         if self.env.context.get("_confirmed_sale_cancel") is _CONFIRMED_SALE_CANCEL:
             return
-        if (not self.env.su
-                and any(order.state in ("sale", "done") for order in self)):
-            raise AccessError(_(
-                "Confirmed sales orders are locked. The analytical account can be edited; authorized users can also use Edit Unit Price."
-            ))
+        if not self.env.su and any(order.state in ("sale", "done") for order in self):
+            raise AccessError(
+                _(
+                    "Confirmed sales orders are locked. The analytical account can be edited; authorized users can also use Edit Unit Price."
+                )
+            )
 
     def _should_be_locked(self):
         self.ensure_one()
@@ -53,9 +63,11 @@ class SaleOrder(models.Model):
         if not self.env.context.get("confirm_sale_cancel_with_trips"):
             with_trips = self.filtered("transport_trip_ids")
             if with_trips:
-                wizard = self.env["taj.transport.sale.cancel.wizard"].create({
-                    "sale_order_ids": [Command.set(self.ids)],
-                })
+                wizard = self.env["taj.transport.sale.cancel.wizard"].create(
+                    {
+                        "sale_order_ids": [Command.set(self.ids)],
+                    }
+                )
                 return {
                     "type": "ir.actions.act_window",
                     "name": _("Cancel Sales Order"),
@@ -73,7 +85,9 @@ class SaleOrder(models.Model):
     @api.model
     def _get_view(self, view_id=None, view_type="form", **options):
         arch, view = super()._get_view(view_id, view_type, **options)
-        if view_type == "form" and arch.xpath(".//field[@name='transport_confirmed_readonly'][not(ancestor::field)]"):
+        if view_type == "form" and arch.xpath(
+            ".//field[@name='transport_confirmed_readonly'][not(ancestor::field)]"
+        ):
             # Include fields supplied by other Sales addons, preserving native modifiers.
             for node in arch.xpath(".//field[not(ancestor::field)]"):
                 field = self._fields.get(node.get("name"))
@@ -85,7 +99,8 @@ class SaleOrder(models.Model):
                         if name in CONFIGURABLE_SHIPMENT_FIELDS:
                             required = (
                                 "display_type in [False, 'product'] and not is_downpayment "
-                                "and '%s' in (parent.transport_required_shipment_fields or [])" % name
+                                "and '%s' in (parent.transport_required_shipment_fields or [])"
+                                % name
                             )
                             if name == "file_type_id":
                                 required += " and product_type == 'consu'"
@@ -93,15 +108,25 @@ class SaleOrder(models.Model):
                         if child.get("name") != "analytic_account_id":
                             readonly = child.get("readonly", "False")
                             if readonly not in ("1", "True"):
-                                child.set("readonly", "(%s) or parent.locked or parent.transport_confirmed_readonly" % readonly)
+                                child.set(
+                                    "readonly",
+                                    "(%s) or parent.locked or parent.transport_confirmed_readonly"
+                                    % readonly,
+                                )
                     options = literal_eval(node.get("options", "{}"))
-                    editable_order = [("state", "not in", ["sale", "done"]), ("locked", "=", False)]
+                    editable_order = [
+                        ("state", "not in", ["sale", "done"]),
+                        ("locked", "=", False),
+                    ]
                     options.update(create=editable_order, delete=editable_order)
                     node.set("options", repr(options))
                     continue
                 if field and not field.readonly:
                     readonly = node.get("readonly", "False")
-                    node.set("readonly", "(%s) or locked or transport_confirmed_readonly" % readonly)
+                    node.set(
+                        "readonly",
+                        "(%s) or locked or transport_confirmed_readonly" % readonly,
+                    )
         return arch, view
 
     def _create_down_payment_section_line_if_needed(self):
@@ -113,23 +138,36 @@ class SaleOrder(models.Model):
     def _create_down_payment_lines_from_base_lines(self, down_payment_base_lines):
         self.check_access("write")
         order = self.with_context(_confirmed_sale_accounting=_CONFIRMED_SALE_ACCOUNTING)
-        lines = super(SaleOrder, order)._create_down_payment_lines_from_base_lines(down_payment_base_lines)
+        lines = super(SaleOrder, order)._create_down_payment_lines_from_base_lines(
+            down_payment_base_lines
+        )
         return lines.with_env(self.env)
 
     def write(self, vals):
         # Accept only updates to existing own lines, and only the requested field.
-        if set(vals) == {"order_line"} and any(order.state in ("sale", "done") for order in self):
+        if set(vals) == {"order_line"} and any(
+            order.state in ("sale", "done") for order in self
+        ):
             self.check_access("write")
             commands = vals["order_line"]
             if not commands or any(
-                len(command) != 3 or command[0] != 1
+                len(command) != 3
+                or command[0] != 1
                 or not isinstance(command[2], dict)
                 or set(command[2]) != {"analytic_account_id"}
                 for command in commands
             ):
-                raise AccessError(_("Only analytical account changes to existing lines are allowed."))
-            lines = self.env["sale.order.line"].browse([command[1] for command in commands]).exists()
-            if len(lines) != len(set(command[1] for command in commands)) or any(line.order_id not in self for line in lines):
+                raise AccessError(
+                    _("Only analytical account changes to existing lines are allowed.")
+                )
+            lines = (
+                self.env["sale.order.line"]
+                .browse([command[1] for command in commands])
+                .exists()
+            )
+            if len(lines) != len(set(command[1] for command in commands)) or any(
+                line.order_id not in self for line in lines
+            ):
                 raise AccessError(_("The line must belong to this Sales Order."))
             for command in commands:
                 lines.browse(command[1]).write(command[2])
@@ -148,27 +186,35 @@ class SaleOrder(models.Model):
         return result
 
     transport_customer_email = fields.Char(
-        string="Customer Email", related="partner_id.email",
-        store=True, readonly=True,
+        string="Customer Email",
+        related="partner_id.email",
+        store=True,
+        readonly=True,
         help="Email taken from the customer record. The trips of this order "
-             "show the same address.",
+        "show the same address.",
     )
 
     transport_trip_ids = fields.One2many(
-        "taj.transport.trip", "sale_order_id",
-        string="Transport Trips", readonly=True,
+        "taj.transport.trip",
+        "sale_order_id",
+        string="Transport Trips",
+        readonly=True,
     )
     transport_trip_count = fields.Integer(
         compute="_compute_transport_trip_count",
         string="Transport Trips",
     )
     trip_file_ids = fields.One2many(
-        "taj.transport.trip.file", "sale_order_id", string="Trip File",
-        readonly=True, copy=False,
+        "taj.transport.trip.file",
+        "sale_order_id",
+        string="Trip File",
+        readonly=True,
+        copy=False,
         groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry",
     )
     trip_file_count = fields.Integer(
-        string="Trip File", compute="_compute_trip_file_count",
+        string="Trip File",
+        compute="_compute_trip_file_count",
         groups="sales_team.group_sale_salesman,taj_transport_operations.group_transport_user,taj_transport_operations.group_shipment_data_entry",
     )
 
@@ -190,6 +236,40 @@ class SaleOrder(models.Model):
         for order in self:
             order.trip_file_count = len(order.trip_file_ids)
 
+    def action_confirm(self):
+        """Warn about empty configured shipment fields before confirming.
+
+        Confirmation is not blocked: the warning lists the empty fields and
+        its Proceed button confirms the order with them still empty.
+        """
+        if (
+            self.env.context.get("_confirm_missing_shipment_fields")
+            is not _CONFIRM_MISSING_SHIPMENT_FIELDS
+        ):
+            missing = self.order_line._missing_required_shipment_fields()
+            if missing:
+                wizard = self.env["taj.transport.sale.confirm.wizard"].create(
+                    {
+                        "sale_order_ids": [Command.set(self.ids)],
+                    }
+                )
+                return {
+                    "type": "ir.actions.act_window",
+                    "name": _("Confirm Sales Order"),
+                    "res_model": "taj.transport.sale.confirm.wizard",
+                    "res_id": wizard.id,
+                    "view_mode": "form",
+                    "target": "new",
+                }
+        return super().action_confirm()
+
+    def action_confirm_with_missing_shipment_fields(self):
+        """Confirm after the warning listed the empty shipment fields."""
+        self.check_access("write")
+        return self.with_context(
+            _confirm_missing_shipment_fields=_CONFIRM_MISSING_SHIPMENT_FIELDS
+        ).action_confirm()
+
     def _action_confirm(self):
         self.order_line._check_required_shipment_fields()
         self.order_line._check_goods_transport_configuration()
@@ -200,26 +280,28 @@ class SaleOrder(models.Model):
     def action_view_trip_files(self):
         self.ensure_one()
         self.check_access("read")
-        action = self.env.ref(
-            "taj_transport_operations.action_transport_trip_file"
-        ).sudo().read()[0]
+        action = (
+            self.env.ref("taj_transport_operations.action_transport_trip_file")
+            .sudo()
+            .read()[0]
+        )
         action["domain"] = [("sale_order_id", "=", self.id)]
         return action
 
     def action_view_transport_trips(self):
         self.ensure_one()
-        action = self.env.ref(
-            "taj_transport_operations.action_transport_trip"
-        ).read()[0]
+        action = self.env.ref("taj_transport_operations.action_transport_trip").read()[
+            0
+        ]
         action["domain"] = [("sale_order_id", "=", self.id)]
         return action
 
     def action_prepare_transport_trips(self):
         self.ensure_one()
         if self.state not in ("sale", "done"):
-            raise UserError(_(
-                "Confirm the sales order before creating transport trips."
-            ))
+            raise UserError(
+                _("Confirm the sales order before creating transport trips.")
+            )
         return {
             "type": "ir.actions.act_window",
             "name": _("Create Transport Trips"),

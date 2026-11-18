@@ -24,4 +24,5 @@ from . import test_trip_email_concurrency
 from . import test_shipment_entry_edits
 from . import test_dispatch_resource_edit
 from . import test_shipment_requirements
+from . import test_confirm_warning
 from . import test_sale_line_types
