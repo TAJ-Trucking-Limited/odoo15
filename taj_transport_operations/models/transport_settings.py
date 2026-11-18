@@ -101,7 +101,8 @@ class TajTransportSettings(models.TransientModel):
     )
     inactivity_recipient = fields.Char(string="Alert Recipient Email")
     required_shipment_field_ids = fields.Many2many(
-        "ir.model.fields", string="Required Shipment and Cargo Fields",
+        "ir.model.fields",
+        string="Sale Order Required Fields",
         domain=lambda self: [
             ("model", "=", "sale.order.line"),
             ("name", "in", CONFIGURABLE_SHIPMENT_FIELDS),

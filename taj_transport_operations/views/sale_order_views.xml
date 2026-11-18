@@ -57,10 +57,10 @@
             </xpath>
             <xpath expr="//field[@name='order_line']/form/field[@name='name']" position="after">
                 <group string="Shipment Details" invisible="display_type not in [False, 'product']">
-                    <field name="trip_type_id" options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="file_type_id" required="product_type == 'consu' and not is_downpayment"
                            options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="clearing_service"/>
+                    <field name="trip_type_id" options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="file_name"/>
                     <field name="srn" string="Shipment Reference Number"/>
                     <field name="consignee" string="Consignee"/>
@@ -101,14 +101,14 @@
                        placeholder="Loading, storage or handling notes"/>
             </xpath>
             <xpath expr="//field[@name='order_line']/list/field[@name='product_template_id']" position="after">
-                <field name="trip_type_id" optional="show"
-                       invisible="display_type not in [False, 'product']"
-                       options="{'no_create': True, 'no_create_edit': True}"/>
                 <field name="file_type_id" optional="show"
                        required="not display_type and product_type == 'consu' and not is_downpayment"
                        invisible="display_type not in [False, 'product']"
                        options="{'no_create': True, 'no_create_edit': True}"/>
                 <field name="clearing_service" optional="show" invisible="display_type not in [False, 'product']"/>
+                <field name="trip_type_id" optional="show"
+                       invisible="display_type not in [False, 'product']"
+                       options="{'no_create': True, 'no_create_edit': True}"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='consignee']" position="move"/>
                 <field name="bill_of_lading" optional="show" invisible="display_type not in [False, 'product']"/>
                 <xpath expr="//field[@name='order_line']/list/field[@name='container_num']" position="move"/>
