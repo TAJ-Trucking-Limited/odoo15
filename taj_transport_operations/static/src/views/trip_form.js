@@ -45,11 +45,13 @@ class TripFormCompiler extends FormCompiler {
         const destinations = {
             trip_progress_section: {
                 label: "Go to Milestones tab",
-                handler: "__comp__.openMilestonesTab",
+                // Compiler-created slot buttons lose the OWL component as
+                // handler `this`; call through __comp__ like the kanban compiler.
+                handler: "(ev) => __comp__.openMilestonesTab(ev)",
             },
             trip_resources_section: {
                 label: "Go to Resources tab",
-                handler: "__comp__.openResourcesTab",
+                handler: "(ev) => __comp__.openResourcesTab(ev)",
             },
         };
         const destination = destinations[section];
