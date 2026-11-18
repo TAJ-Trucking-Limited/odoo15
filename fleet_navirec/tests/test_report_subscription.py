@@ -730,6 +730,11 @@ class TestNavirecReportSubscription(TransactionCase):
         self.assertEqual(columns["trailer"], "Trailer")
         self.assertEqual(columns["trailer_number"], "Trailer Number")
 
+        order = [key for key, _label in subscription._report_columns()]
+        self.assertLess(order.index("license_plate"), order.index("trailer_number"))
+        self.assertLess(order.index("trailer_number"), order.index("driver_name"))
+        self.assertLess(order.index("driver_name"), order.index("driver_number"))
+
         subscription.write({"field_driver_name": False, "field_trailer_number": False})
         columns = dict(subscription._report_columns())
         self.assertNotIn("driver_name", columns)

@@ -94,8 +94,8 @@ When the template is empty, that verified live vehicle route is used automatical
 - To/CC recipients and IANA timezone per subscription.
 - Any number of distinct configurable local send times per day.
 - UTC `next_send_at` calculation with timezone conversion.
-- Configurable Vehicle, Truck Number, Driver Name, Driver Number, Trailer,
-  Trailer Number, Position, Coordinates, Speed, Ignition/Movement and Odometer
+- Configurable Vehicle, Truck Number, Trailer, Trailer Number, Driver Name,
+  Driver Number, Position, Coordinates, Speed, Ignition/Movement and Odometer
   columns. The former License Plate column is now labelled Truck Number; its
   technical field and report key are unchanged for compatibility. Driver
   Number is the driver's phone number, and Trailer Number is the trailer's
