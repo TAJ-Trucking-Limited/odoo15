@@ -13,17 +13,14 @@ def migrate(cr, version):
     if not column_exists(cr, "res_company", "transport_required_shipment_fields"):
         return
 
+    # res_company.transport_required_shipment_fields is jsonb, so the jsonb
+    # array operators must be used here, not the json_* functions.
     cr.execute(
         """
         UPDATE res_company
-           SET transport_required_shipment_fields = (
-               SELECT COALESCE(json_agg(name), '[]'::json)
-                 FROM json_array_elements_text(
-                     transport_required_shipment_fields
-                 ) AS name
-                WHERE name <> ALL(%s)
-           )
-         WHERE transport_required_shipment_fields ?| %s
+           SET transport_required_shipment_fields =
+               transport_required_shipment_fields - %s::text[]
+         WHERE transport_required_shipment_fields ?| %s::text[]
         """,
         (list(REMOVED), list(REMOVED)),
     )
