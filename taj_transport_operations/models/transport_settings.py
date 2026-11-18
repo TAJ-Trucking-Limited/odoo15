@@ -18,8 +18,7 @@ CONFIGURABLE_SHIPMENT_FIELDS = (
     "container_num", "srn", "consignee", "size", "weight", "file_name",
     "file_type_id", "clearing_service", "bill_of_lading", "eta", "etol",
     "shipping_line", "cargo_type_id", "cargo_description",
-    "special_handling_instructions", "transport_planned_departure_at",
-    "transport_planned_arrival_at", "analytic_account_id",
+    "special_handling_instructions", "analytic_account_id",
 )
 
 
@@ -41,7 +40,10 @@ class ResCompany(models.Model):
                 not isinstance(name, str) or name not in CONFIGURABLE_SHIPMENT_FIELDS
                 for name in names
             ):
-                raise ValidationError(_("Only the 18 Shipment and Cargo fields can be configured."))
+                raise ValidationError(
+                    _("Only the %s Shipment and Cargo fields can be configured.")
+                    % len(CONFIGURABLE_SHIPMENT_FIELDS)
+                )
 
     def write(self, vals):
         if "transport_required_shipment_fields" in vals and not self.env.su:
@@ -146,7 +148,10 @@ class TajTransportSettings(models.TransientModel):
             field.model != "sale.order.line" or field.name not in CONFIGURABLE_SHIPMENT_FIELDS
             for field in self.required_shipment_field_ids
         ):
-            raise ValidationError(_("Only the 18 Shipment and Cargo fields can be configured."))
+            raise ValidationError(
+                _("Only the %s Shipment and Cargo fields can be configured.")
+                % len(CONFIGURABLE_SHIPMENT_FIELDS)
+            )
         self.company_id.sudo().write(
             {
                 "transport_required_shipment_fields": self.required_shipment_field_ids.mapped("name"),

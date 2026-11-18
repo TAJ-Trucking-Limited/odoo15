@@ -45,6 +45,15 @@ class TestShipmentRequirements(TransactionCase):
             "transport_planned_arrival_at": "2026-12-02 09:00:00",
             "analytic_account_id": account.id,
         }
+        # Planned departure/arrival are schedule data, not requirements.
+        cls.schedule_only = (
+            "transport_planned_departure_at",
+            "transport_planned_arrival_at",
+        )
+        cls.configurable = {
+            name: value for name, value in cls.values.items()
+            if name not in cls.schedule_only
+        }
         cls.manager = new_test_user(
             cls.env, login="shipment_requirements_manager",
             groups="taj_transport_operations.group_transport_manager",
@@ -66,7 +75,7 @@ class TestShipmentRequirements(TransactionCase):
         })
 
     def test_every_approved_field_blocks_missing_create_and_clear(self):
-        for name in self.values:
+        for name in self.configurable:
             with self.subTest(field=name):
                 self.company.transport_required_shipment_fields = [name]
                 with self.assertRaises(ValidationError), self.env.cr.savepoint():
@@ -106,7 +115,7 @@ class TestShipmentRequirements(TransactionCase):
         self.assertEqual(line.order_id.client_order_ref, "Changed reference")
 
     def test_notes_sections_and_downpayments_are_exempt(self):
-        self.company.transport_required_shipment_fields = list(self.values)
+        self.company.transport_required_shipment_fields = list(self.configurable)
         order = self._order()
         for kind in ("line_section", "line_note"):
             self.env["sale.order.line"].create({
@@ -132,17 +141,21 @@ class TestShipmentRequirements(TransactionCase):
 
     def test_manager_can_save_and_reopen_requirements_without_company_write_access(self):
         Fields = self.env["ir.model.fields"]
-        selected = Fields.search([("model", "=", "sale.order.line"), ("name", "in", list(self.values))])
+        selected = Fields.search([
+            ("model", "=", "sale.order.line"), ("name", "in", list(self.configurable)),
+        ])
         Wizard = self.env["taj.transport.settings"].with_user(self.manager)
         self.assertIn("required_shipment_field_ids", Wizard._fields)
         choices = Fields.with_user(self.manager).with_context(hide_model=True).search_read(
             Wizard._fields["required_shipment_field_ids"].domain(Wizard),
             ["name", "display_name"],
         )
-        self.assertEqual({choice["name"] for choice in choices}, set(self.values))
+        self.assertEqual({choice["name"] for choice in choices}, set(self.configurable))
         wizard = Wizard.create({"required_shipment_field_ids": [Command.set(selected.ids)]})
         wizard.action_save()
-        self.assertEqual(set(self.company.transport_required_shipment_fields), set(self.values))
+        self.assertEqual(
+            set(self.company.transport_required_shipment_fields), set(self.configurable)
+        )
         reopened = Wizard.create({})
         self.assertEqual(reopened.required_shipment_field_ids, selected)
         reopened.write({"required_shipment_field_ids": [Command.clear()]})
@@ -183,7 +196,7 @@ class TestShipmentRequirements(TransactionCase):
         )
         arch = etree.fromstring(view["arch"])
         self.assertTrue(arch.xpath("//sheet/field[@name='transport_required_shipment_fields']"))
-        for name in self.values:
+        for name in self.configurable:
             nodes = arch.xpath("//field[@name='order_line']/list/field[@name='%s']" % name)
             self.assertTrue(nodes, name)
             expression = nodes[0].get("required", "False")
