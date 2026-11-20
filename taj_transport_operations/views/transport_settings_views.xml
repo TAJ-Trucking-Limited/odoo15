@@ -30,6 +30,12 @@
                        If inactivity continues, reminders repeat after the same
                        configured interval. Submitted updates and recorded
                        milestone arrivals/departures reset the activity clock.</p>
+                    <group string="Customer Trip Status Reports">
+                        <field name="customer_report_send_times" placeholder="08:00, 16:00"/>
+                        <field name="customer_report_timezone"/>
+                    </group>
+                    <p>These times apply to all customers. Each report includes their In Progress trips.
+                       Recipients come from Email and Additional Emails on the customer record.</p>
                 </sheet>
                 <footer>
                     <button name="action_save" type="object" string="Save"

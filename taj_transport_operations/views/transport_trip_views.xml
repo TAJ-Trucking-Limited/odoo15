@@ -31,7 +31,8 @@
                 <field name="last_milestone_activity" optional="show"/>
                 <field name="last_milestone_at" optional="show" options="{'numeric': True}"/>
                 <field name="current_driver_id" optional="show" string="Current Driver" width="180px"/>
-                <field name="milestone_progress" optional="show" widget="progressbar" invisible="state == 'draft'"/>
+                <field name="milestone_progress" optional="show" widget="progressbar"
+                       invisible="state not in ('in_progress', 'completed')"/>
                 <field name="state" optional="show" string="Trip Status" widget="badge" decoration-info="state in ('draft', 'ready')" decoration-warning="state == 'in_progress'" decoration-success="state == 'completed'" decoration-muted="state == 'cancelled'"/>
                 <field name="activity_status" optional="show" widget="badge" decoration-danger="activity_status == 'overdue'" decoration-success="activity_status == 'recent'"/>
                 <field name="last_activity_at" optional="show" options="{'numeric': True}"/>
@@ -121,7 +122,6 @@
                                    options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="partner_id" readonly="1"/>
                             <field name="partner_email" readonly="1"/>
-                            <field name="commercial_partner_id" invisible="1"/>
                             <field name="company_id" readonly="1"
                                    groups="base.group_multi_company"/>
                         </group>
@@ -159,7 +159,8 @@
                                                invisible="state not in ('completed', 'cancelled')"/>
                                         <field name="current_driver_id" readonly="1"/>
                                     </group>
-                                    <group string="Trip Progress" name="trip_progress_section">
+                                    <group string="Trip Progress" name="trip_progress_section"
+                                           invisible="state not in ('in_progress', 'completed')">
                                         <field name="allocation_date" readonly="1" options="{'numeric': True}"/>
                                         <field name="actual_departure_at" string="Actual Start" readonly="state in ('completed', 'cancelled')" options="{'numeric': True}"/>
                                         <field name="last_milestone_activity" readonly="1"/>
@@ -374,24 +375,10 @@
                             </field>
                         </page>
                         <page string="Email Updates" name="trip_email_updates">
+                            <p>The customer report includes all their In Progress trips.
+                               Recipients come from the customer record.</p>
                             <group>
-                                <group string="Update Settings">
-                                    <field name="email_notification_enabled" widget="boolean_toggle"/>
-                                    <field name="email_partner_ids" widget="many2many_tags"
-                                           options="{'no_create': True}"
-                                           domain="[('commercial_partner_id', '=', commercial_partner_id)]"
-                                           placeholder="Select customer contacts..."/>
-                                    <field name="email_extra_recipients"
-                                           placeholder="e.g. logistics@client.com, tracking@client.com"/>
-                                    <field name="email_interval_hours"/>
-                                </group>
-                                <group string="Schedule &amp; Live Position">
-                                    <field name="email_next_send_at" readonly="1" options="{'numeric': True}"/>
-                                    <field name="email_last_queued_at" readonly="1" options="{'numeric': True}"/>
-                                    <field name="email_failure_count" readonly="1"
-                                           invisible="not email_failure_count"/>
-                                    <field name="email_last_error" readonly="1"
-                                           invisible="not email_last_error"/>
+                                <group string="Live Position">
                                     <field name="email_position_preview" readonly="1"/>
                                     <field name="email_position_source" readonly="1"/>
                                     <field name="email_position_updated_at" readonly="1" options="{'numeric': True}"/>
@@ -399,11 +386,11 @@
                                            invisible="not email_position_map_url" readonly="1"/>
                                     <field name="email_position_notice" readonly="1"
                                            invisible="not email_position_notice"/>
-                                    <button string="Send Update Email Now"
+                                    <button string="Send Customer Report Now"
                                             name="action_send_email_update_manual"
                                             type="object" class="btn-primary"
                                             icon="fa-envelope"
-                                            invisible="state == 'draft'"/>
+                                            invisible="state != 'in_progress'"/>
                                 </group>
                             </group>
                             <separator string="Dispatch History"/>

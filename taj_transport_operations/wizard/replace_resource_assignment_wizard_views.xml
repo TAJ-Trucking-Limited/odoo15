@@ -8,6 +8,7 @@
                 <group>
                     <field name="trip_id" readonly="1"/>
                     <field name="expected_assignment_id" invisible="1"/>
+                    <field name="defaults_vehicle_id" invisible="1"/>
                     <field name="company_id" invisible="1"/>
                 </group>
                 <group>
@@ -25,9 +26,9 @@
                     </group>
                 </group>
                 <p class="text-muted">
-                    Unchanged resources stay assigned. Cleared resources become
-                    unassigned. The current period will close at the effective
-                    time; a new immutable history row will open.
+                    Changing the truck suggests its Fleet trailer and driver. You can edit
+                    both before saving. The current assignment ends at the effective time
+                    and the replacement is recorded in the trip history.
                 </p>
                 <footer>
                     <button string="Replace Resources"

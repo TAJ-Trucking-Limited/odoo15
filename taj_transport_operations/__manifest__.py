@@ -1,11 +1,12 @@
 {
     "name": "TAJ Operations",
-    "version": "19.0.1.72.0",
+    "version": "19.0.1.73.1",
     "summary": "Transport trip records linked one-to-one to sales order lines",
     "category": "Operations/Transport",
     "author": "TAJ Trucking",
     "license": "LGPL-3",
     "depends": ["sale_management", "move_invoice_line", "fleet", "mail", "web"],
+    "external_dependencies": {"python": ["xlsxwriter"]},
     "assets": {
         "web.assets_backend": [
             "taj_transport_operations/static/src/views/trip_form.js",
@@ -23,6 +24,7 @@
         "data/ir_sequence.xml",
         "data/trip_activity_cron.xml",
         "data/trip_email_cron.xml",
+        "views/transport_partner_views.xml",
         "views/transport_trip_views.xml",
         "views/transport_trip_file_views.xml",
         "views/transport_file_type_views.xml",

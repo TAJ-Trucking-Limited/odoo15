@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_transport_report" model="ir.ui.view">
+        <field name="name">res.partner.form.transport.report</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/div[hasclass('mb8')]//field[@name='email']/parent::div" position="after">
+                <div class="d-flex align-items-baseline w-md-50" invisible="parent_id and not is_company">
+                    <label for="transport_report_additional_emails" class="me-2 text-nowrap"/>
+                    <field name="transport_report_additional_emails" class="w-100"
+                           placeholder="logistics@example.com, tracking@example.com"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

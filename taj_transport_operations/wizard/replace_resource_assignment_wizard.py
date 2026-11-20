@@ -1,7 +1,7 @@
 """Audited atomic replacement on a Draft, Ready or In Progress trip."""
 from markupsafe import Markup
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
 
@@ -20,6 +20,7 @@ class TajTransportReplaceAssignmentWizard(models.TransientModel):
     company_id = fields.Many2one(
         "res.company", related="trip_id.company_id", readonly=True,
     )
+    defaults_vehicle_id = fields.Many2one("fleet.vehicle", readonly=True)
     vehicle_id = fields.Many2one(
         "fleet.vehicle", string="Truck",
         domain=lambda self: "[('active', '=', True), '|', ('category_id', '=', False), ('category_id', '=', %s), '|', "
@@ -40,6 +41,16 @@ class TajTransportReplaceAssignmentWizard(models.TransientModel):
     effective_location = fields.Char(string="Location of Replacement")
     reason = fields.Char(string="Replacement Reason", required=True)
     notes = fields.Text(string="Replacement Notes")
+
+    @api.onchange("vehicle_id")
+    def _onchange_vehicle_id(self):
+        # The opening truck is seeded so opening the form preserves the saved assignment.
+        if self.vehicle_id == self.defaults_vehicle_id:
+            return
+        self.defaults_vehicle_id = self.vehicle_id
+        self.trailer_id, self.driver_id = self.vehicle_id._transport_dialog_defaults(
+            self.company_id or self.env.company,
+        )
 
     def action_replace_resources(self):
         self.ensure_one()

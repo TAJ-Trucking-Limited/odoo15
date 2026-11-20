@@ -7,7 +7,7 @@ from psycopg2.errors import CheckViolation
 
 from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import Form, TransactionCase, tagged
 
 
 @contextmanager
@@ -668,6 +668,47 @@ class TestTransportTripFoundation(TransactionCase):
         self.assertIn(
             "Truck breakdown", " ".join(trip.message_ids.mapped("body")),
         )
+
+    def test_replace_resources_form_refreshes_selected_truck_defaults(self):
+        trip, original, assigned_trailer, assigned_driver = self._replacement_fixture()
+        first_defaults = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id, "license_plate": "REPLACEMENT-DEFAULT-A",
+        })
+        second_defaults = self.env["fleet.vehicle"].create({
+            "model_id": self.trailer_model.id, "license_plate": "REPLACEMENT-DEFAULT-B",
+        })
+        second_driver = self.env["res.partner"].create({"name": "Replacement truck Fleet driver"})
+        self.truck.write({
+            "transport_default_trailer_id": first_defaults.id, "driver_id": self.customer.id,
+        })
+        self.truck_two.write({
+            "transport_default_trailer_id": second_defaults.id, "driver_id": second_driver.id,
+        })
+        action = trip.action_open_replace_assignment_wizard()
+        form = Form(self.env[action["res_model"]].with_context(action["context"]))
+        self.assertEqual(form.trailer_id, assigned_trailer)
+        self.assertEqual(form.driver_id, assigned_driver)
+
+        form.vehicle_id = self.truck_two
+        self.assertEqual(form.trailer_id, second_defaults)
+        self.assertEqual(form.driver_id, second_driver)
+        form.vehicle_id = self.truck
+        self.assertEqual(form.trailer_id, first_defaults)
+        self.assertEqual(form.driver_id, self.customer)
+        form.vehicle_id = self.env["fleet.vehicle"]
+        self.assertFalse(form.trailer_id)
+        self.assertFalse(form.driver_id)
+
+        form.vehicle_id = self.truck_two
+        form.driver_id = self.customer
+        form.effective_from = original.effective_from + timedelta(hours=1)
+        form.reason = "Use the replacement truck and its trailer"
+        form.save().action_replace_resources()
+        self.assertEqual(trip.current_vehicle_id, self.truck_two)
+        self.assertEqual(trip.current_trailer_id, second_defaults)
+        self.assertEqual(trip.current_driver_id, self.customer)
+        self.assertEqual(original.trailer_id, assigned_trailer)
+        self.assertEqual(self.truck_two.driver_id, second_driver)
 
     def test_two_sequential_replacements_keep_contiguous_history(self):
         trip, original, trailer, driver = self._replacement_fixture()

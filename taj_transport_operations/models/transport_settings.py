@@ -1,6 +1,8 @@
-"""Transport Operations settings and the dispatch worklist cutoff date."""
+"""Transport Operations settings and schedules."""
 
-from datetime import datetime, time
+import json
+import re
+from datetime import datetime, time, timedelta
 
 import pytz
 
@@ -9,6 +11,7 @@ from odoo.exceptions import AccessError, ValidationError
 from odoo.tools.safe_eval import safe_eval
 
 CUTOFF_PARAM = "taj_transport_operations.dispatch_cutoff_date"
+CUSTOMER_REPORT_SCHEDULE_PARAM = "taj_transport_operations.customer_report_schedule"
 DISPATCH_ACTIONS = {
     "taj_transport_operations.action_sale_order_line_without_trip",
     "taj_transport_operations.action_sale_order_line_without_truck",
@@ -81,6 +84,23 @@ def get_dispatch_cutoff_start(env, cutoff):
     return fields.Date.to_string(cutoff)
 
 
+def next_customer_report_at(times, timezone, now):
+    """Find the next configured local send time and return it in Odoo's UTC format."""
+    tz = pytz.timezone(timezone)
+    now_utc = pytz.utc.localize(now)
+    today = now_utc.astimezone(tz).date()
+    for day in (today, today + timedelta(days=1)):
+        candidates = []
+        for send_time in times:
+            local = datetime.combine(day, time.fromisoformat(send_time))
+            candidate = tz.localize(local, is_dst=False).astimezone(pytz.utc)
+            if candidate > now_utc:
+                candidates.append(candidate)
+        if candidates:
+            return fields.Datetime.to_string(min(candidates).replace(tzinfo=None))
+    return False
+
+
 class TajTransportSettings(models.TransientModel):
     _name = "taj.transport.settings"
     _description = "Transport Operations Settings"
@@ -102,6 +122,13 @@ class TajTransportSettings(models.TransientModel):
         string="Inactivity Hours", default=24, required=True
     )
     inactivity_recipient = fields.Char(string="Alert Recipient Email")
+    customer_report_send_times = fields.Char(
+        string="Daily Send Times",
+        help="Separate 24-hour times (HH:MM) with commas. Leave empty to disable scheduled reports.",
+    )
+    customer_report_timezone = fields.Selection(
+        [(tz, tz) for tz in pytz.common_timezones], string="Report Timezone", default="UTC", required=True,
+    )
     required_shipment_field_ids = fields.Many2many(
         "ir.model.fields",
         string="Sale Order Required Fields",
@@ -118,6 +145,14 @@ class TajTransportSettings(models.TransientModel):
         values = super().default_get(fields_list)
         if "dispatch_cutoff_date" in fields_list:
             values["dispatch_cutoff_date"] = get_dispatch_cutoff_date(self.env)
+        if {"customer_report_send_times", "customer_report_timezone"}.intersection(fields_list):
+            schedule = json.loads(self.env["ir.config_parameter"].sudo().get_param(
+                CUSTOMER_REPORT_SCHEDULE_PARAM, "{}",
+            ))
+            if "customer_report_send_times" in fields_list:
+                values["customer_report_send_times"] = ", ".join(schedule.get("times", []))
+            if "customer_report_timezone" in fields_list:
+                values["customer_report_timezone"] = schedule.get("timezone", "UTC")
         company = self.env.company
         if "required_shipment_field_ids" in fields_list:
             selected = self.env["ir.model.fields"].search([
@@ -152,6 +187,7 @@ class TajTransportSettings(models.TransientModel):
                 _("Only the %s Shipment and Cargo fields can be configured.")
                 % len(CONFIGURABLE_SHIPMENT_FIELDS)
             )
+        self._save_customer_report_schedule()
         self.company_id.sudo().write(
             {
                 "transport_required_shipment_fields": self.required_shipment_field_ids.mapped("name"),
@@ -169,6 +205,23 @@ class TajTransportSettings(models.TransientModel):
             else "",
         )
         return {"type": "ir.actions.act_window_close"}
+
+    def _save_customer_report_schedule(self):
+        raw = (self.customer_report_send_times or "").strip()
+        times = sorted({value.strip() for value in raw.split(",")}) if raw else []
+        if any(not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value) for value in times):
+            raise ValidationError(_("Enter daily send times as HH:MM, separated by commas."))
+
+        params = self.env["ir.config_parameter"].sudo()
+        previous = json.loads(params.get_param(CUSTOMER_REPORT_SCHEDULE_PARAM, "{}"))
+        timezone = self.customer_report_timezone
+        if times == previous.get("times", []) and timezone == previous.get("timezone", "UTC"):
+            return
+        params.set_param(CUSTOMER_REPORT_SCHEDULE_PARAM, json.dumps({
+            "times": times,
+            "timezone": timezone,
+            "next_send_at": next_customer_report_at(times, timezone, fields.Datetime.now()),
+        }))
 
 
 class IrActionsActWindow(models.Model):

@@ -6,6 +6,7 @@ from odoo import Command
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 from odoo.tests.common import new_test_user
+from odoo.tools.safe_eval import safe_eval
 
 
 @tagged("post_install", "-at_install")
@@ -24,6 +25,21 @@ class TestTripFiles(TransactionCase):
         for field in ("planned_departure_at", "planned_arrival_at"):
             self.assertIn(f'name="{field}"', related_form.arch_db)
             self.assertIn(f'name="{field}" optional="hide"', related_list.arch_db)
+
+    def test_trip_progress_only_shows_for_in_progress_and_completed_trips(self):
+        for view_name, selector in (
+            ("view_transport_trip_form", "//group[@name='trip_progress_section']"),
+            ("view_transport_trip_list", "//list/field[@name='milestone_progress']"),
+        ):
+            view = self.env.ref(f"taj_transport_operations.{view_name}")
+            arch = etree.fromstring(view.get_combined_arch())
+            (progress,) = arch.xpath(selector)
+            for state in ("draft", "ready", "in_progress", "completed", "cancelled"):
+                with self.subTest(view=view_name, state=state):
+                    self.assertEqual(
+                        safe_eval(progress.get("invisible", "False"), {"state": state}),
+                        state not in ("in_progress", "completed"),
+                    )
 
     def test_trip_form_operation_summary_resources_and_hidden_sales_fields(self):
         view = self.env.ref("taj_transport_operations.view_transport_trip_form")

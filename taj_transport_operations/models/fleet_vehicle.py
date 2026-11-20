@@ -98,6 +98,18 @@ class FleetVehicle(models.Model):
                 "Choose an active Truck from the Sales Order's company or a shared truck."
             ))
 
+    def _transport_dialog_defaults(self, company):
+        """Return the selected truck's trailer and driver when valid for the trip company."""
+        trailer = self.transport_default_trailer_id.filtered(
+            lambda vehicle: vehicle.active
+            and vehicle.category_id == self.env.ref("taj_transport_operations.fleet_category_trailer")
+            and (not vehicle.company_id or vehicle.company_id == company)
+        )
+        driver = self.driver_id.filtered(
+            lambda partner: partner.active and (not partner.company_id or partner.company_id == company)
+        )
+        return trailer, driver
+
     def _require_transport_dialog_trailer(self, company):
         """Shared optional trailer checks for Assign Truck / Edit Info dialogs."""
         if not self:

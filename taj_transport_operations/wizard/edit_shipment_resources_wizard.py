@@ -106,17 +106,7 @@ class TajTransportEditShipmentResourcesWizard(models.TransientModel):
             return
         self.defaults_vehicle_id = self.vehicle_id
         company = self.company_id or self.env.company
-        trailer_category = self.env.ref("taj_transport_operations.fleet_category_trailer")
-        trailer = self.vehicle_id.transport_default_trailer_id
-        self.trailer_id = trailer if (
-            trailer and trailer.active and trailer.category_id == trailer_category
-            and (not trailer.company_id or trailer.company_id == company)
-        ) else False
-        driver = self.vehicle_id.driver_id
-        self.driver_id = driver if (
-            driver and driver.active
-            and (not driver.company_id or driver.company_id == company)
-        ) else False
+        self.trailer_id, self.driver_id = self.vehicle_id._transport_dialog_defaults(company)
 
     @api.model
     def _operational_resources_for(self, line, trip):

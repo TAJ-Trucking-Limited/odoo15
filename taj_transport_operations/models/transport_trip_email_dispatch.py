@@ -82,7 +82,7 @@ class TajTransportTripEmailDispatch(models.Model):
     @api.depends("mail_ids", "mail_ids.state")
     def _compute_mail_stats(self):
         for dispatch in self:
-            mails = dispatch.mail_ids
+            mails = dispatch.mail_ids.sudo()
             dispatch.mail_count = len(mails)
             if not mails:
                 dispatch.status = "queued"

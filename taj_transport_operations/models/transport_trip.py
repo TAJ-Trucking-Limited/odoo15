@@ -503,6 +503,7 @@ class TajTransportTrip(models.Model):
                 "default_trip_id": self.id,
                 "default_expected_assignment_id": current.id,
                 "default_vehicle_id": current.vehicle_id.id or False,
+                "default_defaults_vehicle_id": current.vehicle_id.id or False,
                 "default_trailer_id": current.trailer_id.id or False,
                 "default_driver_id": current.driver_id.id or False,
                 "default_co_driver_id": current.co_driver_id.id or False,
