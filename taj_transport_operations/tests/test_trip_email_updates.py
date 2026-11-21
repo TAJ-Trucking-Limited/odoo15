@@ -1,14 +1,18 @@
 """Customer trip report delivery and scheduling."""
 
-from datetime import datetime
+from base64 import b64decode
+from datetime import datetime, timedelta
 from io import BytesIO
+from xml.etree import ElementTree
 from zipfile import ZipFile
 
 from freezegun import freeze_time
 
-from odoo.exceptions import UserError, ValidationError
+from odoo.addons.http_routing.tests.common import MockRequest
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import tagged
 
+from ..models.transport_trip_email import REPORT_XLSX_MIMETYPE
 from .phase3_case import TajTransportPhase3Case
 
 
@@ -66,6 +70,118 @@ class TestTripEmailUpdates(TajTransportPhase3Case):
         self.assertIn("Kasumbalesa border", strings)
         for trip in excluded:
             self.assertNotIn(f">{trip.name}<", strings)
+
+    def test_milestone_comparison_groups_arrivals_and_signed_differences_by_trip(self):
+        specs = self._default_checkpoints()
+        first = self._started_trip(
+            route=self._route("Comparison route", specs), line=self._line_for(self.customer),
+        )
+        other_route = self._route("Other comparison route", [
+            dict(specs[1], name="kasumbalesa border"), dict(specs[2], name="Delivery"),
+        ])
+        second = self._started_trip(route=other_route, line=self._line_for(self.customer))
+        loading, border = first.milestone_ids.sorted("sequence")[:2]
+        late = loading.planned_arrival_at + timedelta(hours=1.5)
+        early = border.planned_arrival_at - timedelta(hours=2)
+        with freeze_time(early):
+            loading._record_arrival(late)
+            border._record_arrival(early)
+        second_border = second.milestone_ids.sorted("sequence")[0]
+        with freeze_time(second_border.planned_arrival_at):
+            second_border._record_arrival(second_border.planned_arrival_at)
+
+        content = (first | second)._render_customer_trip_report("Africa/Dar_es_Salaam")
+        with ZipFile(BytesIO(content)) as workbook:
+            self.assertIn(b'name="Milestone Comparison"', workbook.read("xl/workbook.xml"))
+            sheet = ElementTree.fromstring(workbook.read("xl/worksheets/sheet3.xml"))
+            strings = ElementTree.fromstring(workbook.read("xl/sharedStrings.xml"))
+            styles = workbook.read("xl/styles.xml")
+        cells = {}
+        for cell in sheet.findall(".//{*}c"):
+            value = cell.findtext("{*}v")
+            if value is not None:
+                cells[cell.attrib["r"]] = (
+                    "".join(strings[int(value)].itertext()) if cell.get("t") == "s" else float(value)
+                )
+
+        self.assertIn(b"+0.00;-0.00;0.00", styles)
+        self.assertEqual([cells[key] for key in ("C1", "F1", "I1", "L1")], [
+            "Loading", "Kasumbalesa border", "Offloading", "Delivery",
+        ])
+        self.assertEqual([cells[key] for key in ("C2", "D2", "E2")], [
+            "Planned Arrival", "Actual Arrival", "Difference (hours)",
+        ])
+        self.assertEqual(
+            (cells["A3"], cells["B3"], cells["A4"], cells["B4"]),
+            (self.truck.license_plate, first.name, self.truck.license_plate, second.name),
+        )
+        epoch = datetime(1899, 12, 30)
+        day = timedelta(days=1)
+        offset = timedelta(hours=3)
+        self.assertAlmostEqual(cells["C3"], (loading.planned_arrival_at + offset - epoch) / day)
+        self.assertAlmostEqual(cells["D3"], (late + offset - epoch) / day)
+        self.assertEqual((cells["E3"], cells["H3"], cells["H4"]), (1.5, -2.0, 0.0))
+        self.assertIn("I3", cells)
+        self.assertFalse({"J3", "K3", "L3", "C4", "M4", "N4"}.intersection(cells))
+
+    def test_preview_downloads_the_customer_report_without_queueing_mail(self):
+        self.customer.write({"transport_report_additional_emails": "tracking@example.com"})
+        trip = self._started_trip(
+            route=self._route("Report preview route"), line=self._line_for(self.customer),
+        )
+        other = self._started_trip()
+        loading = trip.milestone_ids.sorted("sequence")[0]
+        arrival = loading.planned_arrival_at + timedelta(hours=1.5)
+        with freeze_time(arrival):
+            loading._record_arrival(arrival)
+
+        action = trip.with_user(self.dispatcher).action_preview_customer_trip_report()
+        self.assertEqual(action["target"], "new")
+        preview = self.env[action["res_model"]].with_user(self.dispatcher).browse(action["res_id"])
+        self.assertEqual(preview.customer_id, self.customer)
+        self.assertFalse(preview.email_to)
+        self.assertEqual(preview.email_cc, "tracking@example.com")
+        self.assertIn(trip.name, preview.trips_html)
+        self.assertNotIn(other.name, preview.trips_html)
+        self.assertIn("Kasumbalesa border", preview.checkpoints_html)
+        self.assertIn("+1.50", preview.comparison_html)
+        data = b64decode(preview.report_file)
+        with ZipFile(BytesIO(data)) as workbook:
+            self.assertIn(b'name="Milestone Comparison"', workbook.read("xl/workbook.xml"))
+            self.assertIn(b">1.5<", workbook.read("xl/worksheets/sheet3.xml"))
+        self.assertEqual(preview.action_download_xlsx()["target"], "download")
+        binary = self.env["ir.binary"].with_user(self.dispatcher)
+        record = binary._find_record(res_model=preview._name, res_id=preview.id, field="report_file")
+        with MockRequest(binary.env):
+            stream = binary._get_stream_from(
+                record, "report_file", filename_field="filename", mimetype=REPORT_XLSX_MIMETYPE,
+            )
+        self.assertEqual(stream.data, data)
+        self.assertEqual(stream.download_name, preview.filename)
+        with self.assertRaises(AccessError):
+            binary.with_user(self.manager)._find_record(
+                res_model=preview._name, res_id=preview.id, field="report_file",
+            )
+        self.assertFalse(trip.email_dispatch_ids)
+        self.assertFalse(other.email_dispatch_ids)
+
+    def test_milestone_preview_download_contains_only_the_selected_trip(self):
+        trip = self._completed_trip(line=self._line_for(self.customer))
+        other = self._started_trip(line=self._line_for(self.customer))
+
+        action = trip.with_user(self.dispatcher).action_preview_milestone_report()
+        self.assertEqual(action["target"], "new")
+        preview = self.env[action["res_model"]].with_user(self.dispatcher).browse(action["res_id"])
+        self.assertTrue(preview.comparison_only)
+        self.assertIn(trip.name, preview.comparison_html)
+        self.assertIn(self.truck.license_plate, preview.comparison_html)
+        self.assertNotIn(other.name, preview.comparison_html)
+        self.assertFalse(preview.trips_html)
+        self.assertFalse(preview.checkpoints_html)
+        with ZipFile(BytesIO(b64decode(preview.report_file))) as workbook:
+            self.assertIn(b'name="Milestone Comparison"', workbook.read("xl/workbook.xml"))
+            self.assertNotIn("xl/worksheets/sheet2.xml", workbook.namelist())
+        self.assertFalse(trip.email_dispatch_ids)
 
     def test_partner_recipients_are_validated_and_deduplicated(self):
         self.customer.email = "ops@customer.example"

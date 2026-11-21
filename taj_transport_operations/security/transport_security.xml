@@ -108,6 +108,11 @@
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
         <field name="groups" eval="[(4, ref('group_transport_user'))]"/>
     </record>
+    <record id="rule_transport_customer_report_preview_owner" model="ir.rule">
+        <field name="name">Customer trip report previews: creator only</field>
+        <field name="model_id" ref="model_taj_transport_customer_report_preview"/>
+        <field name="domain_force">[('create_uid', '=', user.id)]</field>
+    </record>
     <record id="rule_file_data_entry" model="ir.rule">
         <field name="name">rule file data entry</field>
         <field name="model_id" ref="model_taj_transport_trip_file"/>

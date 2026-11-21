@@ -262,6 +262,9 @@
                             </p>
                         </page>
                         <page string="Milestones" name="trip_milestones">
+                            <button string="Preview Milestone Report" name="action_preview_milestone_report"
+                                    type="object" class="btn-secondary mb-3" icon="fa-eye"
+                                    invisible="state not in ('in_progress', 'completed')"/>
                             <group>
                                 <group string="Checkpoint Progress">
                                     <field name="milestone_progress" widget="progressbar"/>
@@ -377,6 +380,12 @@
                         <page string="Email Updates" name="trip_email_updates">
                             <p>The customer report includes all their In Progress trips.
                                Recipients come from the customer record.</p>
+                            <div class="d-flex flex-wrap gap-2 mb-3" invisible="state != 'in_progress'">
+                                <button string="Preview Customer Report" name="action_preview_customer_trip_report"
+                                        type="object" class="btn-secondary" icon="fa-eye"/>
+                                <button string="Send Customer Report Now" name="action_send_email_update_manual"
+                                        type="object" class="btn-primary" icon="fa-envelope"/>
+                            </div>
                             <group>
                                 <group string="Live Position">
                                     <field name="email_position_preview" readonly="1"/>
@@ -386,11 +395,6 @@
                                            invisible="not email_position_map_url" readonly="1"/>
                                     <field name="email_position_notice" readonly="1"
                                            invisible="not email_position_notice"/>
-                                    <button string="Send Customer Report Now"
-                                            name="action_send_email_update_manual"
-                                            type="object" class="btn-primary"
-                                            icon="fa-envelope"
-                                            invisible="state != 'in_progress'"/>
                                 </group>
                             </group>
                             <separator string="Dispatch History"/>

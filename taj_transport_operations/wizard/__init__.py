@@ -17,3 +17,4 @@ from . import trip_milestone_add_wizard
 from . import regenerate_milestones_wizard
 from . import fill_empty_fields_wizard
 from . import trip_activity_wizard
+from . import customer_trip_report_preview
