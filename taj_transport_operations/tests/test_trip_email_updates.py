@@ -3,10 +3,12 @@
 from base64 import b64decode
 from datetime import datetime, timedelta
 from io import BytesIO
+from unittest.mock import patch
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
 from freezegun import freeze_time
+from lxml import html
 
 from odoo.addons.http_routing.tests.common import MockRequest
 from odoo.exceptions import AccessError, UserError, ValidationError
@@ -135,7 +137,10 @@ class TestTripEmailUpdates(TajTransportPhase3Case):
         with freeze_time(arrival):
             loading._record_arrival(arrival)
 
-        action = trip.with_user(self.dispatcher).action_preview_customer_trip_report()
+        map_url = "https://www.google.com/maps?q=-6.7924,39.2083"
+        position = {"label": "Route Mulumbu, Fungurume, Democratic Republic of the Congo", "map_url": map_url}
+        with patch.object(type(trip), "_get_email_update_position_data", return_value=position):
+            action = trip.with_user(self.dispatcher).action_preview_customer_trip_report()
         self.assertEqual(action["target"], "new")
         preview = self.env[action["res_model"]].with_user(self.dispatcher).browse(action["res_id"])
         self.assertEqual(preview.customer_id, self.customer)
@@ -145,6 +150,13 @@ class TestTripEmailUpdates(TajTransportPhase3Case):
         self.assertNotIn(other.name, preview.trips_html)
         self.assertIn("Kasumbalesa border", preview.checkpoints_html)
         self.assertIn("+1.50", preview.comparison_html)
+        for report_html in (preview.trips_html, preview.checkpoints_html, preview.comparison_html):
+            table = html.fromstring(report_html).xpath("//div[contains(@class, 'o_taj_report_preview')]/table")
+            self.assertEqual(len(table), 1)
+            self.assertNotIn("text-nowrap", table[0].classes)
+        map_cell = html.fromstring(preview.trips_html).xpath("//tbody/tr/td[last()]")[0]
+        self.assertEqual(map_cell.text_content().strip(), "View on Map")
+        self.assertEqual(map_cell.xpath("./a/@href"), [map_url])
         data = b64decode(preview.report_file)
         with ZipFile(BytesIO(data)) as workbook:
             self.assertIn(b'name="Milestone Comparison"', workbook.read("xl/workbook.xml"))
@@ -166,7 +178,15 @@ class TestTripEmailUpdates(TajTransportPhase3Case):
         self.assertFalse(other.email_dispatch_ids)
 
     def test_milestone_preview_download_contains_only_the_selected_trip(self):
-        trip = self._completed_trip(line=self._line_for(self.customer))
+        checkpoints = [
+            "Loading at Dar es Salaam", "Tunduma", "Nakonde", "Kasumbalesa Zambia",
+            "Kasumbalesa DRC", "Whiskey", "Kanyaka Parking", "Lubumbashi", "Delivery at Lubumbashi",
+        ]
+        route = self._route("Dar es Salaam to Lubumbashi", [
+            {"name": name, "milestone_type_id": self.type_border.id, "planned_offset_hours": index * 6}
+            for index, name in enumerate(checkpoints)
+        ])
+        trip = self._completed_trip(route=route, line=self._line_for(self.customer))
         other = self._started_trip(line=self._line_for(self.customer))
 
         action = trip.with_user(self.dispatcher).action_preview_milestone_report()
@@ -178,6 +198,11 @@ class TestTripEmailUpdates(TajTransportPhase3Case):
         self.assertNotIn(other.name, preview.comparison_html)
         self.assertFalse(preview.trips_html)
         self.assertFalse(preview.checkpoints_html)
+        table = html.fromstring(preview.comparison_html)
+        groups = table.xpath("//thead/tr[1]/th[@colspan='3']")
+        self.assertEqual([group.text_content() for group in groups], checkpoints)
+        self.assertEqual(len(table.xpath("//thead/tr[2]/th")), 2 + 3 * len(checkpoints))
+        self.assertEqual(len(table.xpath("//tbody/tr/td")), 2 + 3 * len(checkpoints))
         with ZipFile(BytesIO(b64decode(preview.report_file))) as workbook:
             self.assertIn(b'name="Milestone Comparison"', workbook.read("xl/workbook.xml"))
             self.assertNotIn("xl/worksheets/sheet2.xml", workbook.namelist())

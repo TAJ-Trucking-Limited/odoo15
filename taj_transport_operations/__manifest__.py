@@ -1,6 +1,6 @@
 {
     "name": "TAJ Operations",
-    "version": "19.0.1.74.1",
+    "version": "19.0.1.74.2",
     "summary": "Transport trip records linked one-to-one to sales order lines",
     "category": "Operations/Transport",
     "author": "TAJ Trucking",
@@ -12,6 +12,7 @@
             "taj_transport_operations/static/src/views/trip_form.js",
             "taj_transport_operations/static/src/xml/milestone_group_header.xml",
             "taj_transport_operations/static/src/scss/dispatch_readability.scss",
+            "taj_transport_operations/static/src/scss/trip_report_preview.scss",
         ],
     },
     "data": [

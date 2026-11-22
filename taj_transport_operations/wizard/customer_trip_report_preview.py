@@ -41,13 +41,13 @@ class TajTransportCustomerReportPreview(models.TransientModel):
                 "customer_id": customer.id,
                 "email_to": primary,
                 "email_cc": ", ".join(cc),
-                "trips_html": self._render_table(report["trips"]),
+                "trips_html": self._render_table(report["trips"], map_links=True),
                 "checkpoints_html": self._render_table(report["checkpoints"]),
             })
         return self.create(values)
 
     @api.model
-    def _render_table(self, table):
+    def _render_table(self, table, map_links=False):
         def display(value):
             if isinstance(value, datetime):
                 return value.strftime("%Y-%m-%d %H:%M")
@@ -60,6 +60,7 @@ class TajTransportCustomerReportPreview(models.TransientModel):
             "rows": [[display(value) for value in row] for row in table["rows"]],
             "groups": table.get("groups"),
             "time_heading": table.get("time_heading"),
+            "map_links": map_links,
         })
 
     def action_download_xlsx(self):
