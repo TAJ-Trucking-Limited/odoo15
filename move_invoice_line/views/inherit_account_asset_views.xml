@@ -5,9 +5,15 @@
         <field name="model">account.asset</field>
         <field name="inherit_id" ref="account_asset.view_account_asset_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='account_depreciation_expense_id']" position="attributes">
+            <xpath expr="//group[@invisible=&quot;state != 'model'&quot;]//field[@name='account_depreciation_expense_id']" position="attributes">
                 <attribute name="required">1</attribute>
                 <attribute name="readonly">state == 'close'</attribute>
+                <attribute name="domain">[('company_ids', 'parent_of', company_id), ('account_type', 'in', ('expense_depreciation', 'expense', 'expense_direct_cost'))]</attribute>
+            </xpath>
+            <xpath expr="//notebook[@invisible=&quot;state == 'model'&quot;]//field[@name='account_depreciation_expense_id']" position="attributes">
+                <attribute name="required">1</attribute>
+                <attribute name="readonly">state == 'close'</attribute>
+                <attribute name="domain">[('company_ids', 'parent_of', company_id), ('account_type', 'in', ('expense_depreciation', 'expense', 'expense_direct_cost'))]</attribute>
             </xpath>
         </field>
     </record>

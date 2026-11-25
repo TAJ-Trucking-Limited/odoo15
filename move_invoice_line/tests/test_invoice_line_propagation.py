@@ -1,9 +1,11 @@
+from uuid import uuid4
 from xml.etree import ElementTree
 
 from lxml import html as lxml_html
 
 from odoo import Command
 from odoo.tests import Form, tagged
+from odoo.tools.safe_eval import safe_eval
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 
@@ -274,6 +276,16 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
                 "//field[@name='account_depreciation_expense_id']"
             ),
         }
+        allowed_types = ('expense_depreciation', 'expense', 'expense_direct_cost')
+        accounts = self.env['account.account'].sudo().create([
+            {
+                'name': 'Asset domain test ' + account_type,
+                'code': 'TAJ' + uuid4().hex[:12],
+                'account_type': account_type,
+                'company_ids': [Command.set(self.env.company.ids)],
+            }
+            for account_type in (*allowed_types, 'income')
+        ])
         for branch, xpath in asset_field_paths.items():
             expected_fields = base_asset_form.findall(xpath)
             expense_fields = asset_form.findall(xpath)
@@ -285,11 +297,26 @@ class TestSaleInvoiceLinePropagation(AccountTestInvoicingCommon):
                     expense_fields[0].get('readonly'),
                     "state == 'close'",
                 )
-                for attribute in ('domain', 'context'):
-                    self.assertEqual(
-                        expense_fields[0].get(attribute),
-                        expected_fields[0].get(attribute),
-                    )
+                self.assertEqual(
+                    expense_fields[0].get('context'),
+                    expected_fields[0].get('context'),
+                )
+                eval_context = {'company_id': self.env.company.id}
+                native_domain = safe_eval(expected_fields[0].get('domain'), eval_context)
+                expected_domain = [
+                    ('account_type', 'in', allowed_types)
+                    if term == ('account_type', 'in', ('expense_depreciation', 'expense'))
+                    else term
+                    for term in native_domain
+                ]
+                self.assertNotEqual(expected_domain, native_domain)
+                domain = safe_eval(expense_fields[0].get('domain'), eval_context)
+                self.assertEqual(domain, expected_domain)
+                # Search the actual account model with the form's domain.
+                found = accounts.search(domain + [('id', 'in', accounts.ids)])
+                self.assertEqual(set(found.ids), set(accounts.filtered(
+                    lambda account: account.account_type in allowed_types
+                ).ids))
 
         journal_items = self._combined_view_root(
             'move_invoice_line.view_move_line_tree_fleet_madfox'
