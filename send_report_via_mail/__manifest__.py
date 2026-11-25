@@ -1,6 +1,6 @@
 {
     'name': 'Send Report Via Email',
-    'version': '19.0.1.1.5',
+    'version': '19.0.1.1.6',
     'author': 'Madfox Solutions',
     'website': 'https://madfox.solutions/',
     'category': 'Send Mail Implementation',

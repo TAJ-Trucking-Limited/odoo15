@@ -199,6 +199,16 @@ class ReportSendMail(models.TransientModel):
             for code, report_key, _field_name in DETAILS
         }
 
+    @staticmethod
+    def _get_order_operating_income(order):
+        # Keep the historical tax-inclusive, company-currency basis. Odoo's
+        # signed totals already make customer refunds negative.
+        invoices = order.invoice_ids.filtered(
+            lambda move: move.state == 'posted'
+            and move.move_type in ('out_invoice', 'out_refund')
+        )
+        return sum(invoices.mapped('amount_total_signed'))
+
     def _prepare_profit_rows(self):
         self.ensure_one()
         rows = []
@@ -239,8 +249,7 @@ class ReportSendMail(models.TransientModel):
                 + sum(credit_by_code[code] for code in direction_codes)
             )
             expenses = total_debit - total_credit
-            invoice = order_line.order_id.invoice_ids[:1]
-            operating_income = invoice.amount_total_signed if invoice else 0.0
+            operating_income = self._get_order_operating_income(order_line.order_id)
 
             row = {
                 'order_name': order_line.order_id.name,
