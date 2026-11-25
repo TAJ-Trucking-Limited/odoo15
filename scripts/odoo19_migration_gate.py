@@ -19,6 +19,7 @@ from psycopg2 import IntegrityError
 
 from odoo import Command, fields
 from odoo.exceptions import UserError
+from odoo.tools.safe_eval import safe_eval
 from odoo.addons.send_report_via_mail.models.send_mail import DETAILS
 
 
@@ -463,11 +464,16 @@ try:
                 and len(expense_fields) == 1
                 and expense_fields[0].get("required") == "1"
                 and expense_fields[0].get("readonly") == "state == 'close'"
-                and all(
-                    expense_fields[0].get(attribute)
-                    == expected_fields[0].get(attribute)
-                    for attribute in ("domain", "context")
-                )
+                and expense_fields[0].get("context") == expected_fields[0].get("context")
+                and safe_eval(expense_fields[0].get("domain"), {"company_id": env.company.id})
+                == [
+                    ("account_type", "in", ("expense_depreciation", "expense", "expense_direct_cost"))
+                    if term == ("account_type", "in", ("expense_depreciation", "expense"))
+                    else term
+                    for term in safe_eval(expected_fields[0].get("domain"), {"company_id": env.company.id})
+                ]
+                and ("account_type", "in", ("expense_depreciation", "expense", "expense_direct_cost"))
+                in safe_eval(expense_fields[0].get("domain"), {"company_id": env.company.id})
             )
         ok(
             all(asset_contracts),
